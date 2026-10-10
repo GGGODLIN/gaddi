@@ -172,12 +172,13 @@ export interface ChatWindowBody {
    */
   sendQueuedNow?: string[];
   /**
-   * The operator's newest prompt the window holds, so the phone can say which question the reply on
-   * screen answers even when that question sits above the screenful a first paint sends. A run of
-   * forty tool calls is forty turns, so the prompt that started it is routinely outside `limit`.
+   * The operator's newest prompt the window knows, so the phone can say which question the reply on
+   * screen answers even when that question sits above the screenful a first paint sends. A long run
+   * of tool calls fills `limit`, so the prompt that started it is routinely outside it.
    *
-   * STATE, like {@link queued}, and WHOLE on every answer: it moves only when a new prompt lands, so
-   * an unchanged poll serialises to the same bytes and stays a 304. A field rather than a widened first
+   * STATE, like {@link queued}, and WHOLE on every answer: it moves when a prompt lands, is rewound
+   * away, or a lookup behind the front finishes; otherwise a poll serialises to the same bytes and
+   * stays a 304. A field rather than a widened first
    * page because ADR 0073 sized a first paint at a screenful, and walking back to the prompt would make
    * every first paint a History page.
    *
@@ -216,9 +217,10 @@ function promptOf(entry: TranscriptEntry): ChatPrompt | null {
   if (capped.truncated !== true) return { uuid: entry.uuid, ts: entry.ts, text: capped.text };
   // The mask runs after this cut and matches whole shapes, so a secret the cap splits (an AWS key id
   // one character short) would leave unmasked. The cut ends at the last whitespace instead, leaving
-  // the split token out whole. A capped run with no whitespace at all keeps the hard cut.
+  // the split token out whole; no mask shape spans whitespace. With no whitespace to cut at, no text
+  // goes at all: a hard slice there is the same split, and the prompt still counts as the newest.
   const end = capped.text.search(/\s\S*$/);
-  return { uuid: entry.uuid, ts: entry.ts, text: end > 0 ? capped.text.slice(0, end) : capped.text, truncated: true };
+  return { uuid: entry.uuid, ts: entry.ts, text: end >= 0 ? capped.text.slice(0, end) : "", truncated: true };
 }
 
 /** The newest prompt among these turns, walking from the tail, so the common case ends in a few. */
@@ -426,11 +428,13 @@ class LiveWindow {
    */
   private behind: { gen: number; prompt: ChatPrompt | null } | null = null;
   /**
-   * The newest prompt this generation trimmed off its front. It is newer than anything the lookup
-   * behind the front can find, so it outranks that answer; without it, a prompt that arrived after
-   * the lookup and was then trimmed would hand the pin back to the older prompt the lookup found.
+   * The newest prompt turn this generation trimmed off its front. It is newer than anything the
+   * lookup behind the front can find, so it outranks that answer; without it, a prompt that arrived
+   * after the lookup and was then trimmed would hand the pin back to the older prompt the lookup
+   * found. It is the turn itself, not a copy, and is judged again at every answer: pi marks a turn a
+   * rewind left `abandoned` in place, within the generation.
    */
-  private trimmedPrompt: ChatPrompt | null = null;
+  private trimmedPrompt: TranscriptEntry | null = null;
   /** Whether a read has ever run. The floor below has nothing to measure against until it has. */
   private ticked = false;
   private lastTickAt = 0;
@@ -561,7 +565,7 @@ class LiveWindow {
       this.weight -= gone.weight;
       this.byUuid.delete(gone.entry.uuid);
       this.trimmed = true;
-      this.trimmedPrompt = promptOf(gone.entry) ?? this.trimmedPrompt;
+      if (promptOf(gone.entry) !== null) this.trimmedPrompt = gone.entry;
     }
   }
 
@@ -601,8 +605,8 @@ class LiveWindow {
     // Over every row the window holds, not the `limit` sent: the point is the prompt the first paint
     // left out. A window that opened mid-run holds none, and then the newest one it trimmed, or else
     // the one looked up behind its front, stands in until a prompt the window does hold replaces it.
-    const prompt =
-      newestPrompt(this.rows, (row) => row.entry) ?? this.trimmedPrompt ?? this.behind?.prompt ?? null;
+    const trimmed = this.trimmedPrompt === null ? null : promptOf(this.trimmedPrompt);
+    const prompt = newestPrompt(this.rows, (row) => row.entry) ?? trimmed ?? this.behind?.prompt ?? null;
     if (prompt !== null) body.lastPrompt = prompt;
     return body;
   }
@@ -620,7 +624,7 @@ class LiveWindow {
   claimLookup(): number | null {
     if (this.behind?.gen === this.gen) return null;
     if (!(this.trimmed || !this.fromStart)) return null;
-    if (this.trimmedPrompt !== null) return null;
+    if (this.trimmedPrompt !== null && promptOf(this.trimmedPrompt) !== null) return null;
     if (newestPrompt(this.rows, (row) => row.entry) !== null) return null;
     this.behind = { gen: this.gen, prompt: null };
     return this.gen;
