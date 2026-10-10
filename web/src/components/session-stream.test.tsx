@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
 
@@ -635,6 +635,98 @@ describe("SessionStream — the prompt pin", () => {
       }),
     );
     expect(document.querySelector('[data-slot="prompt-pin"]')).toBeNull();
+  });
+
+  /** Where a jump to the block holding `text` scrolls, under {@link layOut}'s fixed geometry. */
+  function jumpTop(text: string, scrolled: number, padding = 0): number {
+    const nodes = [...document.querySelectorAll<HTMLElement>("[data-block]")];
+    const index = nodes.findIndex((node) => node.textContent?.includes(text));
+    expect(index).toBeGreaterThanOrEqual(0);
+    return index * 100 - scrolled - padding;
+  }
+
+  it("a tap seeks the prompt it was tapped for, not one that lands while older pages load", async () => {
+    layOut(150);
+    const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
+    const listRef = createRef<ChatMessageListHandle>();
+    const view = (feed: ChatFeed) => (
+      <SessionStream
+        feed={feed}
+        address="w1:p1"
+        working={false}
+        starting={false}
+        showToolCalls
+        showCompactions={false}
+        fontSize={14}
+        listRef={listRef}
+      />
+    );
+    const held = [entry("a", BASE + 10, "one"), entry("b", BASE + 11, "two"), entry("c", BASE + 12, "three")];
+    const tapped = feedOf({
+      status: { kind: "live" },
+      hasOlder: true,
+      entries: held,
+      lastPrompt: { uuid: "p1", ts: "", text: "rename the route" },
+    });
+    const { rerender } = render(view(tapped));
+    await userEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="prompt-pin"]')!);
+    expect(tapped.loadOlder).toHaveBeenCalledTimes(1);
+    rerender(view({ ...tapped, loadingOlder: true }));
+    // While that page loads, a new prompt lands live; then the page settles without p1 in it.
+    scrollTo.mockClear();
+    rerender(
+      view(
+        feedOf(
+          {
+            status: { kind: "live" },
+            hasOlder: true,
+            entries: [...held, prompt("p2", BASE + 13, "a different question"), entry("d", BASE + 14, "four")],
+            lastPrompt: { uuid: "p2", ts: "", text: "a different question" },
+          },
+          { loadOlder: tapped.loadOlder },
+        ),
+      ),
+    );
+    expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({ top: jumpTop("a different question", 150) }));
+  });
+
+  it("a jump stops re-aligning once the reader asks for the latest turn", () => {
+    vi.useFakeTimers();
+    try {
+      layOut(250);
+      const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
+      renderStream(
+        feedOf({
+          status: { kind: "live" },
+          entries: [prompt("p1", BASE, "fix the flaky test"), entry("a", BASE + 1, "one"), entry("b", BASE + 2, "two"), entry("c", BASE + 3, "three")],
+        }),
+      );
+      fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="prompt-pin"]')!);
+      const toPrompt = expect.objectContaining({ top: jumpTop("fix the flaky test", 250) });
+      expect(scrollTo).toHaveBeenCalledWith(toPrompt);
+      // The latest-turn button sits beside the scroller, not in it, and it is the reader's own move.
+      fireEvent.click(screen.getByRole("button", { name: "Scroll to latest" }));
+      scrollTo.mockClear();
+      act(() => vi.advanceTimersByTime(600));
+      expect(scrollTo).not.toHaveBeenCalledWith(toPrompt);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a jump lands the prompt below the scroller's top padding, the line the pin reads", async () => {
+    layOut(250);
+    const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
+    renderStream(
+      feedOf({
+        status: { kind: "live" },
+        entries: [prompt("p1", BASE, "fix the flaky test"), entry("a", BASE + 1, "one"), entry("b", BASE + 2, "two"), entry("c", BASE + 3, "three")],
+      }),
+    );
+    // The band inset pads the scroller's top while a status band sits over it.
+    document.querySelector<HTMLElement>("[data-block]")!.parentElement!.style.paddingTop = "40px";
+    await userEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="prompt-pin"]')!);
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: jumpTop("fix the flaky test", 250, 40) }));
   });
 
   it("leaves the top edge alone when the prompt is held and on screen", () => {

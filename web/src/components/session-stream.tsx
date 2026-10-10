@@ -192,10 +192,15 @@ const JUMP_SETTLE_MS = [100, 250, 500] as const;
  */
 const BLOCK_OVERLAP_PX = 24;
 
+/** The line the reader's view starts at: the scroller's padding edge, below the strip band. */
+function readingLine(el: HTMLElement): number {
+  return el.getBoundingClientRect().top + (Number.parseFloat(getComputedStyle(el).paddingTop) || 0);
+}
+
 function topBlock(el: HTMLElement): number {
   const nodes = el.querySelectorAll<HTMLElement>(":scope > [data-block]");
   if (nodes.length === 0) return -1;
-  const line = el.getBoundingClientRect().top + (Number.parseFloat(getComputedStyle(el).paddingTop) || 0);
+  const line = readingLine(el);
   if (nodes[0]!.getBoundingClientRect().top >= line) return -1;
   let lo = 0;
   let hi = nodes.length - 1;
@@ -453,44 +458,52 @@ export function SessionStream({
   // brings it near the screen and it takes its real height, pushing the target down (a 293px reply
   // left a prompt 89px below the top on 2026-10-10, measured AFTER the next frame had looked fine).
   // So the jump re-aligns at a few checkpoints, and gives up the moment the reader touches the list:
-  // a correction that lands after their own scroll would be the app fighting them.
+  // a correction that lands after their own scroll would be the app fighting them. "The list" is the
+  // scroller's parent, because the latest-turn button sits beside the scroller, not in it; and a new
+  // jump ends the one before it.
+  const stopJump = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopJump.current?.(), []);
   const jumpToBlock = useCallback(
     (index: number) => {
       const list = listRef.current;
       const el = list?.getScrollElement();
       const node = el?.querySelectorAll<HTMLElement>(":scope > [data-block]")[index] ?? null;
       if (list === null || list === undefined || el === null || el === undefined || node === null) return;
+      stopJump.current?.();
+      const area = el.parentElement ?? el;
       let touched = false;
+      const inputs = ["pointerdown", "click", "wheel", "touchstart", "keydown"] as const;
       const stop = () => {
         touched = true;
+        for (const type of inputs) area.removeEventListener(type, stop);
+        if (stopJump.current === stop) stopJump.current = null;
       };
-      const inputs = ["pointerdown", "wheel", "touchstart", "keydown"] as const;
-      for (const type of inputs) el.addEventListener(type, stop, { once: true, passive: true });
+      stopJump.current = stop;
+      for (const type of inputs) area.addEventListener(type, stop, { passive: true });
       const realign = () => {
         if (touched) return;
-        if (Math.abs(node.getBoundingClientRect().top - el.getBoundingClientRect().top) > 1) list.scrollToChild(node, true);
+        if (Math.abs(node.getBoundingClientRect().top - readingLine(el)) > 1) list.scrollToChild(node, true);
       };
       list.scrollToChild(node, true);
       requestAnimationFrame(realign);
       for (const ms of JUMP_SETTLE_MS) setTimeout(realign, ms);
-      setTimeout(() => {
-        for (const type of inputs) el.removeEventListener(type, stop);
-      }, JUMP_SETTLE_MS.at(-1)! + 1);
+      setTimeout(stop, JUMP_SETTLE_MS.at(-1)! + 1);
     },
     [listRef],
   );
 
   // A reported prompt the client does not hold yet: walk older pages until it arrives, then jump to
   // it. Driven by an effect rather than a loop in the handler because each page is a merge and a
-  // render away, and the anchoring above must run on every one of them.
-  const [seeking, setSeeking] = useState(false);
+  // render away, and the anchoring above must run on every one of them. The walk looks for the prompt
+  // that was tapped: a newer one landing live meanwhile is not where the reader asked to go.
+  const [seeking, setSeeking] = useState<string | null>(null);
   const seekPages = useRef(0);
   useEffect(() => {
-    if (!seeking || loadingOlder) return;
-    if (holdsLastPrompt && lastPrompt !== null) {
-      const index = blocks.findIndex((g) => g.length === 1 && g[0]!.kind === "user" && g[0]!.id.startsWith(`${lastPrompt.uuid}:`));
-      setSeeking(false);
-      if (index >= 0) jumpToBlock(index);
+    if (seeking === null || loadingOlder) return;
+    const index = blocks.findIndex((g) => g.length === 1 && g[0]!.kind === "user" && g[0]!.id.startsWith(`${seeking}:`));
+    if (index >= 0) {
+      setSeeking(null);
+      jumpToBlock(index);
       return;
     }
     if (window.hasOlder && seekPages.current < PIN_SEEK_PAGES) {
@@ -498,16 +511,16 @@ export function SessionStream({
       onLoadOlder();
       return;
     }
-    setSeeking(false);
-  }, [seeking, loadingOlder, holdsLastPrompt, lastPrompt, blocks, window.hasOlder, onLoadOlder, jumpToBlock]);
+    setSeeking(null);
+  }, [seeking, loadingOlder, blocks, window.hasOlder, onLoadOlder, jumpToBlock]);
 
   const onPinTap = () => {
     if (pin === null) return;
     if (pin.kind === "held") jumpToBlock(pin.start);
     else if (pin.kind === "earlier") onLoadOlder();
-    else {
+    else if (lastPrompt !== null) {
       seekPages.current = 0;
-      setSeeking(true);
+      setSeeking(lastPrompt.uuid);
     }
   };
 
@@ -540,7 +553,7 @@ export function SessionStream({
       // older turns is an ordinary act in this body and a rare one in that one.
       className="px-3 pt-0 pb-3"
       style={textTokens(fontSize)}
-      overlay={pin !== null ? <PromptPin pin={pin} busy={seeking || (pin.kind === "earlier" && loadingOlder)} onTap={onPinTap} /> : null}
+      overlay={pin !== null ? <PromptPin pin={pin} busy={seeking !== null || (pin.kind === "earlier" && loadingOlder)} onTap={onPinTap} /> : null}
     >
       {/* Top of the window. Older turns come off `hasOlder` and nothing else: what the live window
           has trimmed is the History read's job, reached through `?before=`, and the bridge holds
