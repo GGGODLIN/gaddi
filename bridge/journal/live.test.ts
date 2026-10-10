@@ -846,6 +846,37 @@ describe("the newest prompt", () => {
     const older = await live.older(fx.adapter, ref(), { seq: first!.oldest, uuid: "u2" }, 10);
     expect("lastPrompt" in older!).toBe(false);
   });
+
+  test("a secret that crosses the cap is still masked, not cut into a shape the mask misses", async () => {
+    // A synthetic AWS key id whose last character sits past LAST_PROMPT_MAX_CHARS: cutting first
+    // leaves 19 characters, which the mask's exact-length rule no longer recognises.
+    const key = "AKIA1234567890ABCDEF";
+    const said = `${"x".repeat(LAST_PROMPT_MAX_CHARS - key.length)} ${key}`;
+    expect(said.length).toBe(LAST_PROMPT_MAX_CHARS + 1);
+    const fx = fakeJournal([ask("p1", said)]);
+    const body = await windows(fx).window(fx.adapter, ref(), { limit: 10 });
+    expect(body!.lastPrompt?.truncated).toBe(true);
+    expect(JSON.stringify(redactChatBody(body!))).not.toContain("1234567890ABCDE");
+  });
+
+  test("a newer prompt trimmed off the front does not hand the pin back to the one looked up", async () => {
+    const fx = fakeJournal([ask("p1", "the first question"), say("u1"), say("u2"), say("u3")]);
+    const tail = tailOf(fx, 2);
+    const live = windows(fx);
+    const first = await live.window(tail, ref(), { limit: 10 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fx.settle();
+    const looked = await live.window(tail, ref(), { limit: 10, after: { gen: first!.gen, rev: first!.rev } });
+    expect(looked!.lastPrompt?.uuid).toBe("p1");
+
+    fx.append(ask("p2", "the second question"));
+    for (let i = 0; i < MAX_LIVE_ENTRIES; i++) fx.append(say(`v${i}`));
+    fx.settle();
+    // A reader arriving now (a reopened Chat, another device) takes a first page.
+    const fresh = await live.window(tail, ref(), { limit: 10 });
+    expect(fresh!.upserts.some((e) => e.uuid === "p2")).toBe(false);
+    expect(fresh!.lastPrompt?.uuid).toBe("p2");
+  });
 });
 
 // M46: the journal's text is masked with the mirror's own list before a turn leaves the bridge. The

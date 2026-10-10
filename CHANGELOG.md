@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The prompt pin keeps a split secret masked and the newer prompt on top.** A long prompt is cut at its last space before the mask runs, so a key the 1000-character cap would split is left out whole instead of sent one character short and unmasked. And a prompt trimmed off the window's front now outranks the older one the bridge looked up, so a reopened Chat no longer pins a reply to the prompt before it.
+
 ## [2.0.1] - 2026-10-11
 
 ### Changed
