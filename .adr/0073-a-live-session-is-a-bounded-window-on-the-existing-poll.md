@@ -87,23 +87,29 @@ one job.**
    > nothing waiting, which is point 7's rule applied to one field instead of the whole route.
 
    > **Amended (2026-10-10).** The live body also carries `lastPrompt`: the newest turn the
-   > operator wrote that the window holds, capped at `LAST_PROMPT_MAX_CHARS` (1000). The phone pins it
-   > above the thread so a reply on screen always shows the question it answers. It exists because of
-   > the consequence below that a first paint is a screenful: a run of forty tool calls is forty
-   > turns, so the prompt that started the run is routinely outside the forty sent. Widening the first
-   > page until it reached a prompt would make every first paint a History page, which is the thing
-   > that consequence rules out.
+   > operator wrote that the window knows, capped at `LAST_PROMPT_MAX_CHARS` (1000) and cut back to
+   > its last whitespace so the mask, which runs after the cut, never sees a secret split in two. The
+   > phone pins it above the thread so a reply on screen always shows the question it answers. It
+   > exists because of the consequence below that a first paint is a screenful: a long run of tool
+   > calls fills the forty turns sent, so the prompt that started the run is routinely outside them.
+   > Widening the first page until it reached a prompt would make every first paint a History page,
+   > which is the thing that consequence rules out.
    >
    > It is a field for the reason `queued` is: it is state with one answer per session, and it arrives
-   > WHOLE on every answer. It moves only when a new prompt lands, so an unchanged poll is still the
-   > same bytes and still a 304. It is read off the rows the window already holds, so an ordinary poll
-   > costs no read. A window whose opening 2 MB tail landed mid-run holds no prompt at all; measured on
-   > 2026-10-10, two of seven live Claude panes opened that way, their first `user` rows being orphaned
-   > tool results. For that window alone the bridge looks the prompt up once per generation in the
-   > History read (`TranscriptStore`), the same bounded read a "load older" tap makes, without holding
-   > the answer for it; the next poll carries what it found. Only `user` turns with text count; a `note` is a prompt the agent sent itself and is never drawn as the
-   > operator's words. A window that holds no prompt, and a member one release behind, send no field,
-   > and the phone reads that as "not known" and offers to load older turns.
+   > WHOLE on every answer. It is read off the rows the window holds, so an ordinary poll costs no
+   > read; a prompt the window trimmed off its front stays the answer until a newer one lands.
+   >
+   > One case does read. The initial tail can start in the middle of a long run, with no operator
+   > prompt in it; its `user` rows may be only orphaned tool results. For that window alone, the bridge
+   > looks the prompt up once per generation through `TranscriptStore`, without holding the answer for
+   > it, and the next poll carries what it found. That is the History read: a valid History cache is
+   > reused, and a cold one costs the same bounded read and parse a History page does, up to
+   > `MAX_TRANSCRIPT_BYTES` for a file-backed journal, kept in that cache afterwards. Until this
+   > amendment only a History or "load older" tap paid that read; now opening Chat on such a window
+   > pays it once. A finished lookup can change the body with no new turn, and the body-based ETag
+   > covers that. Only `user` turns with text count; a `note` is a prompt the agent sent itself and is
+   > never drawn as the operator's words. A window that knows no prompt, and a member one release
+   > behind, send no field, and the phone reads that as "not known" and offers to load older turns.
 
 5. **A tick happens because somebody asked.** There is no timer in `live.ts`. `stat` is the pre-check,
    so a quiet session costs one `stat`; `TICK_FLOOR_MS` (250 ms) makes several readers of one session
