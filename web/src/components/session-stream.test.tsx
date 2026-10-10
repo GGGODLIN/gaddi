@@ -688,6 +688,68 @@ describe("SessionStream — the prompt pin", () => {
       ),
     );
     expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({ top: jumpTop("a different question", 150) }));
+
+    // The walk goes on, and the page that holds p1 ends it on p1.
+    expect(tapped.loadOlder).toHaveBeenCalledTimes(2);
+    scrollTo.mockClear();
+    rerender(
+      view(
+        feedOf(
+          {
+            status: { kind: "live" },
+            hasOlder: true,
+            entries: [prompt("p1", BASE + 5, "rename the route"), entry("z", BASE + 6, "zero"), ...held, prompt("p2", BASE + 13, "a different question"), entry("d", BASE + 14, "four")],
+            lastPrompt: { uuid: "p2", ts: "", text: "a different question" },
+          },
+          { loadOlder: tapped.loadOlder },
+        ),
+      ),
+    );
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: jumpTop("rename the route", 150) }));
+  });
+
+  it("a reader who scrolls while older pages load is not pulled to the prompt when it arrives", async () => {
+    layOut(150);
+    const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
+    const listRef = createRef<ChatMessageListHandle>();
+    const view = (feed: ChatFeed) => (
+      <SessionStream
+        feed={feed}
+        address="w1:p1"
+        working={false}
+        starting={false}
+        showToolCalls
+        showCompactions={false}
+        fontSize={14}
+        listRef={listRef}
+      />
+    );
+    const held = [entry("a", BASE + 10, "one"), entry("b", BASE + 11, "two"), entry("c", BASE + 12, "three")];
+    const tapped = feedOf({
+      status: { kind: "live" },
+      hasOlder: true,
+      entries: held,
+      lastPrompt: { uuid: "p1", ts: "", text: "rename the route" },
+    });
+    const { rerender } = render(view(tapped));
+    await userEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="prompt-pin"]')!);
+    rerender(view({ ...tapped, loadingOlder: true }));
+    fireEvent.wheel(listRef.current!.getScrollElement()!);
+    scrollTo.mockClear();
+    rerender(
+      view(
+        feedOf(
+          {
+            status: { kind: "live" },
+            hasOlder: true,
+            entries: [prompt("p1", BASE + 5, "rename the route"), ...held],
+            lastPrompt: { uuid: "p1", ts: "", text: "rename the route" },
+          },
+          { loadOlder: tapped.loadOlder },
+        ),
+      ),
+    );
+    expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({ top: jumpTop("rename the route", 150) }));
   });
 
   it("a jump stops re-aligning once the reader asks for the latest turn", () => {

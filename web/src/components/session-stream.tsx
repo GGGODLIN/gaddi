@@ -176,6 +176,8 @@ const PIN_SEEK_PAGES = 10;
 
 /** When a jump to a prompt re-checks its landing while the blocks above take their real size. */
 const JUMP_SETTLE_MS = [100, 250, 500] as const;
+/** The reader's own moves, on the scroller's parent, which end a jump or a walk to a prompt. */
+const JUMP_STOP_INPUTS = ["pointerdown", "click", "wheel", "touchstart", "keydown"] as const;
 
 /**
  * The topmost block the reader can see, or -1 while the stream's top edge is on screen.
@@ -472,14 +474,13 @@ export function SessionStream({
       stopJump.current?.();
       const area = el.parentElement ?? el;
       let touched = false;
-      const inputs = ["pointerdown", "click", "wheel", "touchstart", "keydown"] as const;
       const stop = () => {
         touched = true;
-        for (const type of inputs) area.removeEventListener(type, stop);
+        for (const type of JUMP_STOP_INPUTS) area.removeEventListener(type, stop);
         if (stopJump.current === stop) stopJump.current = null;
       };
       stopJump.current = stop;
-      for (const type of inputs) area.addEventListener(type, stop, { passive: true });
+      for (const type of JUMP_STOP_INPUTS) area.addEventListener(type, stop, { passive: true });
       const realign = () => {
         if (touched) return;
         if (Math.abs(node.getBoundingClientRect().top - readingLine(el)) > 1) list.scrollToChild(node, true);
@@ -498,6 +499,18 @@ export function SessionStream({
   // that was tapped: a newer one landing live meanwhile is not where the reader asked to go.
   const [seeking, setSeeking] = useState<string | null>(null);
   const seekPages = useRef(0);
+  // A reader who moves while the pages load has gone somewhere else; the jump at the end would pull
+  // them back. Same inputs, and the same area, as the jump's own stop.
+  const isSeeking = seeking !== null;
+  useEffect(() => {
+    const area = listRef.current?.getScrollElement()?.parentElement;
+    if (!isSeeking || area === null || area === undefined) return;
+    const cancel = () => setSeeking(null);
+    for (const type of JUMP_STOP_INPUTS) area.addEventListener(type, cancel, { passive: true });
+    return () => {
+      for (const type of JUMP_STOP_INPUTS) area.removeEventListener(type, cancel);
+    };
+  }, [isSeeking, listRef]);
   useEffect(() => {
     if (seeking === null || loadingOlder) return;
     const index = blocks.findIndex((g) => g.length === 1 && g[0]!.kind === "user" && g[0]!.id.startsWith(`${seeking}:`));
