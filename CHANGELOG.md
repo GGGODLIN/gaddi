@@ -27,6 +27,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 - **A tap on the prompt pin goes where it was tapped, and lets go when you move.** Walking back to a prompt the first page left out keeps looking for that prompt even if a newer one lands meanwhile; the jump's follow-up corrections stop when you tap the latest-turn button; and the prompt lands below the status band rather than behind it.
 - **Scrolling while the pin walks back to a prompt calls the walk off.** A reader who moves while older pages load is no longer pulled to the prompt when it arrives.
+- **A new Grok pane does not borrow a neighbour's Chat.** The `/resume` correction stands down while another Grok pane runs in the same folder, and ignores a live-session list over 1 MiB. From upstream (7b2a50de).
 
 ## [2.0.1] - 2026-10-11
 
