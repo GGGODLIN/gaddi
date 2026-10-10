@@ -4,19 +4,44 @@
   <img src="assets/social-card.png" alt="A pixel-art Gaddi dog watching a flock on a Himalayan slope, beside the name Gaddi and the line: your agent herd, from your phone." width="640">
 </p>
 
+<p align="center"><b>English</b> · <a href="./README.zh-TW.md">繁體中文</a></p>
+
+Gaddi puts the AI coding agents in your terminal on your phone. Claude Code, Codex and the rest keep
+running in Herdr, tmux or zellij on your computer, and the phone shows which one is waiting on you.
+You answer with a tap, not a terminal keyboard.
+
+It runs on your own machine and reaches your phone over your Tailscale network. There is no account
+and no cloud service, and it isn't in an app store: you open a URL on the phone and add it to the
+home screen.
+
 > **Note.** Gaddi is [GGGODLIN's fork](https://github.com/GGGODLIN/gaddi) of
-> [ColliePWA](https://github.com/AltanS/collie) (AltanS/collie). It is not an official ColliePWA
-> project. It installs from source and publishes its own releases. Everything below the fork section
-> is upstream's README, unchanged, so it still says Collie.
+> [ColliePWA](https://github.com/AltanS/collie) by Altan Sarisin. It is not an official ColliePWA
+> project. It installs from source and publishes its own releases. The `collie` command and the
+> Herdr plugin keep their upstream names, so commands and the docs still say Collie.
 
-## This fork
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="assets/readme/en/dashboard.png" alt="The dashboard: four agents in three workspaces, the one waiting for approval at the top, each with a line on what it is doing" width="240"><br><sub><b>What needs you comes first</b></sub></td>
+    <td align="center" width="33%"><img src="assets/readme/en/approve.png" alt="A bottom sheet over the dashboard with Claude's Bash permission prompt for bun test and its Yes and No buttons" width="240"><br><sub><b>Approve from the list</b></sub></td>
+    <td align="center" width="33%"><img src="assets/readme/en/keys.png" alt="A pane with the permission prompt as buttons and the Keys pad open: Esc, Tab, Shift, Ctrl, Alt, arrows and Ctrl+C" width="240"><br><sub><b>Keys a phone keyboard lacks</b></sub></td>
+  </tr>
+</table>
 
-What it adds over upstream is in [`CHANGELOG.md`](./CHANGELOG.md), from `1.14.0` on. The few
-changes that only make sense on the maintainer's own setup are in [`FORK.md`](./FORK.md), each with
-what it assumes; without those tools, they stay out of the way.
+The screenshots use made-up agents.
 
-`main` moves only when a release is cut or the docs change, so the code you install is always a
-release's. Day-to-day work happens on `dev`, which is not tested for anyone else's use.
+## What it does
+
+- **The agent that needs you is at the top.** Every pane carries one line on what it's doing: the
+  approval it waits for, or the last thing you asked it.
+- **Approve without opening the pane.** Tap a blocked row and its permission prompt opens as
+  buttons over the dashboard.
+- **An agent's own questions become buttons**: permission prompts, AskUserQuestion, plan approval,
+  menus.
+- **The keys a phone keyboard doesn't have**: Esc, Ctrl+C, Tab, arrows, and your own sequences.
+- **Start work from the phone**: a new agent, a command or a worktree, on any of your machines.
+- **Read back what happened**: search the output, read the whole session as Chat, and browse the
+  workspace's files and diffs, read-only.
+- **A push notification** when an agent stops and waits for you.
 
 ### Your agents on the iPhone's Dynamic Island
 
@@ -44,22 +69,29 @@ The screenshots use made-up agents. The second line, what the pane is doing, sho
 `ISLAND_SHOW_DETAIL = YES`, because it can be your newest prompt word for word; by default the
 island shows the pane's name and the counts.
 
-In Gaddi itself, each pane says in one line what its agent is doing, and a tool permission can be
-answered from the list without opening the pane:
+## Before you install
 
-<table>
-  <tr>
-    <td align="center" width="50%"><img src="assets/fork/pane-descriptions.png" alt="The dashboard with a line under each agent: 在等你批准 Bash · bun test under claude, 你：把登入流程改成 OAuth under codex" width="220"><br><sub><b>What each pane is doing</b></sub></td>
-    <td align="center" width="50%"><img src="assets/fork/approve-from-list.png" alt="A bottom sheet over the dashboard showing Claude's Bash permission prompt for bun test, with its Yes and No choices" width="220"><br><sub><b>Approve from the list</b></sub></td>
-  </tr>
-</table>
+You need a Mac or a Linux machine (Windows is experimental, see [Windows](#windows)),
+[Bun](https://bun.sh) 1.3.14 or newer, git, and one multiplexer: [Herdr](https://herdr.dev), tmux
+or zellij. The phone and the computer must be on the same [Tailscale](https://tailscale.com)
+tailnet. Gaddi is for one person: one operator, one tailnet, no shared or public access.
 
-### Install from source
+**Gaddi provides remote shell access to your machine by design.** A single API call sends
+arbitrary keystrokes directly into a live terminal pane. Anyone with access to the URL can read pane
+output (source code, secrets, environment variables, agent output) and execute arbitrary commands
+with your full user privileges. There is no sandbox and no command allow-list, as these would defeat
+the core workflow. Treat the URL as a root login: bind it strictly to your tailnet, set
+`COLLIE_TRUSTED_USER`, and pair only the physical phone you are using. Read
+[`docs/security.md`](./docs/security.md) for details on the security model, defense layers, and
+device gating before running the service.
 
-The Quickstart further down installs upstream Collie, not this fork. Build the fork instead; it needs
-[Bun](https://bun.sh) (1.3.14 or newer), git, and a multiplexer ([Herdr](https://herdr.dev), tmux or
-zellij). Have the multiplexer running first: `start` mirrors the one it finds running, and refuses
-when there is none.
+> 🚫 **Never `tailscale funnel` this**: `funnel` exposes the port to the public internet, whereas
+> `serve` limits access to your private tailnet. Do not funnel Gaddi under any circumstances.
+
+## Install
+
+Gaddi installs from source. Have the multiplexer running first: `start` mirrors the one it finds
+running, and refuses when there is none.
 
 ```bash
 git clone --single-branch https://github.com/GGGODLIN/gaddi.git ~/.local/share/collie &&
@@ -73,7 +105,10 @@ upstream install, say), the clone stops there and nothing is built over it; move
 `start` and everything after it work as upstream documents them; see
 [`docs/install.md`](./docs/install.md), from *Then start it*.
 
-### Update, and roll back
+`main` moves only when a release is cut or the docs change, so the code you install is always a
+release's. Day-to-day work happens on `dev`, which is not tested for anyone else's use.
+
+## Update and roll back
 
 `collie update` and the in-app update banner follow [this fork's
 releases](https://github.com/GGGODLIN/gaddi/releases). The update pulls `main`, rebuilds and
@@ -101,7 +136,7 @@ cd ~/.local/share/collie && git checkout main && bin/collie update
 > `~/.local/share/collie` aside and install again; settings, pairings and push subscriptions live
 > under `~/.config` and `~/.local/state`, not there.
 
-### Optional companions
+## Optional companions
 
 Two features read the output of the maintainer's own Claude Code tools. Both are off until you
 install the tool, and Gaddi runs the same without them.
@@ -110,133 +145,14 @@ install the tool, and Gaddi runs the same without them.
 | --- | --- | --- |
 | A pane's description can use Claude's own recap, and the mirror hides the tool's button row | [cc-mod-waitwhat](https://github.com/GGGODLIN/cc-mod-waitwhat) | The description uses the waiting approval or your newest prompt |
 | *Plain* and *Lost* retell a Claude session in plain words | [cc-sidecar-waitwhat](https://github.com/GGGODLIN/cc-sidecar-waitwhat), named in `retell.toml` ([Configure](./docs/configure.md#retell-a-claude-session)) | The two rows are not offered |
-| Agents' state on the iPhone's Dynamic Island | The iPhone app in [`ios/`](./ios/README.md), built or sideloaded with your own Apple ID; it reads any Collie | Nothing changes; Collie's Settings row for the app's address shows only inside the app |
+| Agents' state on the iPhone's Dynamic Island | The iPhone app in [`ios/`](./ios/README.md), built or sideloaded with your own Apple ID; it reads Gaddi or upstream Collie | Nothing changes; Gaddi's Settings row for the app's address shows only inside the app |
 
-The title bar reads COLLIE-GGGODLIN, so this build is told apart from an upstream install. A pane's
-description line is written in Traditional Chinese (`在等你批准`, `你：`) whatever the app's language.
-
----
-
-ColliePWA is an open-source (MIT) mobile client for [Herdr](https://herdr.dev), with experimental
-support for [tmux](https://github.com/tmux/tmux) and [zellij](https://zellij.dev). It is a
-self-hosted web app (PWA) for driving terminal AI agents such as Claude Code, Codex and OpenCode
-from your phone. Each instance connects to one multiplexer. It is served over Tailscale by default.
-Open the URL on an iPhone or Android phone to see which agent needs input and respond directly from
-your mobile keyboard.
-
-Using Herdr? Read about the
-[Herdr mobile client](https://colliepwa.dev/herdr-mobile-client?utm_source=github&utm_medium=readme&utm_campaign=collie&utm_content=herdr).
-
-The input box uses a standard text field compatible with system voice dictation. Collie also
-includes built-in [voice input](./docs/voice-and-push.md#voice-input-optional) that remains disabled
-until explicitly configured.
-
-**Features**
-
-- **React Router + Vite** with TypeScript, Tailwind, shadcn, and a Bun bridge
-- **Status dashboard** led by what needs your input; every other pane sits under its own workspace, tab on the row
-- **Push notifications** when an agent blocks on user input
-- **Quick actions and slash commands** configured per agent
-- **Keys board you arrange**: `Esc`, `Ctrl+C`, arrows and modifier combinations, plus wider keys, your own chords and sequences, sticky `Ctrl`/`Alt`/`Shift`, presets (Claude Code, Prefix, Vim) and a layout code to share
-- **Start from the phone**: a **+ New** button opens one page where you pick the machine, an agent or a command, the folder and an optional new worktree; each machine shows which agents it has, a lost reply never opens a second pane, and you can add your own launchers from the phone
-- **Output search** and full conversation history beyond standard terminal scrollback
-- **Files screen**: the files of an agent's workspace folder with the changes marked, and a Changes segment with what it changed in its git repos, as diffs with syntax colour, and its last commit, read-only
-- **File attachments**: images from the camera roll, and markdown, text and code files
-- **Device pairing** always on: a device needs its token for every request, reads and writes, and an unpaired browser sees only the pair screen
-- **Crews**: several machines' Collies behind one URL, with operator-triggered failover
-- **Twelve UI languages** and a per-device typeface setting
-- **Herdr session switching** managed from the web interface
-- **PWA support** running locally on loopback with no external accounts or cloud dependencies
-- **No telemetry**: the app sends no analytics, usage statistics or crash reports. Its one unprompted call is the update check to GitHub ([details](./docs/security.md#what-leaves-your-machine))
-
-## Demo
-
-Using Collie from a phone: the dashboard places agents that need input at the top. You can inspect
-spaces, tabs, and panes. Long-press a pane pill or tab chip to rename or close it; Claude panes
-reflect names set via `/rename`. Hold a dashboard row or a pane pill, or right-click it with a mouse,
-to pin that pane to the top of the dashboard and the switcher. Tap to answer an `AskUserQuestion`
-prompt, switch between herds, and receive push notifications when an agent blocks on input.
-
-The [interactive demo](https://colliepwa.dev/demo?utm_source=github&utm_medium=readme&utm_campaign=collie&utm_content=demo-section) runs the web client in your browser against mock
-data without installation.
-
-<table>
-  <tr>
-    <td align="center" width="50%"><img src="assets/dashboard.png" alt="Collie dashboard: a workspace filter, a status summary, then panes grouped by workspace" width="250"><br><sub><b>Dashboard</b> — every pane stays in its workspace, what needs you is marked in place</sub></td>
-    <td align="center" width="50%"><img src="assets/ask-question.png" alt="A Claude permission prompt up-leveled into tappable buttons" width="250"><br><sub><b>Ask</b> — the agent's own prompts become tappable buttons</sub></td>
-  </tr>
-  <tr>
-    <td align="center" width="50%"><img src="assets/space-detail.png" alt="A space's tabs and panes" width="250"><br><sub><b>Space</b> — its tabs and panes, deep-linkable</sub></td>
-    <td align="center" width="50%"><img src="assets/keys.png" alt="The special-keys pad — arrows, Esc, Tab, Ctrl, Alt, Shift" width="250"><br><sub><b>Keys</b> — the special-keys pad, arranged the way you work</sub></td>
-  </tr>
-  <tr>
-    <td align="center" width="50%"><img src="assets/quick.png" alt="The Quick dock — one-tap replies over a working pane" width="250"><br><sub><b>Quick</b> — your own one-tap replies, from <code>quick-replies.toml</code></sub></td>
-    <td align="center" width="50%"><img src="assets/settings.png" alt="Settings — appearance, language, typeface" width="250"><br><sub><b>Settings</b> — appearance, language, typeface, per device</sub></td>
-  </tr>
-</table>
-
-## Motivation
-
-I wanted to check on my agents from my phone. The usual route is [Termux](https://termux.dev) to SSH
-in and attach to the terminal multiplexer session. Driving a TUI through on-screen controls is
-clumsy: special keys are fiddly, `Ctrl`/`Esc`/arrows require awkward chords, and simple text input
-fights the soft keyboard. I wanted a mobile interface instead of a terminal shoehorned onto a
-touchscreen. Collie lets you tap the agent that needs input, type normally, and send `Esc` or
-`Ctrl+C` with one thumb.
-
-## Who is this for
-
-Collie is for developers running AI agents in a terminal multiplexer who want to resume sessions
-from a phone. Herdr is the primary supported target in 1.0. Support for **tmux and zellij is
-experimental**: both run, but testing is limited to a single operator on one machine. If you use
-either, [bug reports are welcome](./docs/multiplexers.md#pointing-collie-at-a-multiplexer), including
-reports of working setups.
-
-The setup assumes a **[Tailscale](https://tailscale.com) tailnet**. Your phone and host must share a
-tailnet, with `tailscale serve` configured as the default ingress. Collie is **single-user**: it
-supports one operator on one tailnet, with no multi-tenant authentication. Do not use it for shared
-or public access. Read the security section below before running it.
-
-## Security — read this first
-
-**Collie provides remote shell access to your machine by design.** A single Collie API call sends
-arbitrary keystrokes directly into a live terminal pane. Anyone with access to the URL can read pane
-output (source code, secrets, environment variables, agent output) and execute arbitrary commands
-with your full user privileges. There is no sandbox and no command allow-list, as these would defeat
-the core workflow. Treat the URL as a root login: bind it strictly to your tailnet, set
-`COLLIE_TRUSTED_USER`, and pair only the physical phone you are using. Read
-[`docs/security.md`](./docs/security.md) for details on the security model, defense layers, and
-device gating before running the service.
-
-> 🚫 **Never `tailscale funnel` this**: `funnel` exposes the port to the public internet, whereas
-> `serve` limits access to your private tailnet. Do not funnel Collie under any circumstances.
-
-## Quickstart
-
-> **Note.** This section installs upstream Collie, without this fork's changes. To install the fork,
-> use [Install from source](#install-from-source) at the top.
-
-New to Tailscale or Herdr? **[Install in five minutes](./docs/five-minute-install.md)** walks the
-whole setup, from an empty computer to Collie on your phone.
-
-Run this on the host, not your phone. It requires `curl`, `tar`, and a sha256 utility. It needs no
-compiler toolchain and does not ask for `sudo`:
-
-```bash
-curl -fsSL https://colliepwa.dev/install.sh | sh
-```
-
-The script downloads the latest release for your platform, verifies the sha256 checksum, installs
-the files, and puts `collie` on your PATH. It then prints the remaining manual steps: seed a config,
-then run `collie start`. You do not need to specify a multiplexer ahead of time. On its first run,
-`collie start` detects Herdr, tmux, and zellij, then prompts for your choice. If you prefer to build
-from source, **[`docs/install.md`](./docs/install.md)** covers manual builds, each system and
-package, Herdr routes, and adding Collie to the home screen of an iPhone or Android phone.
-
-ColliePWA is not in the App Store or Google Play. You add it to your home screen from the browser,
-and that is the only way to install it on a phone.
+A pane's description line is written in Traditional Chinese (`在等你批准`, `你：`) whatever the app's
+language.
 
 ## Documentation
+
+The pages below come from upstream and say Collie; they describe the same software.
 
 ### Guides
 
@@ -468,3 +384,10 @@ integration is documented in [`HERDR_API.md`](./HERDR_API.md).
 - Contribution guidelines: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - Names, logo and forks: [`TRADEMARKS.md`](./TRADEMARKS.md)
 - Release history: [`CHANGELOG.md`](./CHANGELOG.md)
+
+## Credits
+
+Gaddi is built on [ColliePWA](https://github.com/AltanS/collie) by Altan Sarisin, under the
+[MIT License](./LICENSE). What the fork adds over upstream is in [`CHANGELOG.md`](./CHANGELOG.md),
+from `1.14.0` on. The few changes that only make sense on the maintainer's own setup are in
+[`FORK.md`](./FORK.md), each with what it assumes; without those tools, they stay out of the way.
