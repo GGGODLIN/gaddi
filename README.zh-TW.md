@@ -46,7 +46,7 @@ Gaddi。可以自己 build，也可以側載每次發版附的 `.ipa`，兩種�
     <td align="center" width="62%">
       <img src="assets/fork/island.png" alt="動態島顯示 Gaddi 圖示和「1 等你」" width="400"><br>
       <sub><b>動態島</b>：有幾隻 agent 在等你</sub><br><br>
-      <img src="assets/fork/island-expanded.png" alt="長按展開的動態島：pane「重構登入流程」、「在等你批准 Bash · bun test」，以及等你、完成、執行中的數量" width="400"><br>
+      <img src="assets/fork/island-expanded.png" alt="長按展開的動態島：pane「Migrate checkout to Stripe」、「在等你批准 Bash · bun test」，以及等你、完成、執行中的數量" width="400"><br>
       <sub><b>長按</b>：需要你的 pane、它在等什麼、各狀態的數量</sub>
     </td>
     <td align="center" width="38%">

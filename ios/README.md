@@ -4,8 +4,8 @@ An iPhone app that opens your Collie and puts its agents' state on the Dynamic I
 island and it jumps to the pane that needs you most.
 
 <p align="center">
-  <img src="../assets/fork/island-expanded.png" alt="The expanded Dynamic Island: the pane 重構登入流程, the line 在等你批准 Bash · bun test, and the counts waiting, done and working" width="400">
-  <img src="../assets/fork/lock-screen.jpg" alt="The iPhone lock screen with the same Collie card under the clock" width="160">
+  <img src="../assets/fork/island-expanded.png" alt="The expanded Dynamic Island: the pane Migrate checkout to Stripe, the line 在等你批准 Bash · bun test, and the counts waiting, done and working" width="400">
+  <img src="../assets/fork/lock-screen.jpg" alt="The iPhone lock screen with the same Gaddi card under the clock" width="160">
 </p>
 
 Build it from source, or sideload the unsigned `CollieIsland.ipa` each release carries (see

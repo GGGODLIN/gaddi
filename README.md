@@ -53,13 +53,13 @@ is enough, and nothing goes through a push service or a third-party server.
 <table>
   <tr>
     <td align="center" width="62%">
-      <img src="assets/fork/island.png" alt="The Dynamic Island showing the Collie mark in red and the words 1 等你 (one waiting for you)" width="400"><br>
+      <img src="assets/fork/island.png" alt="The Dynamic Island showing the Gaddi mark in red and the words 1 等你 (one waiting for you)" width="400"><br>
       <sub><b>Island</b>: how many agents wait for you</sub><br><br>
-      <img src="assets/fork/island-expanded.png" alt="The expanded Dynamic Island: the pane 重構登入流程, the line 在等你批准 Bash · bun test, and the counts waiting, done and working" width="400"><br>
+      <img src="assets/fork/island-expanded.png" alt="The expanded Dynamic Island: the pane Migrate checkout to Stripe, the line 在等你批准 Bash · bun test, and the counts waiting, done and working" width="400"><br>
       <sub><b>Long press</b>: the pane that needs you, what it waits on, and the counts</sub>
     </td>
     <td align="center" width="38%">
-      <img src="assets/fork/lock-screen.jpg" alt="The iPhone lock screen with the same Collie card under the clock" width="220"><br>
+      <img src="assets/fork/lock-screen.jpg" alt="The iPhone lock screen with the same Gaddi card under the clock" width="220"><br>
       <sub><b>Lock screen</b>: the same card</sub>
     </td>
   </tr>
