@@ -125,7 +125,7 @@ cd ~/.local/share/collie && git checkout main && bin/collie update
 | *Plain* 和 *Lost* 用白話重講一段 Claude session | [cc-sidecar-waitwhat](https://github.com/GGGODLIN/cc-sidecar-waitwhat)，寫在 `retell.toml` 裡（[Configure](./docs/configure.md#retell-a-claude-session)） | 不會出現這兩個選項 |
 | agent 狀態顯示在 iPhone 動態島 | [`ios/`](./ios/README.md) 裡的 iPhone app，用你自己的 Apple ID build 或側載；Gaddi 和上游 Collie 都能接 | 沒有任何差別；Gaddi 設定裡填 app 位址的那一列只在 app 裡才看得到 |
 
-pane 的那一行描述不管 app 設成什麼語言，都是中文（`在等你批准`、`你：`）。
+pane 的那一行描述跟著 app 的語言顯示；recap 照 Claude 寫的原文顯示，推播內文仍是中文。
 
 ## 其他文件
 
