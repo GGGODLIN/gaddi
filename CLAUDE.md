@@ -868,6 +868,8 @@ is the one place that says when to release; the agent proposes, the operator app
   remember.
 - **The operator's phone checks `dev` before `main` moves.** A release reaches `main` only after the
   change was accepted on the operator's iPhone against a dev instance running that `dev` commit.
+  The agent does that check itself through iPhone Mirroring and shows the screenshots; the operator
+  is not asked to test.
   Until that dev instance exists, the phone check stays after the tag, as before.
 - **Docs-only changes batch per working session.** One `main` commit per session, after the link
   check and CI, not one per edit. They need no weekly wait: no tag means no update offer.
