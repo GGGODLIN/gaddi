@@ -140,10 +140,55 @@ async function readNow(): Promise<void> {
   set(version === null ? { reading: next } : { reading: next, marks: markSeen(version) });
 }
 
-async function pollOnce(): Promise<void> {
+/**
+ * How long after "Copy to this phone" a change may be this phone's own copy coming back. With the
+ * phone near the computer, Universal Clipboard carries the copy to the Mac in about a second, and
+ * the counter moves as if the computer had copied something new.
+ */
+export const BOUNCE_WINDOW_MS = 30_000;
+
+/** What this phone just copied, held in memory only, for one comparison inside the window. */
+let copied: { readonly text: string; readonly until: number } | null = null;
+
+/** The sheet copied `text` to this phone. */
+export function noteCopiedToPhone(text: string, now = Date.now()): void {
+  copied = { text, until: now + BOUNCE_WINDOW_MS };
+}
+
+/**
+ * Whether a new counter needs one read to rule out the bounce: only inside the window, and only for
+ * a counter this device has not already seen or pended. Pure, so the window is a table in a test.
+ */
+export function needsBounceCheck(
+  marks: ClipboardMarks | null,
+  version: string,
+  copy: { readonly until: number } | null,
+  now: number,
+): boolean {
+  if (copy === null || now > copy.until || marks === null) return false;
+  return version !== marks.seen && marks.pending?.version !== version;
+}
+
+/** One poll. Exported for the store's own tests; the app polls through {@link useHostClipboardPoll}. */
+export async function pollHostClipboard(): Promise<void> {
   try {
     const got = await fetchHostClipboardVersion();
-    if (got.ok) set({ marks: foldVersion(state.marks, got.version, Date.now()) });
+    if (!got.ok) return;
+    const now = Date.now();
+    const copy = copied;
+    if (copy !== null && needsBounceCheck(state.marks, got.version, copy, now)) {
+      // The one read outside the sheet, and it is caused by the operator's own copy: identical text
+      // is that copy coming back, not news. Anything else, a failed read included, is news.
+      const expected = copy.text;
+      copied = null;
+      const back = await readHostClipboard().catch(() => null);
+      if (back?.ok === true && back.text === expected) {
+        set({ marks: markSeen(back.version) });
+        return;
+      }
+    }
+    if (copied !== null && now > copied.until) copied = null;
+    set({ marks: foldVersion(state.marks, got.version, now) });
   } catch {
     // A failed poll changes nothing: no banner from a guess, and the next poll tries again.
   }
@@ -160,8 +205,8 @@ export function useHostClipboardPoll(): void {
     let timer: ReturnType<typeof setInterval> | null = null;
     const start = () => {
       if (timer !== null || document.visibilityState !== "visible") return;
-      void pollOnce();
-      timer = setInterval(() => void pollOnce(), HOST_CLIPBOARD_POLL_MS);
+      void pollHostClipboard();
+      timer = setInterval(() => void pollHostClipboard(), HOST_CLIPBOARD_POLL_MS);
     };
     const stop = () => {
       if (timer !== null) clearInterval(timer);
@@ -205,5 +250,6 @@ export function useHostClipboard() {
 /** Test helper — reset module state between cases. */
 export function __resetHostClipboard(): void {
   ticket += 1;
+  copied = null;
   state = { marks: readMarks(), sheetOpen: false, reading: LOADING };
 }

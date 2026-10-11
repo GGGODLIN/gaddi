@@ -50,6 +50,12 @@ read = ["/usr/bin/pbpaste"]
   /api/host-clipboard/text` is gated `device-read`, like the Files view, and writes an audit line
   with the size, never the words. The counter is read before and after `read`; a write in between is
   read once more, and a clipboard that keeps moving is said to be moving.
+- **One read outside the sheet: this phone's own copy coming back.** Near the Mac, "Copy to this
+  phone" travels back through Universal Clipboard and moves the counter, so the operator in bed with
+  the Mac in the room would be told about their own copy. For 30 seconds after a copy, the next new
+  counter is checked with one read; text identical to what was copied is marked seen, anything else
+  (a failed read included) is news. The copied text is held in the phone's memory for those 30
+  seconds and never stored (added 2026-10-11, after the dev-lane check).
 - **Nothing is kept.** No history, no copy of the text in the bridge between requests, and on the
   phone only the counter it last saw (`collie:host-clipboard:v1`). The first counter a phone ever
   reads is a baseline, not news.

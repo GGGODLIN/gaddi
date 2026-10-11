@@ -10,7 +10,7 @@ import { useLocale } from "@/hooks/use-locale";
 import { useTick } from "@/hooks/use-tick";
 import { copyText } from "@/lib/clipboard";
 import { timeAgo } from "@/lib/format";
-import { useHostClipboard, useHostClipboardPoll } from "@/lib/host-clipboard";
+import { noteCopiedToPhone, useHostClipboard, useHostClipboardPoll } from "@/lib/host-clipboard";
 import { t } from "@/lib/i18n";
 import { CLIPBOARD } from "@/lib/strip-priority";
 
@@ -81,6 +81,19 @@ export function HostClipboardSheet() {
     return () => clearTimeout(timer);
   }, [copy]);
 
+  // Called straight from the tap: an async function runs up to its first await at once, so
+  // copyText's legacy path still runs inside the user gesture it needs.
+  async function copyToPhone(text: string) {
+    try {
+      await copyText(text);
+      setCopy("copied");
+      // Near the computer, this copy comes back to it and moves the counter (ADR 9010).
+      noteCopiedToPhone(text);
+    } catch {
+      setCopy("failed");
+    }
+  }
+
   const result = reading.phase === "done" ? reading.result : null;
   return (
     <BottomSheet open={clip.sheetOpen} onClose={clip.close} title={t("hostClipboard.title")}>
@@ -99,13 +112,7 @@ export function HostClipboardSheet() {
             {result.text}
           </pre>
           <Button
-            onClick={() => {
-              // Straight from the tap: copyText's legacy path must run inside the user gesture.
-              copyText(result.text).then(
-                () => setCopy("copied"),
-                () => setCopy("failed"),
-              );
-            }}
+            onClick={() => void copyToPhone(result.text)}
           >
             {copy === "copied" ? <Check aria-hidden /> : copy === "failed" ? <X aria-hidden /> : <Clipboard aria-hidden />}
             {copy === "copied" ? t("hostClipboard.copied") : copy === "failed" ? t("hostClipboard.copyFailed") : t("hostClipboard.copy")}

@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { http, HttpResponse } from "msw";
 
-import { dismissBanner, foldVersion, hasUnseen, markSeen, parseMarks, showsBanner, type ClipboardMarks } from "./host-clipboard";
+import { server } from "@/test/setup";
+import {
+  __resetHostClipboard,
+  dismissBanner,
+  foldVersion,
+  hasUnseen,
+  markSeen,
+  needsBounceCheck,
+  noteCopiedToPhone,
+  parseMarks,
+  pollHostClipboard,
+  showsBanner,
+  type ClipboardMarks,
+} from "./host-clipboard";
 
 describe("host clipboard marks", () => {
   it("the first reading is a baseline: no banner, no dot", () => {
@@ -66,5 +80,70 @@ describe("parseMarks", () => {
     expect(parseMarks("not json")).toBeNull();
     expect(parseMarks(JSON.stringify({ seen: 7, pending: null, dismissed: null }))).toBeNull();
     expect(parseMarks(JSON.stringify({ seen: "7", pending: { version: "8" }, dismissed: null }))).toBeNull();
+  });
+});
+
+describe("the bounce of this phone's own copy", () => {
+  const seen = { seen: "10", pending: null, dismissed: null };
+
+  it("needs a check only inside the window, for a counter not seen or pended", () => {
+    expect(needsBounceCheck(seen, "11", { until: 100 }, 50)).toBe(true);
+    expect(needsBounceCheck(seen, "11", { until: 100 }, 101)).toBe(false);
+    expect(needsBounceCheck(seen, "11", null, 50)).toBe(false);
+    expect(needsBounceCheck(seen, "10", { until: 100 }, 50)).toBe(false);
+    expect(needsBounceCheck(null, "11", { until: 100 }, 50)).toBe(false);
+  });
+
+  function stored() {
+    return parseMarks(localStorage.getItem("collie:host-clipboard:v1") ?? "");
+  }
+
+  function serve(version: () => string, text: () => string) {
+    let reads = 0;
+    server.use(
+      http.get("/api/host-clipboard", () => HttpResponse.json({ ok: true, version: version() })),
+      http.get("/api/host-clipboard/text", () => {
+        reads += 1;
+        return HttpResponse.json({ ok: true, text: text(), bytes: text().length, version: version() });
+      }),
+    );
+    return () => reads;
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    __resetHostClipboard();
+  });
+
+  it("identical text right after a copy is that copy coming back, not news", async () => {
+    let v = "10";
+    const reads = serve(() => v, () => "same prompt");
+    await pollHostClipboard();
+    noteCopiedToPhone("same prompt");
+    v = "11";
+    await pollHostClipboard();
+    expect(hasUnseen(stored())).toBe(false);
+    expect(stored()?.seen).toBe("11");
+    expect(reads()).toBe(1);
+  });
+
+  it("different text inside the window is still news", async () => {
+    let v = "10";
+    serve(() => v, () => "something the agent copied");
+    await pollHostClipboard();
+    noteCopiedToPhone("same prompt");
+    v = "11";
+    await pollHostClipboard();
+    expect(showsBanner(stored())).toBe(true);
+  });
+
+  it("without a copy from this phone a change reads nothing and is news", async () => {
+    let v = "10";
+    const reads = serve(() => v, () => "x");
+    await pollHostClipboard();
+    v = "11";
+    await pollHostClipboard();
+    expect(showsBanner(stored())).toBe(true);
+    expect(reads()).toBe(0);
   });
 });
