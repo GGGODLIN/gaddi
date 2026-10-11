@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A box table with Chinese or Japanese in it pans instead of wrapping.** A double-width character takes two terminal columns but one place in the text, so the table's walls never lined up and the whole table wrapped into stacked rules on a phone. Walls are now matched by terminal column, and Grok's Chinese reply tables scroll sideways like any other table.
+
 ## [2.1.1] - 2026-10-11
 
 ### Changed
