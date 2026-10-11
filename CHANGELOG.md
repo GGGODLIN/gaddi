@@ -29,6 +29,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **Scrolling while the pin walks back to a prompt calls the walk off.** A reader who moves while older pages load is no longer pulled to the prompt when it arrives.
 - **A new Grok pane does not borrow a neighbour's Chat.** The `/resume` correction stands down while another Grok pane runs in the same folder, and ignores a live-session list over 1 MiB. From upstream (7b2a50de).
 - **Chat and History follow a Grok `/resume` made after a prompt.** Grok keeps a session that already had a prompt in its live list beside the resumed one, under the same process, so Collie now reads the latest session that process opened.
+- **Chat and History follow a second Grok `/resume`.** When a fresh Grok resumes one session and later another, Collie reads the latest session that process opened instead of the first id Herdr saw.
 
 ## [2.0.1] - 2026-10-11
 

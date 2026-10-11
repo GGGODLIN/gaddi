@@ -103,12 +103,21 @@ export function parseActiveSessions(text: string): GrokActiveSession[] | null {
   return rows;
 }
 
+/** The row opened last among these, leaving out rows without a parseable `opened_at`. */
+function latestOpened(rows: readonly GrokActiveSession[]): GrokActiveSession | undefined {
+  let latest: GrokActiveSession | undefined;
+  for (const s of rows) {
+    if (s.openedAt !== null && s.openedAt > (latest?.openedAt ?? Number.NEGATIVE_INFINITY)) latest = s;
+  }
+  return latest;
+}
+
 /**
  * The session a grok pane really holds. `live` is the rows whose process is still running. While
  * grok still lists Herdr's id, the latest session that same process opened stands, which is that id
- * unless the process resumed another since; rows that cannot be ordered leave it alone. Otherwise
- * the one live session opened in the pane's cwd replaces it. Two in the same cwd could be either
- * pane's, so the reported id stands then too.
+ * unless the process resumed another since. Otherwise, when every live session in the pane's cwd
+ * belongs to one process, the latest of them replaces it. Sessions of two processes in the same cwd
+ * could be either pane's, so the reported id stands then too.
  */
 export function pickLiveSession(
   reported: string,
@@ -117,14 +126,14 @@ export function pickLiveSession(
 ): string {
   const mine = live.find((s) => s.sessionId === reported);
   if (mine !== undefined) {
-    const after = mine.openedAt;
-    if (after === null) return reported;
-    const later = live.filter((s) => s.pid === mine.pid && s.openedAt !== null && s.openedAt > after);
-    if (later.length === 0) return reported;
-    return later.reduce((a, b) => ((b.openedAt ?? 0) > (a.openedAt ?? 0) ? b : a)).sessionId;
+    if (mine.openedAt === null) return reported;
+    const latest = latestOpened(live.filter((s) => s.pid === mine.pid));
+    return latest !== undefined && (latest.openedAt ?? 0) > mine.openedAt ? latest.sessionId : reported;
   }
   const here = live.filter((s) => s.cwd === cwd);
-  return here.length === 1 && here[0] !== undefined ? here[0].sessionId : reported;
+  if (here.length === 1 && here[0] !== undefined) return here[0].sessionId;
+  if (here.length === 0 || new Set(here.map((s) => s.pid)).size !== 1) return reported;
+  return latestOpened(here)?.sessionId ?? reported;
 }
 
 /**
