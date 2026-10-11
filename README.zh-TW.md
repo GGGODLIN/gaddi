@@ -16,6 +16,8 @@ Store：手機打開網址，加到主畫面就能用。
 > [ColliePWA](https://github.com/AltanS/collie)，不是 ColliePWA 官方專案。它從原始碼安裝、自己發版。
 > `collie` 指令和 Herdr 外掛沿用上游的名字，所以指令和文件裡看到的還是 Collie。
 
+https://github.com/user-attachments/assets/b108cfdd-e0e9-48e2-a5f8-3146698adabb
+
 <table>
   <tr>
     <td align="center" width="33%"><img src="assets/readme/zh-TW/dashboard.png" alt="總覽畫面：三個工作區裡有四個 agent，等你批准的那個排在最上面，每個底下都有一行在做什麼" width="240"><br><sub><b>需要你的排第一</b></sub></td>
@@ -24,7 +26,7 @@ Store：手機打開網址，加到主畫面就能用。
   </tr>
 </table>
 
-截圖裡的 agent 都是假資料。
+影片和截圖裡的 agent 都是假資料。
 
 ## 能做什麼
 

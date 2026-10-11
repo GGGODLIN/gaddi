@@ -19,6 +19,8 @@ home screen.
 > project. It installs from source and publishes its own releases. The `collie` command and the
 > Herdr plugin keep their upstream names, so commands and the docs still say Collie.
 
+https://github.com/user-attachments/assets/4c863f80-0167-4391-bdcd-4de76c67f654
+
 <table>
   <tr>
     <td align="center" width="33%"><img src="assets/readme/en/dashboard.png" alt="The dashboard: four agents in three workspaces, the one waiting for approval at the top, each with a line on what it is doing" width="240"><br><sub><b>What needs you comes first</b></sub></td>
@@ -27,7 +29,7 @@ home screen.
   </tr>
 </table>
 
-The screenshots use made-up agents.
+The video and the screenshots use made-up agents.
 
 ## What it does
 
