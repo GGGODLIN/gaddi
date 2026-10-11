@@ -23,10 +23,16 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-10-11
+
+### Changed
+
+- **Built on upstream Collie 1.19.2.** AltanS/collie v1.19.2, commit aacece40. Also carries upstream main's unreleased 7b2a50de.
+
 ### Fixed
 
-- **A box table with Chinese or Japanese in it pans instead of wrapping.** A double-width character takes two terminal columns but one place in the text, so the table's walls never lined up and the whole table wrapped into stacked rules on a phone. Walls are now matched by terminal column, and Grok's Chinese reply tables scroll sideways like any other table.
-- **A Chinese or Japanese table's walls line up on a phone.** The phone draws a double-width character in a fallback font that is not two monospace cells wide, so every wall after one drifted. Inside a table each such character now takes exactly two cells, as it does in the terminal.
+- **A box table with Chinese or Japanese in it pans instead of wrapping.** A double-width character takes two terminal columns but one place in the text, so the table's walls never lined up and the whole table wrapped into stacked rules on a phone. Walls are now matched by terminal column, and Grok's Chinese reply tables scroll sideways like any other table. ([e94968eb](https://github.com/GGGODLIN/gaddi/commit/e94968eb))
+- **A Chinese or Japanese table's walls line up on a phone.** The phone draws a double-width character in a fallback font that is not two monospace cells wide, so every wall after one drifted. Inside a table each such character now takes exactly two cells, as it does in the terminal. ([ab5e8302](https://github.com/GGGODLIN/gaddi/commit/ab5e8302))
 
 ## [2.1.1] - 2026-10-11
 
