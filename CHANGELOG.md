@@ -23,13 +23,19 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-11
+
+### Changed
+
+- **Built on upstream Collie 1.19.2.** AltanS/collie v1.19.2, commit aacece40. Also carries upstream main's unreleased 7b2a50de.
+
 ### Fixed
 
-- **A tap on the prompt pin goes where it was tapped, and lets go when you move.** Walking back to a prompt the first page left out keeps looking for that prompt even if a newer one lands meanwhile; the jump's follow-up corrections stop when you tap the latest-turn button; and the prompt lands below the status band rather than behind it.
-- **Scrolling while the pin walks back to a prompt calls the walk off.** A reader who moves while older pages load is no longer pulled to the prompt when it arrives.
-- **A new Grok pane does not borrow a neighbour's Chat.** The `/resume` correction stands down while another Grok pane runs in the same folder, and ignores a live-session list over 1 MiB. From upstream (7b2a50de).
-- **Chat and History follow a Grok `/resume` made after a prompt.** Grok keeps a session that already had a prompt in its live list beside the resumed one, under the same process, so Collie now reads the latest session that process opened.
-- **Chat and History follow a second Grok `/resume`.** When a fresh Grok resumes one session and later another, Collie reads the latest session that process opened instead of the first id Herdr saw.
+- **A tap on the prompt pin goes where it was tapped, and lets go when you move.** Walking back to a prompt the first page left out keeps looking for that prompt even if a newer one lands meanwhile; the jump's follow-up corrections stop when you tap the latest-turn button; and the prompt lands below the status band rather than behind it. ([9c231bf5](https://github.com/GGGODLIN/gaddi/commit/9c231bf5))
+- **Scrolling while the pin walks back to a prompt calls the walk off.** A reader who moves while older pages load is no longer pulled to the prompt when it arrives. ([d4f61677](https://github.com/GGGODLIN/gaddi/commit/d4f61677))
+- **A new Grok pane does not borrow a neighbour's Chat.** The `/resume` correction stands down while another Grok pane runs in the same folder, and ignores a live-session list over 1 MiB. From upstream (7b2a50de). ([76c32553](https://github.com/GGGODLIN/gaddi/commit/76c32553))
+- **Chat and History follow a Grok `/resume` made after a prompt.** Grok keeps a session that already had a prompt in its live list beside the resumed one, under the same process, so Collie now reads the latest session that process opened. ([5138731e](https://github.com/GGGODLIN/gaddi/commit/5138731e))
+- **Chat and History follow a second Grok `/resume`.** When a fresh Grok resumes one session and later another, Collie reads the latest session that process opened instead of the first id Herdr saw. ([44b73bbe](https://github.com/GGGODLIN/gaddi/commit/44b73bbe))
 
 ## [2.0.1] - 2026-10-11
 
