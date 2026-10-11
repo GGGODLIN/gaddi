@@ -289,6 +289,31 @@ describe("GrokTranscriptSource.reconcile", () => {
     expect(await src.reconcile({ kind: "id", value: STALE }, CWD)).toEqual({ kind: "id", value: STALE });
   });
 
+  // Live-verified 2026-10-11, grok 1.0.50: `/resume` from a session that already had a prompt
+  // leaves that session's row in place and adds the resumed one under the same pid.
+  test("a reported id whose process opened a later session gives way to that session", async () => {
+    const later = { ...row(RESUMED), opened_at: "2026-10-08T11:35:21.334258Z" };
+    const root = await grokHome(JSON.stringify([row(STALE), later]));
+    const src = new GrokTranscriptSource(root, alive);
+    expect(await src.reconcile({ kind: "id", value: STALE }, CWD)).toEqual({ kind: "id", value: RESUMED });
+  });
+
+  test("a later session under another pid does not move a listed reported id", async () => {
+    const later = { ...row(RESUMED, CWD, 4343), opened_at: "2026-10-08T11:35:21.334258Z" };
+    const root = await grokHome(JSON.stringify([row(STALE), later]));
+    const src = new GrokTranscriptSource(root, alive);
+    expect(await src.reconcile({ kind: "id", value: STALE }, CWD)).toEqual({ kind: "id", value: STALE });
+  });
+
+  test("two rows of one process that cannot be ordered keep the reported id", async () => {
+    const { opened_at: _, ...undated } = row(RESUMED);
+    for (const other of [undated, { ...row(RESUMED), opened_at: "not a time" }]) {
+      const root = await grokHome(JSON.stringify([row(STALE), other]));
+      const src = new GrokTranscriptSource(root, alive);
+      expect(await src.reconcile({ kind: "id", value: STALE }, CWD)).toEqual({ kind: "id", value: STALE });
+    }
+  });
+
   test("two live sessions in the same cwd are ambiguous, so the reported id is kept", async () => {
     const root = await grokHome(JSON.stringify([row(RESUMED), row(OTHER, CWD, 4343)]));
     const src = new GrokTranscriptSource(root, alive);

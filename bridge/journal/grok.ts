@@ -26,8 +26,10 @@
 // running grok fires SessionStart with the resumed id and source `load`, and Herdr keeps the pane's
 // first id because it accepts a replacement from grok only for source `new` (still so on Herdr's
 // main that day). `reconcile` corrects it from `$GROK_HOME/active_sessions.json`, the list grok
-// itself keeps of the session each live process holds. That file is grok's own and undocumented,
-// so anything short of one unambiguous live match leaves Herdr's id alone. The reconcile step is a
+// itself keeps of the session each live process holds. A resumed session that had no prompt is
+// dropped from that list, but one that had a prompt stays beside the resumed one under the same pid
+// (live-verified 2026-10-11, grok 1.0.50), so a listed id can still be stale. That file is grok's
+// own and undocumented, so anything short of one unambiguous live match leaves Herdr's id alone. The reconcile step is a
 // workaround for herdrdev/herdr#2683 and is to be removed once the Herdr version Collie requires
 // takes a grok session start with source `load`.
 
@@ -70,6 +72,8 @@ export interface GrokActiveSession {
   sessionId: string;
   pid: number;
   cwd: string;
+  /** When the process opened it, in ms, or null when the row says nothing parseable. */
+  openedAt: number | null;
 }
 
 /**
@@ -93,22 +97,32 @@ export function parseActiveSessions(text: string): GrokActiveSession[] | null {
     if (typeof sessionId !== "string" || !isGrokSessionId(sessionId)) return null;
     if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) return null;
     if (typeof cwd !== "string" || cwd === "") return null;
-    rows.push({ sessionId, pid, cwd });
+    const opened = typeof row.opened_at === "string" ? Date.parse(row.opened_at) : Number.NaN;
+    rows.push({ sessionId, pid, cwd, openedAt: Number.isNaN(opened) ? null : opened });
   }
   return rows;
 }
 
 /**
- * The session a grok pane really holds. `live` is the rows whose process is still running. Herdr's
- * id stands while grok still lists it; otherwise the one live session opened in the pane's cwd
- * replaces it. Two in the same cwd could be either pane's, so the reported id stands then too.
+ * The session a grok pane really holds. `live` is the rows whose process is still running. While
+ * grok still lists Herdr's id, the latest session that same process opened stands, which is that id
+ * unless the process resumed another since; rows that cannot be ordered leave it alone. Otherwise
+ * the one live session opened in the pane's cwd replaces it. Two in the same cwd could be either
+ * pane's, so the reported id stands then too.
  */
 export function pickLiveSession(
   reported: string,
   cwd: string,
   live: readonly GrokActiveSession[],
 ): string {
-  if (live.some((s) => s.sessionId === reported)) return reported;
+  const mine = live.find((s) => s.sessionId === reported);
+  if (mine !== undefined) {
+    const after = mine.openedAt;
+    if (after === null) return reported;
+    const later = live.filter((s) => s.pid === mine.pid && s.openedAt !== null && s.openedAt > after);
+    if (later.length === 0) return reported;
+    return later.reduce((a, b) => ((b.openedAt ?? 0) > (a.openedAt ?? 0) ? b : a)).sessionId;
+  }
   const here = live.filter((s) => s.cwd === cwd);
   return here.length === 1 && here[0] !== undefined ? here[0].sessionId : reported;
 }
