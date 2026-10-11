@@ -162,10 +162,12 @@ describe("createHostClipboard", () => {
   });
 
   test("text over the cap is too large, never a cut half", async () => {
-    // The real spawn and a real child that writes forever, so the cap that trips is the module's own.
+    // The real spawn and a real child that writes past the cap, so the cap that trips is the
+    // module's own. Bun itself is the writer: `/usr/bin/yes` is not on a Windows runner.
     const counts = ["5", "5"];
+    const writer = [process.execPath, "-e", "process.stdout.write('x'.repeat(1024 * 1024))"];
     const spawn: ClipboardSpawn = (argv, maxBytes) =>
-      argv[0] === "count-cmd" ? child(counts.shift() ?? "5") : bunClipboardSpawn(["/usr/bin/yes"], maxBytes);
+      argv[0] === "count-cmd" ? child(counts.shift() ?? "5") : bunClipboardSpawn(writer, maxBytes);
     expect(await createHostClipboard(configured, spawn).read()).toEqual({ ok: false, kind: "too-large", version: "5" });
   });
 });
