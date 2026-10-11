@@ -113,6 +113,7 @@ import {
 import { createOperatorAccounts, type Account } from "./operator-accounts.ts";
 import { settingsChangedSinceLastTurn, switchAccount } from "./account-switch.ts";
 import { bunRetellSpawn, createOperatorRetell, retellArgv, runRetell, type RetellConfig, type RetellMode, type RetellSpawn } from "./retell.ts";
+import { createHostClipboard, createOperatorHostClipboard, type HostClipboard } from "./host-clipboard.ts";
 import {
   DEFAULT_PROMPT_TAIL_LINES,
   verifyPromptBinding,
@@ -216,6 +217,8 @@ import type {
   PaneHistoryResponse,
   PaneReadResponse,
   RetellResponse,
+  HostClipboardTextResponse,
+  HostClipboardVersionResponse,
   PaneWire,
   SnapshotResponse,
   SttCapability,
@@ -835,6 +838,8 @@ export function bridgeConfigBody(opts: {
   accounts?: readonly string[];
   /** Whether `retell.toml` names a command. Omitted when it does not (ADR 9005). */
   retell?: boolean;
+  /** Whether `clipboard.toml` names both commands. Omitted when it does not (ADR 9010). */
+  hostClipboard?: boolean;
   /**
    * What this host accepts as an attachment. Optional here for the reason `mux` is — the crew-mode
    * assertions build this body by hand and are about the crew — and always passed by the real
@@ -878,6 +883,7 @@ export function bridgeConfigBody(opts: {
   // declared no accounts or no retell command.
   if (opts.accounts !== undefined && opts.accounts.length > 0) wire.accounts = [...opts.accounts];
   if (opts.retell === true) wire.retell = true;
+  if (opts.hostClipboard === true) wire.hostClipboard = true;
   // Same omit-when-absent rule, and the same reading on the other end: no key is an older bridge,
   // which the phone falls back to the pre-attachment contract for (images, 10 MB).
   if (opts.upload !== undefined) wire.upload = opts.upload;
@@ -1182,6 +1188,9 @@ export function startServer(opts: {
   // Two more on that contract: the switch-account allowlist and the retell command (ADR 9005).
   const operatorAccounts = createOperatorAccounts(cfg.accountsFile);
   const operatorRetell = createOperatorRetell(cfg.retellFile);
+  // And the host clipboard's two commands (ADR 9010). Nothing runs until a phone asks.
+  const operatorClipboard = createOperatorHostClipboard(cfg.clipboardFile);
+  const hostClipboard: HostClipboard = createHostClipboard(operatorClipboard);
   // The rows phones added here, and the operator's `[phone]` switches over them (ADR 0094). The launch
   // allowlist is the MERGE of the operator's rows and these, read fresh each time (bridge/launcher-adds.ts).
   const addedLaunchers = opts.addedLaunchers ?? memoryAddedLaunchers();
@@ -2302,6 +2311,29 @@ export function startServer(opts: {
       // The rule catalog behind the cache chips, and the overrides this host applies. Gated exactly as
       // `/api/config` is — read-level, and through `guard` so COLLIE_PUBLIC_HOSTS covers it — because
       // it is the same kind of payload: Collie's own facts plus operator-authored text.
+      // The host clipboard (ADR 9010), this collie's own and never forwarded to a member. The version
+      // is a counter and nothing else, so a plain read may poll it; the text is the clipboard itself,
+      // so it asks for an authorised device, the Files view's `device-read`, and leaves an audit line
+      // that records its size and never its words.
+      if (pathname === "/api/host-clipboard" && req.method === "GET") {
+        const denied = guard(req, cfg, "read", pairingGate);
+        if (denied) return denied;
+        const version = await hostClipboard.version();
+        if (version === null) return text("not found", 404);
+        return json(version satisfies HostClipboardVersionResponse, req.headers.get("accept-encoding"));
+      }
+      if (pathname === "/api/host-clipboard/text" && req.method === "GET") {
+        const denied = guard(req, cfg, "device-read", pairingGate);
+        if (denied) return denied;
+        const result = await hostClipboard.read();
+        if (result === null) return text("not found", 404);
+        audit.record({
+          action: "clipboard.read",
+          device: whois(req).device,
+          detail: result.ok ? { bytes: result.bytes } : { outcome: result.kind },
+        });
+        return json(result satisfies HostClipboardTextResponse, req.headers.get("accept-encoding"));
+      }
       if (pathname === "/api/cache-rules" && req.method === "GET") {
         const denied = guard(req, cfg, "read", pairingGate);
         if (denied) return denied;
@@ -2381,6 +2413,7 @@ export function startServer(opts: {
             // and the pane sheet hides both rows for a pane on a member.
             accounts: (await operatorAccounts()).map((a) => a.label),
             retell: (await operatorRetell()).length > 0,
+            hostClipboard: (await operatorClipboard()).length > 0,
             // This host's own limits, read from cfg on every request like everything else here.
             // A crew member answers with ITS number, which is the number that will judge the bytes.
             upload: {

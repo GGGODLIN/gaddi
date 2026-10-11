@@ -185,6 +185,7 @@ function cfg(overrides: Partial<Config> = {}): Config {
     launchersFile: "/nope/launchers.toml",
     accountsFile: "/nope/accounts.toml",
     retellFile: "/nope/retell.toml",
+    clipboardFile: "/nope/clipboard.toml",
     cacheRulesFile: "/nope/cache-rules.toml",
     trustedUser: "",
     trustedUserOptional: false,

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type RefObject } from "react";
 import { useRevalidator } from "react-router";
 
 import { RouteHeader, SettingsGear } from "@/components/app-header";
+import { HostClipboardButton } from "@/components/host-clipboard";
 import { SessionSwitcher } from "@/components/session-switcher";
 import { ServerSwitcher } from "@/components/server-switcher";
 import { ReadOnlyBanner } from "@/components/read-only-banner";
@@ -248,7 +249,12 @@ export function HomeRoute() {
             <SessionSwitcher sessions={sessionsHere} scope={data.scope} viewAll={data.viewAll} />
           </>
         }
-        rightTrail={<SettingsGear scope={data.scope} />}
+        rightTrail={
+          <>
+            <HostClipboardButton />
+            <SettingsGear scope={data.scope} />
+          </>
+        }
       />
 
       {/* Content region below the header: a viewport-clipped internal scroller. `relative` is

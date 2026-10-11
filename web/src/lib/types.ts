@@ -1792,6 +1792,8 @@ export interface BridgeConfig {
   accounts?: string[];
   /** Present when `retell.toml` names a command, so the phone draws "Plain" / "Lost" (ADR 9005). */
   retell?: true;
+  /** Present when `clipboard.toml` names both commands, so the phone draws the clipboard (ADR 9010). */
+  hostClipboard?: true;
   /**
    * What this collie accepts as an attachment. Mirrors `UploadCapability` in bridge/types.ts.
    *

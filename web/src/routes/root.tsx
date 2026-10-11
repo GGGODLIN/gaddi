@@ -16,6 +16,7 @@ import { useAgentTransitions } from "@/hooks/use-transitions";
 import { usePushSetup } from "@/hooks/use-push";
 import { useConnectionLost } from "@/hooks/use-connection-lost";
 import { UpdateRibbon } from "@/components/update-ribbon";
+import { HostClipboardSheet, HostClipboardStrip } from "@/components/host-clipboard";
 import { UpdateRunStrip } from "@/components/update-run-strip";
 import { useOptionalUpdateScreen } from "@/components/update-screen-provider";
 import { ConnectionBanner } from "@/components/connection-banner";
@@ -202,6 +203,10 @@ export function RootLayout() {
                 above it, a unit test or the playground, and that renders no strip, which is
                 correct. */}
             {updateScreen !== null && <UpdateRunStrip screen={updateScreen} />}
+            {/* The host clipboard's news, the quietest strip (ADR 9010), and the one sheet that reads
+                it. Both render nothing on a host with no clipboard.toml. */}
+            <HostClipboardStrip />
+            <HostClipboardSheet />
             {/* The app's ONE connection surface: a thin bar that stays hidden while healthy, appears
                 amber "reconnecting…" only after ≥4s of sustained trouble (the flicker fix), escalates
                 to a red "not connected" cause + Retry/Reload at ≥15s, and flashes green on recovery.

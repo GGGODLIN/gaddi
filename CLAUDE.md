@@ -768,6 +768,11 @@ a web form, for the reason pairing is.
 never a shell, a daemon or a client-chosen string. Absent file, absent feature
 ([ADR 9005](./.adr/9005-retell-is-a-one-shot-operator-child.md)).
 
+**The host clipboard is read when a phone asks, and never watched, kept or attributed** — the two
+argv in `clipboard.toml`, a counter the open phone polls and the text when its sheet opens, each one
+short-lived child. No bridge timer, no history, no guess at who copied
+([ADR 9010](./.adr/9010-the-host-clipboard-is-read-when-the-phone-asks.md)).
+
 **Two device gates guard writes, independently, and compose by AND.** `COLLIE_DEVICE_HEADER` trusts
 a name a proxy injects; **pairing** (`bridge/pairing.ts`, `collie pair` / `collie devices`) requires a
 bearer credential the device holds, and is always on, reads included

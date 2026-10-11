@@ -555,6 +555,33 @@ alike. Each request runs one child for at most 180 seconds.
 > **Note.** Without this file the rows do not appear. Where the model call goes is decided by your
 > `command`: `--source http` keeps it on the local proxy (ADR 9005).
 
+## Take the computer's clipboard on the phone
+
+Text an agent copied on the computer can be read and copied on the phone, on macOS.
+
+```toml
+# ~/.config/collie/clipboard.toml
+count = ["/usr/bin/osascript", "-l", "JavaScript", "-e",
+         "ObjC.import('AppKit'); $.NSPasteboard.generalPasteboard.changeCount"]
+read = ["/usr/bin/pbpaste"]
+```
+
+When the clipboard changes, a strip under the header says so, and a clipboard button sits beside
+the gear on the dashboard. Opening it reads the text once and offers **Copy to this phone**.
+
+The phone asks for the change counter every 10 seconds while it is open, and the text only when you
+open the sheet. A closed app asks nothing, so a change waits for your next look. Nothing is kept:
+no history, and the strip never names who copied.
+
+| Key | What it prints | Limit |
+| --- | --- | --- |
+| `count` | the clipboard's change counter, a whole number | 5 seconds |
+| `read` | the clipboard's text | 5 seconds, 256 KB |
+
+> **Note.** Without this file nothing appears and nothing runs. Both keys are argv arrays, never a
+> shell line. Reading the text needs a paired device, and each read is in the audit log by size
+> only (ADR 9010).
+
 ## Your own typefaces
 
 The interface font is a per-device setting. Under **Settings → Appearance → Typeface**, you can choose between

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRevalidator } from "react-router";
 
 import { RouteHeader, SettingsGear } from "@/components/app-header";
+import { HostClipboardButton } from "@/components/host-clipboard";
 import { ReadOnlyBanner } from "@/components/read-only-banner";
 import { SpaceStrip } from "@/components/space-strip";
 import { SpaceView } from "@/components/space-view";
@@ -108,7 +109,12 @@ export function SpaceRoute() {
         onHome={toDashboard}
         wordmark
         width="responsive-column"
-        rightTrail={<SettingsGear scope={data.scope} />}
+        rightTrail={
+          <>
+            <HostClipboardButton />
+            <SettingsGear scope={data.scope} />
+          </>
+        }
       />
 
       {/* Content region below the header: the viewport-clipped scroller, the same shell the

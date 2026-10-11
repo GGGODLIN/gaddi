@@ -296,6 +296,11 @@ export interface Config {
    */
   retellFile: string;
   /**
+   * The operator's host-clipboard commands — `clipboard.toml`, read by bridge/host-clipboard.ts.
+   * Absent file means the phone draws no clipboard surface at all (ADR 9010).
+   */
+  clipboardFile: string;
+  /**
    * Where the operator's prompt-cache overrides live — `cache-rules.toml`, the sixth file on the same
    * contract, read the same way (bridge/operator-cache-rules.ts) and likewise never read here.
    */
@@ -687,6 +692,7 @@ export function loadConfig(env: Environment = process.env): Config {
     launchersFile: join(configDir, "launchers.toml"),
     accountsFile: join(configDir, "accounts.toml"),
     retellFile: join(configDir, "retell.toml"),
+    clipboardFile: join(configDir, "clipboard.toml"),
     cacheRulesFile: join(configDir, "cache-rules.toml"),
     trustedUser: env.COLLIE_TRUSTED_USER ?? "",
     trustedUserOptional: envBool("COLLIE_TRUSTED_USER_OPTIONAL", false, env),

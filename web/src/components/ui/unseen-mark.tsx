@@ -14,17 +14,20 @@ import { useLocale } from "@/hooks/use-locale";
  *
  * `reserve` keeps the slot when the pane is seen, drawn invisible, so a row's name truncates at the
  * same width in both states and nothing shifts when the mark comes or goes (DESIGN.md's no-shift
- * rule). The words are for a screen reader only when the mark is drawn.
+ * rule). The words are for a screen reader only when the mark is drawn. `label` names what is unseen
+ * where it is not a reply, the host clipboard's news (ADR 9010), so the same square keeps one meaning.
  */
 export function UnseenMark({
   on = true,
   reserve = false,
   size = "md",
+  label,
   className,
 }: {
   on?: boolean;
   reserve?: boolean;
   size?: "sm" | "md";
+  label?: string;
   className?: string;
 }) {
   useLocale();
@@ -32,7 +35,7 @@ export function UnseenMark({
   return (
     <span
       role={on ? "img" : undefined}
-      aria-label={on ? t("home.row.unseen") : undefined}
+      aria-label={on ? (label ?? t("home.row.unseen")) : undefined}
       aria-hidden={on ? undefined : true}
       className={cn(
         "shrink-0 self-center rounded-[2px] bg-foreground",

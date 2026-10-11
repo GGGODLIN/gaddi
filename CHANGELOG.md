@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **The phone can take the computer's clipboard.** With `clipboard.toml` naming two commands (the macOS example is in docs/configure.md), a strip under the header says when the computer's clipboard changed, and a clipboard button beside the gear opens a sheet that reads the text once and copies it to the phone. The phone asks only while it is open, nothing is kept, and the strip never guesses who copied (ADR 9010).
+
 ## [2.2.0] - 2026-10-11
 
 ### Changed
