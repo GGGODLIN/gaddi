@@ -23,6 +23,20 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-11
+
+### Changed
+
+- **Built on upstream Collie 1.19.2.** AltanS/collie v1.19.2, commit aacece40. Also carries upstream main's unreleased 7b2a50de.
+
+### Added
+
+- **The phone can take the computer's clipboard.** With `clipboard.toml` naming two commands (the macOS example is in docs/configure.md), a strip under the header says when the computer's clipboard changed, and a clipboard button beside the gear opens a sheet that reads the text once and copies it to the phone. The phone asks only while it is open, nothing is kept, and the strip never guesses who copied (ADR 9010). ([533cc701](https://github.com/GGGODLIN/gaddi/commit/533cc701))
+
+### Fixed
+
+- **Your own copy coming back to a nearby Mac no longer raises the clipboard strip.** With the phone near the computer, Copy to this phone travels back through Universal Clipboard and moves the computer's clipboard; for 30 seconds after a copy the phone reads the next change once, and identical text is not news. ([565c9583](https://github.com/GGGODLIN/gaddi/commit/565c9583))
+
 ## [2.2.0] - 2026-10-11
 
 ### Changed

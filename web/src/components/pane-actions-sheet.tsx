@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookOpenText,
+  Clipboard,
   Compass,
   Copy,
   GitBranchPlus,
@@ -35,6 +36,7 @@ import { setStatus } from "@/lib/status";
 import { stampTopology } from "@/lib/poll-intent";
 import { paneName } from "@/lib/pane-name";
 import { useOperatorAccounts } from "@/lib/operator-config";
+import { useHostClipboard } from "@/lib/host-clipboard";
 import type { RetellMode } from "@/components/retell-sheet";
 import { dropPin, pinMatcher, setPinned, usePins } from "@/lib/pins";
 import type { PaneView } from "@/lib/pane-view";
@@ -253,6 +255,10 @@ export function PaneActionsSheet({
     pane.hasSession === true &&
     (pane.host === undefined || pane.host === lead);
   const accountConfirm = usePendingConfirm();
+  // The clipboard is THIS host's (ADR 9010), so a pane on a crew member does not offer it: the row
+  // would read as that member's clipboard.
+  const hostClipboard = useHostClipboard();
+  const offersClipboard = hostClipboard.enabled && (pane?.host === undefined || pane.host === lead);
   const [switching, setSwitching] = useState<string | null>(null);
 
   // Reset to the action list — and reprefill the label — whenever the sheet opens on a (new) pane,
@@ -550,6 +556,16 @@ export function PaneActionsSheet({
                 }}
               />
             </>
+          )}
+          {offersClipboard && (
+            <ActionRow
+              icon={<Clipboard className="size-4 shrink-0 text-muted-foreground" />}
+              label={t("hostClipboard.title")}
+              onClick={() => {
+                onClose();
+                hostClipboard.open();
+              }}
+            />
           )}
           <ActionRow
             icon={

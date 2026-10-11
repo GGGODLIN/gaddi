@@ -1408,6 +1408,38 @@ export function retellPane(
   );
 }
 
+/** The host clipboard's change counter, or why it could not be read (ADR 9010). Never its text. */
+export type HostClipboardVersion = { ok: true; version: string } | { ok: false; reason: string };
+
+/** The host clipboard's text as it was when the sheet asked, or what stood in the way (ADR 9010). */
+export type HostClipboardText =
+  | { ok: true; text: string; bytes: number; version: string }
+  | { ok: false; kind: "empty" | "too-large"; version: string }
+  | { ok: false; kind: "failed"; reason: string };
+
+/** This host's clipboard counter. A 404 means no `clipboard.toml`, which the caller reads as off. */
+export async function fetchHostClipboardVersion(signal?: AbortSignal): Promise<HostClipboardVersion> {
+  const got = await doReq<JsonObject>("/api/host-clipboard", { signal, timeoutMs: GET_TIMEOUT_MS });
+  const version = asJsonString(got.version);
+  if (got.ok === true && version !== undefined) return { ok: true, version };
+  return { ok: false, reason: asJsonString(got.reason) ?? "" };
+}
+
+/** This host's clipboard text, read now. Asked only when the operator opens the sheet. */
+export async function readHostClipboard(signal?: AbortSignal): Promise<HostClipboardText> {
+  const got = await doReq<JsonObject>("/api/host-clipboard/text", { signal, timeoutMs: GET_TIMEOUT_MS });
+  const version = asJsonString(got.version);
+  if (got.ok === true) {
+    const text = asJsonString(got.text);
+    const bytes = asJsonNumber(got.bytes);
+    if (text !== undefined && bytes !== undefined && version !== undefined) return { ok: true, text, bytes, version };
+  }
+  if ((got.kind === "empty" || got.kind === "too-large") && version !== undefined) {
+    return { ok: false, kind: got.kind, version };
+  }
+  return { ok: false, kind: "failed", reason: asJsonString(got.reason) ?? "" };
+}
+
 /** Set (or clear) a pane's label. An empty/blank `label` clears it (the bridge sends `null` on). */
 export function renamePane(
   paneId: string,

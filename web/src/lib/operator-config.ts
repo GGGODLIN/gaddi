@@ -65,6 +65,8 @@ let currentUpload: UploadCapability | null = null;
 // and false until a read succeeds, which is also what a host that declared neither sends.
 let currentAccounts: readonly string[] = [];
 let currentRetell = false;
+// Whether `clipboard.toml` names both commands (ADR 9010). False until a read succeeds, like retell.
+let currentHostClipboard = false;
 let inflight: Promise<void> | null = null;
 let loaded = false;
 const listeners = new Set<() => void>();
@@ -101,6 +103,7 @@ export function loadOperatorCommands(): Promise<void> {
       currentUpload = cfg.upload ?? null;
       currentAccounts = cfg.accounts ?? [];
       currentRetell = cfg.retell === true;
+      currentHostClipboard = cfg.hostClipboard === true;
       loaded = true;
       emit();
     } catch {
@@ -300,6 +303,10 @@ export function getRetellEnabled(): boolean {
   return currentRetell;
 }
 
+export function getHostClipboardEnabled(): boolean {
+  return currentHostClipboard;
+}
+
 /** Reactive read of the switch-account labels. Same one-shot fetch, same contract. */
 export function useOperatorAccounts(): readonly string[] {
   useEffect(() => {
@@ -316,6 +323,14 @@ export function useRetellEnabled(): boolean {
   return useSyncExternalStore(subscribeOperatorConfig, getRetellEnabled, getRetellEnabled);
 }
 
+/** Reactive read of whether this host offers its clipboard. Same one-shot fetch, same contract. */
+export function useHostClipboardEnabled(): boolean {
+  useEffect(() => {
+    void loadOperatorCommands();
+  }, []);
+  return useSyncExternalStore(subscribeOperatorConfig, getHostClipboardEnabled, getHostClipboardEnabled);
+}
+
 /** Test helper — reset module state between cases. */
 export function __resetOperatorCommands(): void {
   hostMux.clear();
@@ -329,6 +344,7 @@ export function __resetOperatorCommands(): void {
   currentUpload = null;
   currentAccounts = [];
   currentRetell = false;
+  currentHostClipboard = false;
   inflight = null;
   loaded = false;
   listeners.clear();

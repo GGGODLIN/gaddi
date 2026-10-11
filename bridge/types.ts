@@ -1074,6 +1074,15 @@ export type RetellResponse =
   | { ok: true; mode: "plain" | "lost"; label: string; answer: string; cached: boolean; source: string }
   | { ok: false; error: string; code?: ErrorCode; detail?: ApiErrorDetail };
 
+/** GET /api/host-clipboard — the host clipboard's change counter, never its text (ADR 9010). */
+export type HostClipboardVersionResponse = { ok: true; version: string } | { ok: false; reason: string };
+
+/** GET /api/host-clipboard/text — the text as it is now, read when a phone opens the sheet (ADR 9010). */
+export type HostClipboardTextResponse =
+  | { ok: true; text: string; bytes: number; version: string }
+  | { ok: false; kind: "empty" | "too-large"; version: string }
+  | { ok: false; kind: "failed"; reason: string };
+
 /** POST /api/pane/:id/upload — image saved to a host file; `path` is the absolute path to ref. */
 export type UploadResponse =
   | { ok: true; path: string }
@@ -1704,6 +1713,8 @@ export interface BridgeConfig {
   accounts?: string[];
   /** Present when `retell.toml` names a command, so the phone draws "Plain" / "Lost" (ADR 9005). */
   retell?: true;
+  /** Present when `clipboard.toml` names both commands, so the phone draws the clipboard (ADR 9010). */
+  hostClipboard?: true;
   /**
    * What this collie accepts as an attachment. **Absent is a bridge older than this field**, which
    * a client reads as the contract that shipped before it: 10 MB, images only. Present, it is the

@@ -687,6 +687,11 @@ describe("solo zero-tax — routes", () => {
       // named here rather than exempted. It is the one ungated `/api/*` route: the prober is a local
       // updater holding no credential, and what it answers is `{ ok, version, deposed, mode }`.
       "/api/health",
+      // The host clipboard (ADR 9010) — a SOLO pair that legitimately extends this list. Absent
+      // `clipboard.toml`, both answer 404 and run nothing; the counter is read-gated, the text
+      // `device-read`, and neither crosses the crew link.
+      "/api/host-clipboard",
+      "/api/host-clipboard/text",
       // The operator's own launcher rows (`launchers.toml`) — a SOLO route that legitimately
       // extends this list, named here rather than exempted. It is session-scoped and write-gated
       // through the same closure `/api/workspace` rides, and the configured rows are its allowlist:
@@ -804,6 +809,7 @@ const CONFIG_KEYS = {
   launchersFile: true,
   accountsFile: true,
   retellFile: true,
+  clipboardFile: true,
   cacheRulesFile: true,
   maxUploadBytes: true,
   port: true,
@@ -852,6 +858,7 @@ describe("solo zero-tax — config", () => {
       "basePath",
       "cacheRulesFile",
       "cacheWarnSeconds",
+      "clipboardFile",
       "commandsFile",
       "deviceAllowlist",
       "deviceHeader",

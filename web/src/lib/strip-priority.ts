@@ -38,3 +38,10 @@ export const DEGRADED = 20;
 
 /** A new build is available. A calm fact, not a warning — lowest priority by design. */
 export const UPDATE = 10;
+
+/**
+ * The host clipboard changed since this device last looked (ADR 9010). Below `UPDATE`: it is news,
+ * not a condition of the app, and any of the others is the more urgent sentence. The header's
+ * clipboard button keeps the unseen mark, so losing the band to another strip loses no fact.
+ */
+export const CLIPBOARD = 5;
