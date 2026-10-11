@@ -20,7 +20,6 @@ import {
   WINDOW_IDLE_MS,
   MAX_WINDOWS,
 } from "./live.ts";
-import { createPiReducer, parsePiTranscript } from "./pi.ts";
 import { NO_CHANGE, noUnknowns, parseWith, type PendingTool, rememberPending, type RowReducer } from "./reduce.ts";
 import { TranscriptStore } from "./store.ts";
 import { redactEntry } from "./text.ts";
@@ -777,18 +776,11 @@ describe("the newest prompt", () => {
     expect("lastPrompt" in body!).toBe(false);
   });
 
-  test("a long prompt is capped at a space and says so", async () => {
-    const fx = fakeJournal([ask("p1", "word ".repeat(LAST_PROMPT_MAX_CHARS))]);
+  test("a long prompt is capped and says so", async () => {
+    const fx = fakeJournal([ask("p1", "x".repeat(LAST_PROMPT_MAX_CHARS + 50))]);
     const body = await windows(fx).window(fx.adapter, ref(), { limit: 10 });
-    expect(body!.lastPrompt?.text.length).toBeLessThanOrEqual(LAST_PROMPT_MAX_CHARS);
-    expect(body!.lastPrompt?.text.endsWith("word")).toBe(true);
+    expect(body!.lastPrompt?.text).toHaveLength(LAST_PROMPT_MAX_CHARS);
     expect(body!.lastPrompt?.truncated).toBe(true);
-  });
-
-  test("a capped prompt with no space to cut at sends no text, and is still the newest", async () => {
-    const fx = fakeJournal([ask("p0", "older"), ask("p1", "x".repeat(LAST_PROMPT_MAX_CHARS + 50))]);
-    const body = await windows(fx).window(fx.adapter, ref(), { limit: 10 });
-    expect(body!.lastPrompt).toEqual({ uuid: "p1", ts: "2026-10-10T00:00:00Z", text: "", truncated: true });
   });
 
   test("an incremental answer carries it whole, and a new prompt replaces it", async () => {
@@ -853,79 +845,6 @@ describe("the newest prompt", () => {
     const first = await live.window(fx.adapter, ref(), { limit: 1 });
     const older = await live.older(fx.adapter, ref(), { seq: first!.oldest, uuid: "u2" }, 10);
     expect("lastPrompt" in older!).toBe(false);
-  });
-
-  test("a secret that crosses the cap is still masked, not cut into a shape the mask misses", async () => {
-    // A synthetic AWS key id whose last character sits past LAST_PROMPT_MAX_CHARS: cutting first
-    // leaves 19 characters, which the mask's exact-length rule no longer recognises.
-    const key = "AKIA1234567890ABCDEF";
-    const said = `${"x".repeat(LAST_PROMPT_MAX_CHARS - key.length)} ${key}`;
-    expect(said.length).toBe(LAST_PROMPT_MAX_CHARS + 1);
-    const fx = fakeJournal([ask("p1", said)]);
-    const body = await windows(fx).window(fx.adapter, ref(), { limit: 10 });
-    expect(body!.lastPrompt?.truncated).toBe(true);
-    expect(JSON.stringify(redactChatBody(body!))).not.toContain("1234567890ABCDE");
-  });
-
-  test("a secret glued to the text before it by punctuation is still kept out of the cut", async () => {
-    // A colon is a word boundary to the mask but not a space, so a cut that falls back to a hard
-    // slice when it finds no space would leave the key one character short again.
-    const key = "AKIA1234567890ABCDEF";
-    const said = `${"x".repeat(LAST_PROMPT_MAX_CHARS - key.length)}:${key}`;
-    expect(said.length).toBe(LAST_PROMPT_MAX_CHARS + 1);
-    const fx = fakeJournal([ask("p1", said)]);
-    const body = await windows(fx).window(fx.adapter, ref(), { limit: 10 });
-    expect(JSON.stringify(redactChatBody(body!))).not.toContain("1234567890ABCDE");
-  });
-
-  test("a trimmed prompt that pi rewinds away stops being the answer", async () => {
-    // pi marks a rewound turn `abandoned` in place, inside the same generation, so a prompt the
-    // window trimmed earlier must be judged again rather than kept as a copy.
-    const row = (id: string, parentId: string | null, role: "user" | "assistant", text: string) =>
-      JSON.stringify({ id, parentId, timestamp: "2026-10-10T00:00:00.000Z", type: "message", message: { role, content: [{ type: "text", text }] } });
-    const fx = fakeJournal([row("p1", null, "user", "the first question"), row("a1", "p1", "assistant", "one"), row("a2", "a1", "assistant", "two"), row("a3", "a2", "assistant", "three")]);
-    const pi: ReturnType<typeof fakeJournal> = { ...fx, adapter: { ...fx.adapter, parse: parsePiTranscript, reducer: createPiReducer } };
-    const tail = tailOf(pi, 2);
-    const live = windows(fx);
-    const first = await live.window(tail, ref(), { limit: 10 });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    fx.settle();
-    expect((await live.window(tail, ref(), { limit: 10, after: { gen: first!.gen, rev: first!.rev } }))!.lastPrompt?.uuid).toBe("p1");
-
-    fx.append(row("p2", "a3", "user", "the second question"));
-    let parent = "p2";
-    for (let i = 0; i < MAX_LIVE_ENTRIES; i++) {
-      fx.append(row(`v${i}`, parent, "assistant", "ok"));
-      parent = `v${i}`;
-    }
-    fx.settle();
-    const trimmed = await live.window(tail, ref(), { limit: 10 });
-    expect(trimmed!.lastPrompt?.uuid).toBe("p2");
-
-    // The rewind: a new row hangs off p1, so p2 and everything after it leave the branch.
-    fx.append(row("p3", "p1", "assistant", "back at the first question"));
-    fx.settle();
-    const rewound = await live.window(tail, ref(), { limit: 10, after: { gen: trimmed!.gen, rev: trimmed!.rev } });
-    expect(rewound!.lastPrompt?.uuid).toBe("p1");
-  });
-
-  test("a newer prompt trimmed off the front does not hand the pin back to the one looked up", async () => {
-    const fx = fakeJournal([ask("p1", "the first question"), say("u1"), say("u2"), say("u3")]);
-    const tail = tailOf(fx, 2);
-    const live = windows(fx);
-    const first = await live.window(tail, ref(), { limit: 10 });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    fx.settle();
-    const looked = await live.window(tail, ref(), { limit: 10, after: { gen: first!.gen, rev: first!.rev } });
-    expect(looked!.lastPrompt?.uuid).toBe("p1");
-
-    fx.append(ask("p2", "the second question"));
-    for (let i = 0; i < MAX_LIVE_ENTRIES; i++) fx.append(say(`v${i}`));
-    fx.settle();
-    // A reader arriving now (a reopened Chat, another device) takes a first page.
-    const fresh = await live.window(tail, ref(), { limit: 10 });
-    expect(fresh!.upserts.some((e) => e.uuid === "p2")).toBe(false);
-    expect(fresh!.lastPrompt?.uuid).toBe("p2");
   });
 });
 

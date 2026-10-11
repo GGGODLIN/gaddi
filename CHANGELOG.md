@@ -25,9 +25,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ### Fixed
 
-- **The prompt pin keeps a split secret masked and the newer prompt on top.** A long prompt is cut at its last space before the mask runs, so a key the 1000-character cap would split is left out whole instead of sent one character short and unmasked. And a prompt trimmed off the window's front now outranks the older one the bridge looked up, so a reopened Chat no longer pins a reply to the prompt before it.
 - **A tap on the prompt pin goes where it was tapped, and lets go when you move.** Walking back to a prompt the first page left out keeps looking for that prompt even if a newer one lands meanwhile; the jump's follow-up corrections stop when you tap the latest-turn button; and the prompt lands below the status band rather than behind it.
-- **A prompt preview with no space to cut at sends no text.** A key glued to the words before it by punctuation is no longer cut one character short, and a trimmed prompt a pi rewind has left stops being pinned.
 - **Scrolling while the pin walks back to a prompt calls the walk off.** A reader who moves while older pages load is no longer pulled to the prompt when it arrives.
 
 ## [2.0.1] - 2026-10-11

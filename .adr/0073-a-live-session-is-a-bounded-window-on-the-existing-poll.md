@@ -87,9 +87,8 @@ one job.**
    > nothing waiting, which is point 7's rule applied to one field instead of the whole route.
 
    > **Amended (2026-10-10).** The live body also carries `lastPrompt`: the newest turn the
-   > operator wrote that the window knows, capped at `LAST_PROMPT_MAX_CHARS` (1000) and cut back to
-   > its last whitespace so the mask, which runs after the cut, never sees a secret split in two (with
-   > no whitespace to cut at, it carries no text). The phone pins it above the thread so a reply on
+   > operator wrote that the window knows, capped at `LAST_PROMPT_MAX_CHARS` (1000). The phone pins
+   > it above the thread so a reply on
    > screen always shows the question it answers. It exists because of the consequence below that a
    > first paint is a screenful: a long run of tool calls fills the forty turns sent, so the prompt
    > that started the run is routinely outside them.
@@ -98,8 +97,7 @@ one job.**
    >
    > It is a field for the reason `queued` is: it is state with one answer per session, and it arrives
    > WHOLE on every answer. It is read off the rows the window holds, so an ordinary poll costs no
-   > read; a prompt the window trimmed off its front stays the answer until a newer one lands or a
-   > rewind leaves it.
+   > read.
    >
    > One case does read. The initial tail can start in the middle of a long run, with no operator
    > prompt in it; its `user` rows may be only orphaned tool results. For that window alone, the bridge
