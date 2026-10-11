@@ -172,12 +172,13 @@ export interface ChatWindowBody {
    */
   sendQueuedNow?: string[];
   /**
-   * The operator's newest prompt the window holds, so the phone can say which question the reply on
-   * screen answers even when that question sits above the screenful a first paint sends. A run of
-   * forty tool calls is forty turns, so the prompt that started it is routinely outside `limit`.
+   * The operator's newest prompt the window knows, so the phone can say which question the reply on
+   * screen answers even when that question sits above the screenful a first paint sends. A long run
+   * of tool calls fills `limit`, so the prompt that started it is routinely outside it.
    *
-   * STATE, like {@link queued}, and WHOLE on every answer: it moves only when a new prompt lands, so
-   * an unchanged poll serialises to the same bytes and stays a 304. A field rather than a widened first
+   * STATE, like {@link queued}, and WHOLE on every answer: it moves when a prompt lands, is rewound
+   * away, or a lookup behind the front finishes; otherwise a poll serialises to the same bytes and
+   * stays a 304. A field rather than a widened first
    * page because ADR 0073 sized a first paint at a screenful, and walking back to the prompt would make
    * every first paint a History page.
    *
