@@ -43,6 +43,10 @@ Each entry says what it is, where it lives, and what it assumes.
   iPhone app icon and Island mark, `assets/social-card.png` and `assets/gaddi-banner.png`.
 - **Assumes.** Nothing outside the repo. Internal names stay upstream's: the `collie` command, the
   plugin id `herdr.collie`, file names and identifiers, so an existing install updates in place.
+- **Not renamed, on purpose (2026-10-11).** The CLI's own output and the pages under `docs/` still
+  say Collie. Their reader is the operator at a terminal typing `collie`, the README says so up
+  front, and the `cli/` sources hold about 170 such lines mixed with action names and paths that
+  must not change.
 - **To upstream.** Leave it out. An upstream PR takes no file from this list.
 
 ### The pane description reads a recap cc-mod-waitwhat writes (2026-09-24)

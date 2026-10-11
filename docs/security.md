@@ -279,9 +279,13 @@ What you type and send is never masked, and the audit trail keeps its own rules
 
 The switch lives on the bridge only, as `COLLIE_REDACT`. Settings → System shows it read-only, as
 "Secret masking". The phone has no switch on purpose: a switch on the phone would let any paired
-phone, or a stolen one, turn the mask off. To read a masked value, read it on the machine. The first
-time a pane shows masked text, a short line on the phone says so, once per device. If you paste
-masked text into a reply, a caution under the box says the pane gets the dots, not the secret.
+phone, or a stolen one, turn the mask off. To read a masked value, read it on the machine.
+
+The mask stops a secret from showing on a screen by accident; it does not limit a paired phone. That
+phone types into a real terminal and can run any command there, so treat its pairing as shell access.
+
+The first time a pane shows masked text, a short line on the phone says so, once per device. If you
+paste masked text into a reply, a caution under the box says the pane gets the dots, not the secret.
 
 In a crew, each member masks its own text, and the lead masks it again before your phone gets it.
 The lead masks a member's mirror, Chat, History, diffs, file text and pane titles with the same mask

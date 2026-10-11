@@ -324,14 +324,15 @@ cp ~/.local/share/collie/current/.env.example ~/.config/collie/.env
 ```
 
 That path is for the install script; a source checkout has `.env.example` at its root. On a Herdr
-plugin, the file lives where `herdr plugin config-dir herdr.collie` points. Then set the backend and
-its endpoint:
+plugin, the file lives where `herdr plugin config-dir herdr.collie` points. Then set the backend:
 
 ```bash
 COLLIE_MUX=tmux                                           # or: zellij
-# zellij instead: COLLIE_MUX_ENDPOINT_ZELLIJ=<session>
-COLLIE_MUX_ENDPOINT_TMUX=/run/user/1000/collie-tmux.sock
 ```
+
+With no endpoint, Collie uses tmux's own default server, or the single running zellij session. Set
+`COLLIE_MUX_ENDPOINT_TMUX` or `COLLIE_MUX_ENDPOINT_ZELLIJ` only when your server runs on its own
+socket or session; the values are in [Pointing Collie at a multiplexer](multiplexers.md#pointing-collie-at-a-multiplexer).
 
 > **Caution.** Do not run that `cp` after a start: it overwrites the `COLLIE_MUX` value that
 > `start` just wrote.
