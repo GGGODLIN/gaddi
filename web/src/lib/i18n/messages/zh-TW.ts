@@ -1304,6 +1304,8 @@ export const zhTW: Dictionary = {
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude 沒有確認已結束，所以沒有啟動新的程序，請查看窗格",
   "apiError.account.draft_present": "Claude 的輸入框裡有還沒送出的文字，請先送出或清掉",
+  "apiError.account.input_row_missing": "畫面上找不到 Claude 的輸入框，沒有啟動任何東西",
+  "apiError.account.input_row_stuck": "Claude 的輸入框清不掉，沒有啟動任何東西",
   "apiError.account.launch_failed": "{reason}",
   "apiError.retell.off": "這台主機沒有設定重講",
   "apiError.retell.not_claude": "此窗格沒有執行 Claude session",

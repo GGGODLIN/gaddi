@@ -1794,6 +1794,8 @@ export const ru: Dictionary = {
   "pushTitle.machine.disk": "Диск почти заполнен на {machine}",
   "apiError.account.confirm_interrupt": "Агент работает, подтвердите прерывание этого хода",
   "apiError.account.draft_present": "В поле ввода Claude есть неотправленный текст, сначала отправьте или очистите его",
+  "apiError.account.input_row_missing": "Поле ввода Claude не видно на экране, ничего не запущено",
+  "apiError.account.input_row_stuck": "Поле ввода Claude не очистилось, ничего не запущено",
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude не подтвердил выход, поэтому ничего не запущено, проверьте pane",
   "apiError.account.in_progress": "В этом pane уже идёт переключение",

@@ -9,6 +9,8 @@ import type { MuxAdapter } from "./mux/types.ts";
 //
 // The sequence is the one measured on Claude Code 2.1.283 (2026-09-26):
 //   • working → one ctrl+c interrupts the turn and puts the sent prompt back in the input box;
+//   • blocked → Escape closes the permission or question dialog and leaves the input box empty
+//     (ctrl+c leaves the dialog up: measured on 2.1.296, 2026-10-12);
 //   • ctrl+c on a non-empty input box clears it;
 //   • `/exit` then exits and prints `claude --resume <id>`, and Herdr drops the pane's agent;
 //   • `<account command> --resume <id>` restores the last turn's model, effort and 1M context.
@@ -19,8 +21,8 @@ export interface SwitchPlan {
   readonly paneId: string;
   readonly sessionId: string;
   readonly command: string;
-  /** The pane was working or blocked when the phone asked, so its turn is interrupted first. */
-  readonly interrupt: boolean;
+  /** The pane was working or blocked when the phone asked, so its turn is interrupted first; null when idle. */
+  readonly interrupt: "working" | "blocked" | null;
 }
 
 export type SwitchOutcome =
@@ -31,6 +33,8 @@ export type SwitchOutcome =
   | { readonly ok: false; readonly stage: "unconfirmed" }
   /** An idle Claude's input row held text the operator never sent. Nothing was sent to the pane. */
   | { readonly ok: false; readonly stage: "draft" }
+  /** The input row was not on screen, or did not clear, so `/exit` was never typed. */
+  | { readonly ok: false; readonly stage: "input_row"; readonly row: "missing" | "stuck" }
   /** The old process is gone but the new line did not reach the pane. */
   | { readonly ok: false; readonly stage: "launch"; readonly reason: string };
 
@@ -53,13 +57,54 @@ const EXIT_TAIL_LINES = 8;
 /** Clearing ctrl+c presses tried before the switch gives up on an input row that stays full. */
 const CLEAR_ATTEMPTS = 2;
 
+const ESC = "\u001b";
+
+/**
+ * A styled row's characters with the faint (SGR 2) runs taken out. Claude draws its placeholder
+ * (`Try "…"`) and its next-step suggestion faint inside an empty input box, while typed text and a
+ * paste's `[Pasted text #N]` token are drawn at normal weight (measured on Claude Code 2.1.296,
+ * 2026-10-12). Read without styling, the two cannot be told apart, and every idle Claude that had
+ * answered once was refused as holding a draft.
+ */
+function unfaint(row: string): string {
+  let out = "";
+  let faint = false;
+  for (let i = 0; i < row.length; i++) {
+    const ch = row.charAt(i);
+    if (ch !== ESC) {
+      if (!faint) out += ch;
+      continue;
+    }
+    if (row.charAt(i + 1) !== "[") continue;
+    let j = i + 2;
+    while (j < row.length && !/[@-~]/.test(row.charAt(j))) j++;
+    if (row[j] === "m") {
+      const params = row.slice(i + 2, j).split(";");
+      for (let k = 0; k < params.length; k++) {
+        const p = params[k];
+        if (p === "" || p === "0" || p === "22") faint = false;
+        else if (p === "2") faint = true;
+        // An extended colour's own fields (`38;2;r;g;b`, `38;5;n`) are not attributes: the `2` in
+        // `38;2;…` is "truecolour", and reading it as faint would hide the text that follows.
+        else if (p === "38" || p === "48" || p === "58") k += params[k + 1] === "5" ? 2 : 4;
+      }
+    }
+    i = j;
+  }
+  return out;
+}
+
 /**
  * Whether Claude's input row is empty: the LOWEST `❯` row on screen, which is the input box's (the
- * transcript above echoes earlier prompts with the same mark). Null when no such row is on screen,
- * which the caller treats as "cannot tell" and refuses on.
+ * transcript above echoes earlier prompts with the same mark), read from a STYLED grid so that faint
+ * placeholder text counts as empty. Null when no such row is on screen, which the caller treats as
+ * "cannot tell" and refuses on.
  */
 export function inputRowEmpty(screen: string): boolean | null {
-  const rows = screen.split(/\r?\n/).filter((line) => line.trimStart().startsWith("❯"));
+  const rows = screen
+    .split(/\r?\n/)
+    .map(unfaint)
+    .filter((line) => line.trimStart().startsWith("❯"));
   const row = rows.at(-1);
   return row === undefined ? null : row.trim() === "❯";
 }
@@ -128,20 +173,20 @@ export async function switchAccount(mux: SwitchMux, plan: SwitchPlan, clock: Swi
     const sent = await mux.sendKeys(plan.paneId, k);
     return sent.ok ? null : sent.detail;
   };
-  if (plan.interrupt) {
-    const failed = await keys(["ctrl+c"]);
+  if (plan.interrupt !== null) {
+    const failed = await keys([plan.interrupt === "blocked" ? "Escape" : "ctrl+c"]);
     if (failed !== null) return { ok: false, stage: "exit", reason: failed };
     await clock.sleep(INTERRUPT_SETTLE_MS);
   }
   for (let attempt = 0; ; attempt++) {
-    const read = await mux.readGrid(plan.paneId, { scope: "viewport", lines: 60, styling: "strip" });
+    const read = await mux.readGrid(plan.paneId, { scope: "viewport", lines: 60, styling: "preserve" });
     const empty = read.ok ? inputRowEmpty(read.value.text) : null;
     if (empty === true) break;
-    if (empty === null) return { ok: false, stage: "exit", reason: "Claude's input row is not on screen" };
+    if (empty === null) return { ok: false, stage: "input_row", row: "missing" };
     // Idle, the text in the row is a draft the operator typed and never sent, and a ctrl+c would lose
     // it for good. After an interrupt it is the prompt just handed back, already in the transcript.
-    if (!plan.interrupt) return { ok: false, stage: "draft" };
-    if (attempt >= CLEAR_ATTEMPTS) return { ok: false, stage: "exit", reason: "Claude's input row did not clear" };
+    if (plan.interrupt === null) return { ok: false, stage: "draft" };
+    if (attempt >= CLEAR_ATTEMPTS) return { ok: false, stage: "input_row", row: "stuck" };
     const cleared = await keys(["ctrl+c"]);
     if (cleared !== null) return { ok: false, stage: "exit", reason: cleared };
     await clock.sleep(KEY_SETTLE_MS);

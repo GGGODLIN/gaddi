@@ -151,6 +151,10 @@ export const ERROR_CODES = {
   "account.exit_failed": "{reason}",
   /** An idle Claude's input box held unsent text; clearing it would lose it. Nothing was touched. */
   "account.draft_present": "Claude's input box holds text you haven't sent — send or clear it first",
+  /** Claude's input row was not on screen, so `/exit` was never typed. Nothing new was started. */
+  "account.input_row_missing": "Claude's input box is not on screen — nothing was started",
+  /** The interrupted turn's input row stayed full after clearing, so `/exit` was never typed. Nothing new was started. */
+  "account.input_row_stuck": "Claude's input box did not clear — nothing was started",
   /** The old process was never seen gone, so the new one was not typed. Check the pane. */
   "account.exit_unconfirmed": "Claude did not confirm it exited — nothing was started",
   /** The old Claude exited but the resume line did not reach the pane. The pane is at a shell. */

@@ -1326,6 +1326,8 @@ export const ja: Dictionary = {
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude の終了を確認できなかったため、何も起動していません。ペインを確認してください",
   "apiError.account.draft_present": "Claude の入力欄に未送信のテキストがあります。先に送信するか消してください",
+  "apiError.account.input_row_missing": "Claude の入力欄が画面にありません。何も起動していません",
+  "apiError.account.input_row_stuck": "Claude の入力欄を空にできませんでした。何も起動していません",
   "apiError.account.launch_failed": "{reason}",
   "apiError.retell.off": "このホストでは言い直しが設定されていません",
   "apiError.retell.not_claude": "このペインでは Claude セッションが動いていません",

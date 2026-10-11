@@ -1321,6 +1321,8 @@ export const ko: Dictionary = {
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude가 종료를 확인하지 않아 아무것도 시작하지 않았습니다, 창을 확인하세요",
   "apiError.account.draft_present": "Claude 입력창에 보내지 않은 텍스트가 있습니다, 먼저 보내거나 지우세요",
+  "apiError.account.input_row_missing": "화면에 Claude 입력창이 없습니다, 아무것도 시작하지 않았습니다",
+  "apiError.account.input_row_stuck": "Claude 입력창이 비워지지 않았습니다, 아무것도 시작하지 않았습니다",
   "apiError.account.launch_failed": "{reason}",
   "apiError.retell.off": "이 호스트에는 다시 설명이 설정되어 있지 않습니다",
   "apiError.retell.not_claude": "이 창에서는 Claude 세션이 실행되고 있지 않습니다",

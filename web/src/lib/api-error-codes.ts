@@ -85,6 +85,8 @@ export const API_ERROR_CODES = [
   "account.settings_pending",
   "account.exit_failed",
   "account.draft_present",
+  "account.input_row_missing",
+  "account.input_row_stuck",
   "account.exit_unconfirmed",
   "account.launch_failed",
   "retell.off",

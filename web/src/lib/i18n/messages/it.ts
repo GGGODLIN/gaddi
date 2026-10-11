@@ -1694,6 +1694,8 @@ export const it: Dictionary = {
   "pushTitle.machine.disk": "Disco sempre pieno su {machine}",
   "apiError.account.confirm_interrupt": "L'agente sta lavorando, conferma di interrompere questo turno",
   "apiError.account.draft_present": "La casella di input di Claude contiene testo non inviato, invialo o cancellalo prima",
+  "apiError.account.input_row_missing": "La casella di input di Claude non è sullo schermo, non è stato avviato nulla",
+  "apiError.account.input_row_stuck": "La casella di input di Claude non si è svuotata, non è stato avviato nulla",
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude non ha confermato l'uscita, quindi non è stato avviato nulla, controlla il pane",
   "apiError.account.in_progress": "Un cambio è già in corso su questo pane",

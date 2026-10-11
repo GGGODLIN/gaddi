@@ -1694,6 +1694,8 @@ export const tr: Dictionary = {
   "pushTitle.machine.disk": "{machine} üzerinde disk dolu kalıyor",
   "apiError.account.confirm_interrupt": "Ajan çalışıyor, bu turu kesmeyi onaylayın",
   "apiError.account.draft_present": "Claude'un giriş kutusunda gönderilmemiş metin var, önce gönderin veya silin",
+  "apiError.account.input_row_missing": "Claude'un giriş kutusu ekranda değil, hiçbir şey başlatılmadı",
+  "apiError.account.input_row_stuck": "Claude'un giriş kutusu boşalmadı, hiçbir şey başlatılmadı",
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude çıktığını onaylamadı, bu yüzden hiçbir şey başlatılmadı, pane'i kontrol edin",
   "apiError.account.in_progress": "Bu pane'de bir geçiş zaten sürüyor",

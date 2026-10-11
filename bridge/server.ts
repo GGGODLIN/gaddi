@@ -4523,7 +4523,12 @@ export async function switchAccountPane(
     if (settingsChangedSinceLastTurn(log)) return refuse("account.settings_pending", 409);
     outcome = await switchAccount(
       herdr,
-      { paneId, sessionId: claude.sessionId, command: account.command, interrupt: busy },
+      {
+        paneId,
+        sessionId: claude.sessionId,
+        command: account.command,
+        interrupt: claude.status === "working" || claude.status === "blocked" ? claude.status : null,
+      },
       { sleep: defaultSleep, now: () => Date.now() },
     );
   } finally {
@@ -4540,6 +4545,9 @@ export async function switchAccountPane(
   if (outcome.ok) return json({ ok: true } satisfies ActionResponse, ae);
   if (outcome.stage === "unconfirmed") return refuse("account.exit_unconfirmed", 200);
   if (outcome.stage === "draft") return refuse("account.draft_present", 409);
+  if (outcome.stage === "input_row") {
+    return refuse(outcome.row === "missing" ? "account.input_row_missing" : "account.input_row_stuck", 200);
+  }
   return refuse(outcome.stage === "exit" ? "account.exit_failed" : "account.launch_failed", 200, {
     reason: outcome.reason,
   });

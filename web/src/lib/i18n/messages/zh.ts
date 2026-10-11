@@ -1308,6 +1308,8 @@ export const zh: Dictionary = {
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude 没有确认已退出，所以没有启动新的进程，请查看窗格",
   "apiError.account.draft_present": "Claude 的输入框里有还没发送的文字，请先发送或清除",
+  "apiError.account.input_row_missing": "屏幕上找不到 Claude 的输入框，没有启动任何东西",
+  "apiError.account.input_row_stuck": "Claude 的输入框清不掉，没有启动任何东西",
   "apiError.account.launch_failed": "{reason}",
   "apiError.retell.off": "这台主机没有设置重讲",
   "apiError.retell.not_claude": "此窗格没有运行 Claude session",

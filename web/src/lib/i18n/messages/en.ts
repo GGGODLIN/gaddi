@@ -1411,6 +1411,8 @@ export const en = {
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude didn't confirm it exited, so nothing was started — check the pane",
   "apiError.account.draft_present": "Claude's input box holds text you haven't sent — send or clear it first",
+  "apiError.account.input_row_missing": "Claude's input box is not on screen — nothing was started",
+  "apiError.account.input_row_stuck": "Claude's input box did not clear — nothing was started",
   "apiError.account.launch_failed": "{reason}",
   "apiError.retell.off": "Retell isn't set up on this host",
   "apiError.retell.not_claude": "This pane isn't running a Claude session",

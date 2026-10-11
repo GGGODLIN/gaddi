@@ -1335,6 +1335,8 @@ export const es: Dictionary = {
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude no confirmó que terminó, así que no se inició nada, revisa el panel",
   "apiError.account.draft_present": "El cuadro de entrada de Claude tiene texto sin enviar, envíalo o bórralo primero",
+  "apiError.account.input_row_missing": "El cuadro de entrada de Claude no está en pantalla, no se inició nada",
+  "apiError.account.input_row_stuck": "El cuadro de entrada de Claude no se vació, no se inició nada",
   "apiError.account.launch_failed": "{reason}",
   "apiError.retell.off": "El resumen no está configurado en este host",
   "apiError.retell.not_claude": "Este panel no ejecuta una sesión de Claude",

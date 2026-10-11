@@ -1694,6 +1694,8 @@ export const fr: Dictionary = {
   "pushTitle.machine.disk": "Disque toujours plein sur {machine}",
   "apiError.account.confirm_interrupt": "L'agent travaille, confirmez l'interruption de ce tour",
   "apiError.account.draft_present": "La zone de saisie de Claude contient un texte non envoyé, envoyez-le ou effacez-le d'abord",
+  "apiError.account.input_row_missing": "La zone de saisie de Claude n'est pas à l'écran, rien n'a été lancé",
+  "apiError.account.input_row_stuck": "La zone de saisie de Claude ne s'est pas vidée, rien n'a été lancé",
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude n'a pas confirmé sa fermeture, rien n'a été lancé, vérifiez le pane",
   "apiError.account.in_progress": "Un changement est déjà en cours sur ce pane",

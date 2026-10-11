@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { exitLineShown, settingsChangedSinceLastTurn, switchAccount, type SwitchClock } from "./account-switch.ts";
+import {
+  exitLineShown,
+  inputRowEmpty,
+  settingsChangedSinceLastTurn,
+  switchAccount,
+  type SwitchClock,
+  type SwitchPlan,
+} from "./account-switch.ts";
 import { validateOperatorAccounts } from "./operator-accounts.ts";
 import type { MuxAck, MuxGrid, MuxOutcome, MuxSnapshot } from "./mux/types.ts";
 
@@ -19,10 +26,15 @@ function fakeMux(opts: {
   launchFails?: boolean;
   /** A draft sits in the input row until this many ctrl+c presses; null = it never clears. */
   draftClearsAfter?: number | null;
+  /** What an empty input row looks like on this screen, styled as the multiplexer returns it. */
+  emptyRow?: string;
+  /** A permission dialog is up until Escape is pressed; ctrl+c leaves it, as Claude does. */
+  dialog?: boolean;
 }) {
   const calls: string[] = [];
   let submittedExit = false;
   let clears = 0;
+  let dialog = opts.dialog === true;
   const draft = () =>
     opts.draftClearsAfter !== undefined && (opts.draftClearsAfter === null || clears < opts.draftClearsAfter);
   let polls = 0;
@@ -30,7 +42,8 @@ function fakeMux(opts: {
   const mux = {
     async sendKeys(_pane: string, keys: readonly string[]): Promise<MuxAck> {
       calls.push(`keys:${keys.join(",")}`);
-      if (keys[0] === "ctrl+c") clears += 1;
+      if (keys[0] === "ctrl+c" && !dialog) clears += 1;
+      if (keys[0] === "Escape") dialog = false;
       if (keys[0] === "Enter" && calls.at(-2) === "text:/exit") submittedExit = true;
       return ok;
     },
@@ -48,7 +61,7 @@ function fakeMux(opts: {
     async readGrid(): Promise<MuxOutcome<MuxGrid>> {
       const text = gone()
         ? (opts.screenAfterExit ?? `Resume this session with:\nclaude --resume ${SID}\n\n❯`)
-        : `❯ earlier prompt\n╭ claude frame ╮\n${draft() ? "❯ a draft" : "❯ "}\n`;
+        : `❯ earlier prompt\n╭ claude frame ╮\n${dialog ? " ❯ 1. Yes\n   2. No" : draft() ? "❯ a draft" : (opts.emptyRow ?? "❯ ")}\n`;
       // SAFETY: the switch reads only `text` off a grid.
       return { ok: true, value: { text } as MuxGrid };
     },
@@ -56,59 +69,107 @@ function fakeMux(opts: {
   return { mux, calls };
 }
 
-const plan = (interrupt: boolean) => ({ paneId: "w1:p1", sessionId: SID, command: "cc -personal", interrupt });
+const plan = (interrupt: SwitchPlan["interrupt"]): SwitchPlan => ({
+  paneId: "w1:p1",
+  sessionId: SID,
+  command: "cc -personal",
+  interrupt,
+});
+/** Claude's faint next-step suggestion in an empty input box, as Herdr's styled read returns it. */
+const SUGGESTION = "❯ \u001b[0m\u001b[2mls 看一下這兩個檔案在不在\u001b[0m";
 
 describe("switchAccount", () => {
   test("an idle pane with an empty input row: /exit, wait for the exit, then resume", async () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: 2 });
-    expect(await switchAccount(mux, plan(false), fakeClock())).toEqual({ ok: true });
+    expect(await switchAccount(mux, plan(null), fakeClock())).toEqual({ ok: true });
     expect(calls).toEqual(["text:/exit", "keys:Enter", `text:cc -personal --resume ${SID}`, "keys:Enter"]);
   });
 
   test("a working pane is interrupted once, then /exit goes into the empty row", async () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: 0 });
-    expect(await switchAccount(mux, plan(true), fakeClock())).toEqual({ ok: true });
+    expect(await switchAccount(mux, plan("working"), fakeClock())).toEqual({ ok: true });
     expect(calls.slice(0, 2)).toEqual(["keys:ctrl+c", "text:/exit"]);
   });
 
   test("the prompt an interrupt hands back is cleared before /exit is typed", async () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: 0, draftClearsAfter: 2 });
-    expect(await switchAccount(mux, plan(true), fakeClock())).toEqual({ ok: true });
+    expect(await switchAccount(mux, plan("working"), fakeClock())).toEqual({ ok: true });
     expect(calls.slice(0, 3)).toEqual(["keys:ctrl+c", "keys:ctrl+c", "text:/exit"]);
   });
 
   test("an idle pane holding an unsent draft is refused, and nothing is sent to it", async () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: 0, draftClearsAfter: 1 });
-    expect(await switchAccount(mux, plan(false), fakeClock())).toEqual({ ok: false, stage: "draft" });
+    expect(await switchAccount(mux, plan(null), fakeClock())).toEqual({ ok: false, stage: "draft" });
     expect(calls).toEqual([]);
   });
 
   test("an input row that never clears stops the switch before /exit", async () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: 0, draftClearsAfter: null });
-    expect(await switchAccount(mux, plan(true), fakeClock())).toEqual({
+    expect(await switchAccount(mux, plan("working"), fakeClock())).toEqual({
       ok: false,
-      stage: "exit",
-      reason: "Claude's input row did not clear",
+      stage: "input_row",
+      row: "stuck",
     });
     expect(calls).toEqual(["keys:ctrl+c", "keys:ctrl+c", "keys:ctrl+c"]);
   });
 
+  test("an idle pane showing only Claude's faint suggestion switches, typing /exit over it", async () => {
+    const { mux, calls } = fakeMux({ exitAfterPolls: 0, emptyRow: SUGGESTION });
+    expect(await switchAccount(mux, plan(null), fakeClock())).toEqual({ ok: true });
+    expect(calls[0]).toBe("text:/exit");
+  });
+
+  test("a pane waiting on a dialog is closed with Escape, never ctrl+c, then exits", async () => {
+    const { mux, calls } = fakeMux({ exitAfterPolls: 0, dialog: true });
+    expect(await switchAccount(mux, plan("blocked"), fakeClock())).toEqual({ ok: true });
+    expect(calls.slice(0, 2)).toEqual(["keys:Escape", "text:/exit"]);
+  });
+
+  test("a dialog that ctrl+c cannot close stops the switch as a stuck row", async () => {
+    const { mux, calls } = fakeMux({ exitAfterPolls: 0, dialog: true });
+    expect(await switchAccount(mux, plan("working"), fakeClock())).toEqual({ ok: false, stage: "input_row", row: "stuck" });
+    expect(calls.some((c) => c === "text:/exit")).toBe(false);
+  });
+
   test("an exit never confirmed starts nothing", async () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: null });
-    expect(await switchAccount(mux, plan(false), fakeClock())).toEqual({ ok: false, stage: "unconfirmed" });
+    expect(await switchAccount(mux, plan(null), fakeClock())).toEqual({ ok: false, stage: "unconfirmed" });
     expect(calls.some((c) => c.includes("--resume"))).toBe(false);
   });
 
   test("a shell with no exit line for THIS session is not an exit", async () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: 0, screenAfterExit: "claude --resume 00000000-0000-0000-0000-000000000000\n❯" });
-    expect(await switchAccount(mux, plan(false), fakeClock())).toEqual({ ok: false, stage: "unconfirmed" });
+    expect(await switchAccount(mux, plan(null), fakeClock())).toEqual({ ok: false, stage: "unconfirmed" });
     expect(calls.some((c) => c.includes("--resume"))).toBe(false);
   });
 
   test("a resume line the pane refused is reported as a launch failure, not retried", async () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: 0, launchFails: true });
-    expect(await switchAccount(mux, plan(false), fakeClock())).toEqual({ ok: false, stage: "launch", reason: "pane gone" });
+    expect(await switchAccount(mux, plan(null), fakeClock())).toEqual({ ok: false, stage: "launch", reason: "pane gone" });
     expect(calls.filter((c) => c.includes("--resume"))).toHaveLength(1);
+  });
+});
+
+describe("inputRowEmpty", () => {
+  test("faint placeholder and suggestion text is empty; typed text and a paste token are not", () => {
+    expect(inputRowEmpty(SUGGESTION)).toBe(true);
+    expect(inputRowEmpty('❯ \u001b[0m\u001b[2mTry "refactor <filepath>"\u001b[0m')).toBe(true);
+    expect(inputRowEmpty("❯ hello draft")).toBe(false);
+    expect(inputRowEmpty("❯ [Pasted text #1]rd269 word270")).toBe(false);
+  });
+
+  test("typed text followed by a faint completion is still a draft", () => {
+    expect(inputRowEmpty("❯ /ex\u001b[2mit\u001b[0m")).toBe(false);
+  });
+
+  test("a truecolour field is not read as faint, so coloured text stays visible", () => {
+    expect(inputRowEmpty("\u001b[38;2;177;185;249m❯ \u001b[38;2;2;2;2mdraft\u001b[0m")).toBe(false);
+    expect(inputRowEmpty("\u001b[38;5;2m❯\u001b[0m ")).toBe(true);
+  });
+
+  test("the dialog's own pointer is the lowest mark, and it is not an empty row", () => {
+    expect(inputRowEmpty("❯ \n ❯ 1. Yes")).toBe(false);
+    expect(inputRowEmpty("no input box here")).toBeNull();
   });
 });
 

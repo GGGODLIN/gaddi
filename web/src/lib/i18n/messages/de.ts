@@ -1338,6 +1338,8 @@ export const de: Dictionary = {
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "Claude hat das Beenden nicht bestätigt, daher wurde nichts gestartet, prüfe das Pane",
   "apiError.account.draft_present": "Im Eingabefeld von Claude steht noch nicht gesendeter Text, erst senden oder löschen",
+  "apiError.account.input_row_missing": "Das Eingabefeld von Claude ist nicht zu sehen, nichts wurde gestartet",
+  "apiError.account.input_row_stuck": "Das Eingabefeld von Claude wurde nicht leer, nichts wurde gestartet",
   "apiError.account.launch_failed": "{reason}",
   "apiError.retell.off": "Nacherzählen ist auf diesem Host nicht eingerichtet",
   "apiError.retell.not_claude": "In diesem Pane läuft keine Claude-Sitzung",

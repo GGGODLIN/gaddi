@@ -1694,6 +1694,8 @@ export const pt: Dictionary = {
   "pushTitle.machine.disk": "Disco continua cheio em {machine}",
   "apiError.account.confirm_interrupt": "O agente está trabalhando, confirme a interrupção deste turno",
   "apiError.account.draft_present": "A caixa de entrada do Claude tem texto não enviado, envie ou apague primeiro",
+  "apiError.account.input_row_missing": "A caixa de entrada do Claude não está na tela, nada foi iniciado",
+  "apiError.account.input_row_stuck": "A caixa de entrada do Claude não ficou vazia, nada foi iniciado",
   "apiError.account.exit_failed": "{reason}",
   "apiError.account.exit_unconfirmed": "O Claude não confirmou a saída, então nada foi iniciado, verifique o pane",
   "apiError.account.in_progress": "Uma troca já está em andamento neste pane",
