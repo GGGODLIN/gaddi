@@ -860,6 +860,8 @@ is the one place that says when to release; the agent proposes, the operator app
   8 on 10-10) is the pattern this rule stops.
 - **Same-day only for an urgent patch:** data loss, a security fix, or a broken update path, the
   three cases *Versioning* step 1 gives the `**Urgent.**` line. Anything else waits for the week.
+  These limits bind what the agent proposes. An explicit ask from the operator is the approval at
+  any time; the agent says once that it falls inside the week and cuts it.
 - **An upstream sync rides the next weekly release** rather than taking a release of its own.
 - **The agent proposes the release; it never cuts one unasked.** When `dev` holds something worth
   shipping and a week has passed, propose it with the range (`git diff --stat origin/main
