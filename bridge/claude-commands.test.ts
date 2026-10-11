@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { sep } from "node:path";
 
 import { claudeConfigDir, discoverClaudeCommands, parseFrontmatter, type DiscoveryIo } from "./claude-commands.ts";
 
@@ -6,21 +7,25 @@ interface FakeTree {
   readonly [path: string]: string;
 }
 
+/** Fixtures are spelled with `/`; the code joins with the platform's separator, `\` on Windows. */
+const native = (path: string) => path.replaceAll("/", sep);
+
 /** A disk made of file paths; every folder is implied by a file below it. */
-function fakeIo(files: FakeTree): DiscoveryIo {
+function fakeIo(spelled: FakeTree): DiscoveryIo {
+  const files = new Map(Object.entries(spelled).map(([path, text]) => [native(path), text] as const));
   return {
     async list(dir) {
-      const prefix = `${dir}/`;
+      const prefix = `${dir}${sep}`;
       const seen = new Map<string, boolean>();
-      for (const path of Object.keys(files)) {
+      for (const path of files.keys()) {
         if (!path.startsWith(prefix)) continue;
-        const [head, ...rest] = path.slice(prefix.length).split("/");
+        const [head, ...rest] = path.slice(prefix.length).split(sep);
         seen.set(head!, (seen.get(head!) ?? false) || rest.length > 0);
       }
       return seen.size === 0 ? null : [...seen].map(([name, isDir]) => ({ name, dir: isDir }));
     },
     async read(path) {
-      return files[path] ?? null;
+      return files.get(path) ?? null;
     },
   };
 }
@@ -30,9 +35,9 @@ const skill = (description: string, extra = "") => `---\ndescription: ${descript
 async function run(files: FakeTree, cwd: string | null = "/h/code/app/src") {
   const warns: string[] = [];
   const rows = await discoverClaudeCommands({
-    home: "/h",
-    cwd,
-    configDir: "/h/.claude",
+    home: native("/h"),
+    cwd: cwd === null ? null : native(cwd),
+    configDir: native("/h/.claude"),
     io: fakeIo(files),
     warn: (m) => warns.push(m),
   });
@@ -58,9 +63,10 @@ describe("parseFrontmatter", () => {
 
 describe("claudeConfigDir", () => {
   test("follows a profile's journal root, else the home default", () => {
-    expect(claudeConfigDir(["/h/.claude-work/projects", "/h/.claude/projects"], "/h")).toBe("/h/.claude-work");
-    expect(claudeConfigDir(["/srv/logs"], "/h")).toBe("/h/.claude");
-    expect(claudeConfigDir([], "/h")).toBe("/h/.claude");
+    const roots = [native("/h/.claude-work/projects"), native("/h/.claude/projects")];
+    expect(claudeConfigDir(roots, native("/h"))).toBe(native("/h/.claude-work"));
+    expect(claudeConfigDir([native("/srv/logs")], native("/h"))).toBe(native("/h/.claude"));
+    expect(claudeConfigDir([], native("/h"))).toBe(native("/h/.claude"));
   });
 });
 
@@ -117,10 +123,10 @@ describe("discoverClaudeCommands", () => {
   test("enabled plugins are namespaced; a disabled or other-project install is not", async () => {
     const installed = {
       plugins: {
-        "codex@openai": [{ scope: "user", installPath: "/p/codex" }],
-        "off@m": [{ scope: "user", installPath: "/p/off" }],
-        "elsewhere@m": [{ scope: "project", projectPath: "/h/other", installPath: "/p/elsewhere" }],
-        "here@m": [{ scope: "project", projectPath: "/h/code/app", installPath: "/p/here" }],
+        "codex@openai": [{ scope: "user", installPath: native("/p/codex") }],
+        "off@m": [{ scope: "user", installPath: native("/p/off") }],
+        "elsewhere@m": [{ scope: "project", projectPath: native("/h/other"), installPath: native("/p/elsewhere") }],
+        "here@m": [{ scope: "project", projectPath: native("/h/code/app"), installPath: native("/p/here") }],
       },
     };
     const { names } = await run({
@@ -163,8 +169,8 @@ describe("discoverClaudeCommands", () => {
     });
     expect(names).toEqual(["/fine"]);
     expect(warns).toHaveLength(2);
-    expect(warns.join("\n")).toContain("/h/.claude/skills/broken/SKILL.md");
-    expect(warns.join("\n")).toContain("/h/.claude/settings.json");
+    expect(warns.join("\n")).toContain(native("/h/.claude/skills/broken/SKILL.md"));
+    expect(warns.join("\n")).toContain(native("/h/.claude/settings.json"));
   });
 
   test("descriptions are flattened and cut, and odd names are dropped", async () => {
