@@ -3,6 +3,11 @@
 Install Collie on your system, start it, and put it on your phone. Read
 [Security](security.md) first: Collie exposes remote shell access to your machine by design.
 
+> **Note.** Installing Gaddi, the GGGODLIN/gaddi fork? Use the source install in its
+> [README](../README.md#install). The install script, the packages, `AltanS/collie` and the Herdr
+> plugin on this page install upstream Collie. From [Start it](#start-it) on, this page applies to
+> both.
+
 ## Before you start
 
 Collie needs a front door: something that serves it over HTTPS and restricts access to you.

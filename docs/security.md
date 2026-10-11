@@ -31,7 +31,8 @@ the code already filled in. The phone stores the returned token. Collie keeps on
 the token is displayed once. You do not need to restart the process; the running daemon applies
 pairings and revocations on the next request.
 
-The two device gates answer different questions, and you can run either, both, or neither:
+The two device gates answer different questions. Pairing is always on; the device header is an
+extra gate you can add on top of it:
 
 | | asks | trusts | revoke by |
 | --- | --- | --- | --- |
@@ -332,8 +333,12 @@ error, with the fix. A folder that Collie cannot check is a warning: `cannot con
 
 ## What leaves your machine
 
-Nothing, by default and by policy. Collie sends no install events, no usage statistics, no crash
-reports and no analytics. There is no flag that enables them.
+No telemetry, by default and by policy. Collie sends no install events, no usage statistics, no
+crash reports and no analytics. There is no flag that enables them.
+
+The network paths you choose are separate from that: the phone reaches Collie through your front
+door (Tailscale by default), and Web Push, once you turn it on, goes through the phone's push
+service (Apple's on an iPhone).
 
 The one unprompted outbound call is the update check: an anonymous HTTPS `GET` to GitHub's public
 tags API (`bridge/update.ts`) that compares your version to the newest tag. It carries no data about

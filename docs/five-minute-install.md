@@ -9,6 +9,9 @@ install script. For other setups, see [Install](install.md).
 > **Note.** Collie gives remote shell access to your machine by design. Read
 > [Security](security.md) before you install it.
 
+> **Note.** This guide installs upstream Collie. For Gaddi, the GGGODLIN/gaddi fork, follow its
+> [README](../README.md#install) instead.
+
 ## What you need
 
 - A Linux or macOS computer (the host). A Mac needs Apple Silicon

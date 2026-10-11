@@ -261,5 +261,6 @@ limit. With the re-sign at 03:30, the 08:00 trigger brings the island back.
 drafts). The backup is kept per Collie address, so a build pointed at another Collie starts clean. The web view is not created before the
   phone's first unlock, because "Always" location lets iOS start the app earlier than that.
 - Web Push does not work inside the app; the PWA keeps delivering notifications.
-- The app's own text (the address screen, the location prompt, the Control Center button) is in
-  Traditional Chinese.
+- The app's own text (the address screen, the location prompt, the Control Center button) follows
+  the phone's language: Traditional Chinese on a phone set to it, English otherwise, from build 4
+  (fork 2.1.0).
