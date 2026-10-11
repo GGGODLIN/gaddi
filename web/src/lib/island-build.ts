@@ -4,7 +4,7 @@ export interface IslandBuildRecommendation {
 }
 
 // Raise this only in the release AFTER this tag's IPA is confirmed downloadable (CLAUDE.md).
-export const RECOMMENDED_ISLAND_BUILD: IslandBuildRecommendation = { build: 3, tag: "v1.19.3" };
+export const RECOMMENDED_ISLAND_BUILD: IslandBuildRecommendation = { build: 4, tag: "v2.1.0" };
 
 export function islandUpdateTag(
   app: { build?: number } | undefined,

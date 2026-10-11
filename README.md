@@ -10,9 +10,9 @@ Gaddi puts the AI coding agents in your terminal on your phone. Claude Code, Cod
 running in Herdr, tmux or zellij on your computer, and the phone shows which one is waiting on you.
 You answer with a tap, not a terminal keyboard.
 
-It runs on your own machine and reaches your phone over your Tailscale network. There is no account
-and no cloud service, and it isn't in an app store: you open a URL on the phone and add it to the
-home screen.
+It runs on your own machine and reaches your phone over your Tailscale network. Gaddi has no account
+of its own, no hosted backend and no telemetry; the connection is your Tailscale's. It isn't in an
+app store: you open a URL on the phone and add it to the home screen.
 
 > **Note.** Gaddi is [GGGODLIN's fork](https://github.com/GGGODLIN/gaddi) of
 > [ColliePWA](https://github.com/AltanS/collie) by Altan Sarisin. It is not an official ColliePWA
@@ -43,14 +43,15 @@ The video and the screenshots use made-up agents.
 - **Start work from the phone**: a new agent, a command or a worktree, on any of your machines.
 - **Read back what happened**: search the output, read the whole session as Chat, and browse the
   workspace's files and diffs, read-only.
-- **A push notification** when an agent stops and waits for you.
+- **A push notification** when an agent stops and waits for you, once you turn Web Push on
+  ([Voice input and Web Push](./docs/voice-and-push.md)).
 
 ### Your agents on the iPhone's Dynamic Island
 
 The fork's main addition is an iPhone app, in [`ios/`](./ios/README.md), that puts your agents'
 state on the Dynamic Island and the lock screen, and opens Gaddi when you tap it. Build it, or
-sideload the `.ipa` each release carries; either way it is signed with your own Apple ID. A free one
-is enough, and nothing goes through a push service or a third-party server.
+sideload the `.ipa` each release carries; either way it is signed with your own Apple ID. The app
+updates the island itself, from your Gaddi, with no push service in between.
 
 <table>
   <tr>
@@ -69,31 +70,76 @@ is enough, and nothing goes through a push service or a third-party server.
 
 The screenshots use made-up agents. The second line, what the pane is doing, shows only with
 `ISLAND_SHOW_DETAIL = YES`, because it can be your newest prompt word for word; by default the
-island shows the pane's name and the counts.
+island shows the pane's name and the counts. The pane's name still shows on the lock screen, so
+name panes with that in mind.
+
+What the island asks of you, before you decide to install it
+([`ios/README.md`](./ios/README.md) has each in full):
+
+- **An iPhone on iOS 18 or newer**, and location set to **Always**: that is how the app stays awake
+  in the background. Its battery use has not been measured.
+- **A restart every 8 hours.** iOS ends a Live Activity after 8 hours, and an iOS update may end it
+  sooner.
+- **Re-signing every 7 days** with a free Apple ID. AltStore does it in the background while
+  AltServer is reachable; a week without it and the app stops opening until you refresh it.
+- **A Mac or a Windows PC to sign it.** AltServer has no Linux version, so a Linux host still needs
+  one of them nearby.
+
+The home-screen web app and the iPhone app are two different things:
+
+| | Home-screen web app | iPhone app |
+| --- | --- | --- |
+| Approve, reply, read panes | Yes | Yes, through the same web app inside it |
+| Dynamic Island and lock screen | No | Yes |
+| Push notifications | Yes, once Web Push is on | No; keep the web app for them |
+| Pairing | Its own pairing | Its own pairing, separate from the web app's |
+| Updates | With Gaddi's own update | Install the new `.ipa` over the old app when a release says so |
 
 ## Before you install
 
-You need a Mac or a Linux machine (Windows is experimental, see [Windows](#windows)),
-[Bun](https://bun.sh) 1.3.14 or newer, git, and one multiplexer: [Herdr](https://herdr.dev), tmux
-or zellij. The phone and the computer must be on the same [Tailscale](https://tailscale.com)
-tailnet. Gaddi is for one person: one operator, one tailnet, no shared or public access.
+You need:
+
+- **A Mac or a Linux machine** that stays awake and online while you are away from it: Gaddi and
+  your agents run there, and the phone only reads them. Windows is experimental, see
+  [Windows](#windows).
+- **[Bun](https://bun.sh) 1.3.14 or newer and git.**
+- **One multiplexer, with your agents running inside it.** [Herdr](https://herdr.dev) is the setup
+  the maintainer runs every day. tmux and zellij work too but are experimental
+  ([Multiplexers](./docs/multiplexers.md)). An agent started in a plain terminal tab does not show
+  up; start it in a pane of the multiplexer.
+- **[Tailscale](https://tailscale.com) on the computer and the phone, on the same tailnet, with
+  HTTPS turned on** (admin console → DNS → Enable HTTPS). On a Mac, the `tailscale` command must be
+  on your PATH; the Tailscale app can install it from its settings.
+
+The maintainer runs it on a Mac with Herdr, Claude Code and an iPhone, and that is the route this
+README walks. The other combinations pass CI but have not been walked end to end for this fork.
+
+Gaddi is for one person: one operator, one tailnet, no shared or public access.
 
 **Gaddi provides remote shell access to your machine by design.** A single API call sends
-arbitrary keystrokes directly into a live terminal pane. Anyone with access to the URL can read pane
-output (source code, secrets, environment variables, agent output) and execute arbitrary commands
-with your full user privileges. There is no sandbox and no command allow-list, as these would defeat
-the core workflow. Treat the URL as a root login: bind it strictly to your tailnet, set
-`COLLIE_TRUSTED_USER`, and pair only the physical phone you are using. Read
-[`docs/security.md`](./docs/security.md) for details on the security model, defense layers, and
-device gating before running the service.
+arbitrary keystrokes directly into a live terminal pane. A paired device can read pane output
+(source code, secrets, environment variables, agent output) and run any command as your user.
+There is no sandbox and no command allow-list, as these would defeat the core workflow.
+
+Every request needs a device you paired with `collie pair`; knowing the URL is not enough. Pairing
+is always on. Treat a paired phone like an SSH key to your account: keep Gaddi on your tailnet, set
+`COLLIE_TRUSTED_USER` so only your tailnet login gets through
+([Variant A](#variant-a--tailscale-serve--person-identity-default)), and pair only the phone you
+use. [`docs/security.md`](./docs/security.md) has the security model in full.
 
 > 🚫 **Never `tailscale funnel` this**: `funnel` exposes the port to the public internet, whereas
 > `serve` limits access to your private tailnet. Do not funnel Gaddi under any circumstances.
 
 ## Install
 
-Gaddi installs from source. Have the multiplexer running first: `start` mirrors the one it finds
-running, and refuses when there is none.
+Gaddi installs from source. Start your agents in the multiplexer first: `start` mirrors the one it
+finds running, and refuses when there is none. With tmux, that is:
+
+```bash
+tmux new -s agents      # then run claude (or codex) inside it
+```
+
+Then, in another terminal:
 
 ```bash
 git clone --single-branch https://github.com/GGGODLIN/gaddi.git ~/.local/share/collie &&
@@ -102,10 +148,21 @@ git clone --single-branch https://github.com/GGGODLIN/gaddi.git ~/.local/share/c
 
 Each step runs only if the one before it succeeded. If `~/.local/share/collie` already exists (an
 upstream install, say), the clone stops there and nothing is built over it; move it aside first.
-`--single-branch` fetches `main` alone, and later updates keep to it.
+`--single-branch` fetches `main` alone, and later updates keep to it. `start` runs
+`tailscale serve` for you and prints the HTTPS address.
 
-`start` and everything after it work as upstream documents them; see
-[`docs/install.md`](./docs/install.md), from *Then start it*.
+Then put it on the phone. The commands below run in `~/.local/share/collie`; `bin/collie link`
+puts `collie` on your PATH if you want the short form.
+
+1. Run `bin/collie url` and open the address it prints in Safari on the iPhone.
+2. Tap **Share**, then **Add to Home Screen**, then open Gaddi from the new icon.
+3. Run `bin/collie pair` and type its 8-character code in Gaddi under Settings → System → Paired
+   devices.
+
+Type the code inside the home-screen app rather than scanning the QR code: the QR code opens
+Safari, and a pairing made in Safari may not carry over to the home-screen app. On Android, use
+Chrome and the **Install** card in Gaddi's Settings. [`docs/install.md`](./docs/install.md#start-it) has the
+rest of first run, from *Start it*.
 
 `main` moves only when a release is cut or the docs change, so the code you install is always a
 release's. Day-to-day work happens on `dev`, which is not tested for anyone else's use.
@@ -120,10 +177,11 @@ restarts:
 cd ~/.local/share/collie && bin/collie update
 ```
 
-To go back to an earlier release, check out its tag, rebuild and restart:
+To go back to an earlier release, check out its tag, rebuild and restart. Stay within 2.x: a
+release before 1.18.0 lets anyone who reaches the URL read every pane, paired or not.
 
 ```bash
-cd ~/.local/share/collie && git fetch --tags && git checkout v1.14.0 &&
+cd ~/.local/share/collie && git fetch --tags && git checkout v2.0.2 &&
   bash scripts/collie-ctl.sh build && bin/collie restart
 ```
 
@@ -140,8 +198,8 @@ cd ~/.local/share/collie && git checkout main && bin/collie update
 
 ## Optional companions
 
-Two features read the output of the maintainer's own Claude Code tools. Both are off until you
-install the tool, and Gaddi runs the same without them.
+Everything in this table is optional, and Gaddi runs the same without it. The first two rows read
+the output of the maintainer's own Claude Code tools; the third is the iPhone app.
 
 | Feature | Needs | Without it |
 | --- | --- | --- |
@@ -154,7 +212,9 @@ notification's text stays in Traditional Chinese.
 
 ## Documentation
 
-The pages below come from upstream and say Collie; they describe the same software.
+The pages below come from upstream and say Collie. Their install commands (`colliepwa.dev`'s
+script, `AltanS/collie`, the packages and the Herdr plugin) install upstream Collie, not Gaddi; for
+Gaddi, use [Install](#install) above. Everything after installing applies to both.
 
 ### Guides
 
@@ -207,8 +267,8 @@ COLLIE_TRUSTED_USER=you@example.com
 - **Why it's safe on bare `tailscale serve`:** serve is the *trusted injector* of
   `Tailscale-User-Login` — it sets that header itself and a client can't forge it through the proxy.
 - Nothing else to configure; origins match automatically on the MagicDNS name.
-- Want *per-device* control without standing up a proxy? [Pair the
-  device](./docs/security.md#pair-a-device--the-write-credential) — it composes on top of this variant.
+- Per-device control comes from [pairing](./docs/security.md#pair-a-device--the-write-credential),
+  which is always on and applies on top of this variant.
 
 This is the right choice unless you specifically need a proxy in the path. If you do, or if Tailscale
 isn't in the path at all, [`docs/deployment.md`](./docs/deployment.md) has the rest:
@@ -320,8 +380,8 @@ in place.
   boundaries. [`ARCHITECTURE.md`](./ARCHITECTURE.md) §3 explains why Collie runs as a supervised
   service instead of an embedded pane, which keeps the Herdr manifest limited to `[[actions]]` and
   `[[build]]`.
-- **Pull requests:** [`CONTRIBUTING.md`](./CONTRIBUTING.md) documents base branches (`main` for
-  bugfixes, `v1` for features), CI checks, and version bump requirements.
+- **Pull requests:** send them to this fork's `dev` branch; `main` takes only releases and docs.
+  [`CONTRIBUTING.md`](./CONTRIBUTING.md) covers CI checks and version bump requirements.
 
 ### The states playground
 

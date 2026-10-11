@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  type ChannelEvidence,
   PLAYGROUND_ICON_LINKS,
   channelFor,
   iconLinksFor,
@@ -19,25 +20,52 @@ import {
 // file that imports `vite`/`vite-plugin-pwa`, and this module imports neither.
 
 describe("channelFor", () => {
+  const evidence = (over: Partial<ChannelEvidence>): ChannelEvidence => ({
+    head: "abc123",
+    tagCommit: null,
+    tagCount: 3,
+    changedSinceTag: null,
+    ...over,
+  });
+
   it("no git at all (head null): a tarball or packaged build, release", () => {
-    expect(channelFor({ head: null, tagCommit: null, tagCount: null })).toBe("release");
+    expect(channelFor(evidence({ head: null, tagCount: null }))).toBe("release");
   });
 
   it("git works but holds no tags at all: the shallow detached install, release", () => {
-    expect(channelFor({ head: "abc123", tagCommit: null, tagCount: 0 })).toBe("release");
+    expect(channelFor(evidence({ tagCount: 0 }))).toBe("release");
   });
 
   it("tags exist and the version's tag matches HEAD: a real release checkout", () => {
-    expect(channelFor({ head: "abc123", tagCommit: "abc123", tagCount: 3 })).toBe("release");
+    expect(channelFor(evidence({ tagCommit: "abc123" }))).toBe("release");
   });
 
   it("tags exist but the version's tag is missing: dev checkout on an untagged commit", () => {
     // This is the case that shipped 1.8.1 as "release" before v1.8.1 was tagged.
-    expect(channelFor({ head: "abc123", tagCommit: null, tagCount: 3 })).toBe("dev");
+    expect(channelFor(evidence({}))).toBe("dev");
   });
 
   it("tags exist but the version's tag points elsewhere: dev", () => {
-    expect(channelFor({ head: "abc123", tagCommit: "def456", tagCount: 3 })).toBe("dev");
+    expect(channelFor(evidence({ tagCommit: "def456" }))).toBe("dev");
+  });
+
+  it("HEAD past the tag with only Markdown and assets/ changed: still the release", () => {
+    const changedSinceTag = ["README.md", "docs/install.md", "assets/fork/lock-screen.jpg"];
+    expect(channelFor(evidence({ tagCommit: "def456", changedSinceTag }))).toBe("release");
+  });
+
+  it("HEAD past the tag with any code changed: dev", () => {
+    const changedSinceTag = ["README.md", "web/src/main.tsx"];
+    expect(channelFor(evidence({ tagCommit: "def456", changedSinceTag }))).toBe("dev");
+  });
+
+  it("an image outside the root assets/ folder is code, not docs: dev", () => {
+    const changedSinceTag = ["web/public/assets/icon.png"];
+    expect(channelFor(evidence({ tagCommit: "def456", changedSinceTag }))).toBe("dev");
+  });
+
+  it("the diff failed past the tag: dev, never guessed release", () => {
+    expect(channelFor(evidence({ tagCommit: "def456", changedSinceTag: null }))).toBe("dev");
   });
 });
 

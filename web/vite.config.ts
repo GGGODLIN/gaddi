@@ -117,7 +117,9 @@ function gitSha(): string {
 //   3. git works and tags exist -> a real dev checkout, so the version's own tag decides: its
 //      commit matching HEAD means release, anything else (including a missing tag for this
 //      version) means dev. This is the case a dev lane on an untagged `chore(release):` commit
-//      used to get wrong, building as release before its tag existed.
+//      used to get wrong, building as release before its tag existed. A HEAD past the tag whose
+//      changes since it are only Markdown or `assets/` is release too: docs-only commits reach `main`
+//      between releases, and its code is still the tagged one.
 //
 // Each git call below has its own try/catch, so one failure (e.g. no `.git`) doesn't discard
 // evidence another call already gathered.
@@ -143,7 +145,20 @@ function gitEvidence(version: string): ChannelEvidence {
   } catch {
     tagCount = null;
   }
-  return { head, tagCommit, tagCount };
+  let changedSinceTag: string[] | null;
+  try {
+    // `git diff` names paths relative to the repo root even from `web/`, which is what
+    // `channelFor`'s `assets/` check expects.
+    changedSinceTag =
+      tagCommit === null
+        ? null
+        : git(`git diff --name-only ${tagCommit} HEAD`)
+            .split("\n")
+            .filter((line) => line.length > 0);
+  } catch {
+    changedSinceTag = null;
+  }
+  return { head, tagCommit, tagCount, changedSinceTag };
 }
 // SAFETY: `web/package.json` is this repo's own manifest, sitting next to this config, and
 // `scripts/check-version.sh` gates every build on its `version` agreeing with the other two files —

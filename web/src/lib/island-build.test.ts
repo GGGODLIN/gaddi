@@ -21,8 +21,8 @@ describe("islandUpdateTag", () => {
   it("does not offer an update before the IPA is published", () => {
     expect(islandUpdateTag({ build: 1 }, { build: 2, tag: null })).toBeNull();
   });
-  it("sends shells older than build 3 to the published v1.19.3 IPA", () => {
-    expect(islandUpdateTag({ build: 2 }, RECOMMENDED_ISLAND_BUILD)).toBe("v1.19.3");
-    expect(islandUpdateTag({ build: 3 }, RECOMMENDED_ISLAND_BUILD)).toBeNull();
+  it("sends shells older than build 4 to the published v2.1.0 IPA", () => {
+    expect(islandUpdateTag({ build: 3 }, RECOMMENDED_ISLAND_BUILD)).toBe("v2.1.0");
+    expect(islandUpdateTag({ build: 4 }, RECOMMENDED_ISLAND_BUILD)).toBeNull();
   });
 });
