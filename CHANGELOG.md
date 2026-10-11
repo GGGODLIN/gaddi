@@ -23,13 +23,16 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-11
+
 ### Changed
 
-- **Gaddi recommends Collie Island build 4.** The iPhone app on build 3 or older is offered the v2.1.0 IPA, whose app and island follow the phone's language in English or Traditional Chinese.
+- **Built on upstream Collie 1.19.2.** AltanS/collie v1.19.2, commit aacece40. Also carries upstream main's unreleased 7b2a50de.
+- **Gaddi recommends Collie Island build 4.** The iPhone app on build 3 or older is offered the v2.1.0 IPA, whose app and island follow the phone's language in English or Traditional Chinese. ([ad5e0e7f](https://github.com/GGGODLIN/gaddi/commit/ad5e0e7f))
 
 ### Fixed
 
-- **A fresh clone of main builds as the release, not as dev.** When main has moved past the release tag only by documentation, the app keeps the Gaddi name, icon and version instead of Gaddi (dev).
+- **A fresh clone of main builds as the release, not as dev.** When main has moved past the release tag only by documentation, the app keeps the Gaddi name, icon and version instead of Gaddi (dev). ([943ec427](https://github.com/GGGODLIN/gaddi/commit/943ec427))
 
 ## [2.1.0] - 2026-10-11
 
