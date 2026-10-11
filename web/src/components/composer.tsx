@@ -2276,6 +2276,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         open={drawer === "cmd"}
         onClose={closeDrawer}
         agent={agent}
+        paneId={paneId}
+        scope={scope}
         mine={operatorCommands}
         onInsert={insertCommand}
       />

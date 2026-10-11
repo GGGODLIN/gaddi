@@ -1,6 +1,6 @@
 # 9001 — Claude operator commands join the reference catalog
 
-- **Status:** Accepted; command execution amended by [ADR 9002](./9002-the-agent-palette-stages-never-sends.md)
+- **Status:** Accepted; command execution amended by [ADR 9002](./9002-the-agent-palette-stages-never-sends.md); "not a runtime registry" amended by [ADR 9009](./9009-the-palette-lists-what-claude-code-would-load.md)
 - **Date:** 2026-09-23
 - **Shipped in:** pending
 - **Trail:** operator request in the 2026-09-23 Claude Code design thread ("自製 slash 一定出現，原生的也要有") · `web/src/lib/agent-commands.ts` (`commandsFor`) · [ADR 0018](./0018-operator-command-rows-replace-the-catalog.md) · [ADR 0043](./0043-operator-bar-rows-replace-the-bar-not-the-palette.md)

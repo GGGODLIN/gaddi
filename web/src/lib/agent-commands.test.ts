@@ -335,3 +335,39 @@ describe("commandsFor with the operator's own rows", () => {
     expect(commandsFor("omp", [mine]).some((c) => c.command === "/mine")).toBe(false);
   });
 });
+
+describe("commandsFor with the commands found on the pane's machine (ADR 9009)", () => {
+  const toSpec = { command: "/to-spec", description: "Write the spec", argHint: "" };
+  const deploy = { command: "/deploy", description: "Ship it", argHint: "[env]" };
+
+  it("joins Claude's one list as searchable rows, never on the first screen", () => {
+    const all = commandsFor("claude", [], [toSpec, deploy]);
+    const row = all.find((c) => c.command === "/deploy");
+    expect(row).toEqual({
+      command: "/deploy",
+      description: "Ship it",
+      takesArg: true,
+      argHint: "[env]",
+      common: false,
+      dangerous: false,
+    });
+    expect(all.filter((c) => c.command === "/to-spec")).toHaveLength(1);
+  });
+
+  it("takes a reference row's place without making it safe", () => {
+    const local = { command: "/clear", description: "My own clear", argHint: "" };
+    const rows = commandsFor("claude", [], [local]).filter((c) => c.command === "/clear");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ description: "My own clear", dangerous: true, common: true });
+  });
+
+  it("gives way to the operator's own row of the same name", () => {
+    const mine = { agent: "claude", command: "/to-spec", description: "寫成 spec", takesArg: false, argHint: "" };
+    const rows = commandsFor("claude", [mine], [toSpec]).filter((c) => c.command === "/to-spec");
+    expect(rows).toEqual([expect.objectContaining({ description: "寫成 spec", common: true })]);
+  });
+
+  it("stays out of every other harness", () => {
+    expect(commandsFor("codex", [], [toSpec]).some((c) => c.command === "/to-spec")).toBe(false);
+  });
+});

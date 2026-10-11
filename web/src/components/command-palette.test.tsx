@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 
 import { CommandPalette } from "./command-palette";
 import type { OperatorCommand } from "@/lib/types";
+import { server } from "@/test/setup";
 
 function setup(overrides?: { agent?: string | null; mine?: OperatorCommand[] }) {
   // Widened at the binding, not asserted at the literal: the overrides below hand `null` and
@@ -164,5 +166,24 @@ describe("CommandPalette", () => {
     await user.click(screen.getByText("Deploy staging"));
     expect(props.onInsert).toHaveBeenCalledExactlyOnceWith("/deploy");
     expect(props.onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("finds the skills Claude Code would load in the pane, through the same search", async () => {
+    server.use(
+      http.get("/api/pane/w1%3Ap1/claude-commands", () =>
+        HttpResponse.json({ commands: [{ command: "/to-spec", description: "Write the spec", argHint: "" }] }),
+      ),
+    );
+    const user = userEvent.setup();
+    render(<CommandPalette open onClose={vi.fn()} agent="claude" paneId="w1:p1" onInsert={vi.fn()} />);
+    expect(screen.queryByText("/to-spec")).toBeNull();
+    await user.type(screen.getByPlaceholderText(/Search \d+ commands/), "to-spec");
+    expect(await screen.findByText("/to-spec")).toBeInTheDocument();
+  });
+
+  it("keeps the palette it had when the machine cannot answer", async () => {
+    server.use(http.get("/api/pane/w1%3Ap1/claude-commands", () => new HttpResponse(null, { status: 501 })));
+    render(<CommandPalette open onClose={vi.fn()} agent="claude" paneId="w1:p1" onInsert={vi.fn()} />);
+    expect(await screen.findByText("/status")).toBeInTheDocument();
   });
 });

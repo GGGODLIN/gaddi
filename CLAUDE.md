@@ -553,6 +553,11 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   composer, an argument-taking row includes one trailing space, and only the explicit Send action
   submits it. The harness bar is the separate direct-action surface
   ([ADR 9002](./.adr/9002-the-agent-palette-stages-never-sends.md)).
+- **On a Claude pane the palette also lists what Claude Code would load there** — the bridge reads
+  the skills and command files from disk (`bridge/claude-commands.ts`, `GET
+  /api/pane/<id>/claude-commands`) and they join the same list and search; `commands.toml` rows still
+  come first and win a name. It mirrors Claude Code's loader, it is not a registry, and it is fork-only
+  ([ADR 9009](./.adr/9009-the-palette-lists-what-claude-code-would-load.md)).
 - **The composition rule runs PER SURFACE, and the harness bar still replaces** — a row with
   `bar = true` goes on the bar above the keys as well as into the palette, and the bar's
   replace-or-fall-back runs over the `bar = true` rows ALONE

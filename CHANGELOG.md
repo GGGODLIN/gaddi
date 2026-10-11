@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **The Agent palette finds your own Claude skills by itself.** On a Claude pane, searching the palette now also finds every skill and slash command Claude Code would load in that pane's folder: your personal and project skills, enabled plugins and skills synced from claude.ai. They sit in the same list as the built-in commands, and your `commands.toml` rows still come first. There is nothing left to copy by hand (ADR 9009).
+
 ## [2.1.2] - 2026-10-11
 
 ### Changed
