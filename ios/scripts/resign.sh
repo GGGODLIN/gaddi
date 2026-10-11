@@ -71,11 +71,15 @@ xcodebuild -project "$ROOT/CollieIsland.xcodeproj" -scheme CollieIsland -configu
 # ("Could not allocate a resource", 2026-09-27, phone unlocked). Restarting the per-user
 # daemons (launchd relaunches them on demand) fixed it on the spot, so retry once that way.
 install() { xcrun devicectl device install app --device "$DEVICE" "$APP" >"$STATE/last-install.log" 2>&1; }
+# The next successful install overwrites last-install.log, so a nightly failure's reason was lost
+# by the time anyone looked (6 of 12 nights, 2026-09-30 to 10-11). Each failed attempt is kept here.
+keep_failure() { { echo "== $(date '+%F %T')"; cat "$STATE/last-install.log"; } >>"$STATE/install-failures.log"; }
 if ! install; then
-  [ "$RESTART_COREDEVICE" = "YES" ] || fail "install: iPhone unreachable? (see last-install.log)"
+  keep_failure
+  [ "$RESTART_COREDEVICE" = "YES" ] || fail "install: iPhone unreachable? (see install-failures.log)"
   log "install failed; restarting CoreDevice daemons and retrying"
   pkill -U "$(id -u)" -x CoreDeviceService; pkill -U "$(id -u)" -x remotepairingd
-  install || fail "install: iPhone unreachable?"
+  install || { keep_failure; fail "install: iPhone unreachable? (see install-failures.log)"; }
 fi
 
 raw=$(security cms -D -i "$APP/embedded.mobileprovision" 2>/dev/null | plutil -extract ExpirationDate raw - 2>/dev/null)
