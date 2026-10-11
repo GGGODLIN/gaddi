@@ -27,6 +27,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 - **Gaddi recommends Collie Island build 4.** The iPhone app on build 3 or older is offered the v2.1.0 IPA, whose app and island follow the phone's language in English or Traditional Chinese.
 
+### Fixed
+
+- **A fresh clone of main builds as the release, not as dev.** When main has moved past the release tag only by documentation, the app keeps the Gaddi name, icon and version instead of Gaddi (dev).
+
 ## [2.1.0] - 2026-10-11
 
 ### Changed

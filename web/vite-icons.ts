@@ -16,7 +16,15 @@ export interface ChannelEvidence {
   readonly head: string | null;
   readonly tagCommit: string | null;
   readonly tagCount: number | null;
+  // Paths that differ between the version's tag and HEAD (`git diff --name-only`); null when the
+  // tag is missing or the diff failed.
+  readonly changedSinceTag: readonly string[] | null;
 }
+
+// Docs-only commits can land on `main` between releases, so a fresh clone of `main` sits past the
+// tag on a tree whose code is still the release's. Without this it builds as dev, orange icon and
+// all, for a stranger installing the newest release.
+const isDocsPath = (path: string): boolean => path.endsWith(".md") || path.startsWith("assets/");
 
 /**
  * The build channel for a checkout, from three facts about its git state. A checkout is one of
@@ -29,12 +37,17 @@ export interface ChannelEvidence {
  *    an empty tag list is expected there, not a sign of a dev tree. Builds as release.
  * 3. Git works and tags exist: this is a real dev checkout, so the version's own tag decides. Its
  *    commit matching HEAD means the checkout sits on a cut, tagged release; anything else,
- *    including a missing tag for this version, is dev.
+ *    including a missing tag for this version, is dev. A HEAD past the tag whose only changes
+ *    since it are Markdown files or `assets/` still builds the release's code, so it is release.
  */
 export function channelFor(evidence: ChannelEvidence): Channel {
   if (evidence.head === null) return "release";
   if (evidence.tagCount === 0) return "release";
-  if (evidence.tagCommit !== null && evidence.tagCommit === evidence.head) return "release";
+  if (evidence.tagCommit === null) return "dev";
+  if (evidence.tagCommit === evidence.head) return "release";
+  if (evidence.changedSinceTag !== null && evidence.changedSinceTag.every(isDocsPath)) {
+    return "release";
+  }
   return "dev";
 }
 
