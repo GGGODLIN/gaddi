@@ -149,8 +149,8 @@ install the tool, and Gaddi runs the same without them.
 | *Plain* and *Lost* retell a Claude session in plain words | [cc-sidecar-waitwhat](https://github.com/GGGODLIN/cc-sidecar-waitwhat), named in `retell.toml` ([Configure](./docs/configure.md#retell-a-claude-session)) | The two rows are not offered |
 | Agents' state on the iPhone's Dynamic Island | The iPhone app in [`ios/`](./ios/README.md), built or sideloaded with your own Apple ID; it reads Gaddi or upstream Collie | Nothing changes; Gaddi's Settings row for the app's address shows only inside the app |
 
-A pane's description line is written in Traditional Chinese (`在等你批准`, `你：`) whatever the app's
-language.
+A pane's description line follows the app's language. A recap shows as Claude wrote it, and a push
+notification's text stays in Traditional Chinese.
 
 ## Documentation
 
