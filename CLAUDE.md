@@ -818,19 +818,59 @@ This fork keeps two branches and its own version line; both override upstream's 
 - **`dev` takes every change.** Commit and push to `dev`, never to `main`. The operator's active
   Collie follows `main` through the in-app update, so a `dev` change reaches it only in a release.
 - **`main` holds releases, plus docs-only commits between them, and only moves forward.** It is
-  upstream's history followed by one commit per fork release (or docs-only change, below), whose
-  tree is exactly the tree of a commit on `dev`; its first parent is always the previous `main`. Never rebuild or force-push a published
+  upstream's history followed by one commit per fork release, whose tree is exactly the tree of a
+  commit on `dev`, and docs-only commits between them (below), which change documentation alone;
+  its first parent is always the previous `main`. Never rebuild or force-push a published
   `main`: a clone following it updates with `--ff-only` and would be stranded. `dev`'s own history
   never reaches `main`, since before 1.14.0 it carries material this fork does not publish.
 - **Pushing `main` is publishing.** A clone following `main` takes a commit the moment it lands,
   before any tag or CI result. So a release commit reaches `main` only after CI passed on the `dev`
   commit whose tree it copies.
-- **A docs-only change reaches `main` without a release.** When everything on `dev` since the last
-  release touches only `*.md` files and `assets/`, copy `dev`'s tree to `main` the same way
-  (`git commit-tree 'dev^{tree}' -p origin/main`, first parent `origin/main`), with a `docs:`
-  message, no tag and no version bump. A release would only show operators an update with nothing
-  in it; an untagged commit shows no update, because only a `vX.Y.Z` tag is offered. Its CHANGELOG
-  line stays under `## [Unreleased]` until the next release.
+- **A docs change reaches `main` at any time, without a release.** Documentation and code ship
+  apart: code waits for the week (*Release cadence*), docs do not. Build the commit from `main`'s
+  tree with `dev`'s documentation laid over it, so code still waiting on `dev` stays off `main`:
+
+  ```bash
+  git fetch origin
+  export GIT_INDEX_FILE="$(mktemp)"
+  git read-tree origin/main
+  # CHANGELOG.md describes code, so it moves with the release, not here.
+  git diff --name-only origin/main origin/dev -- '*.md' 'assets/' ':!CHANGELOG.md' \
+    | while read -r f; do
+        if git cat-file -e "origin/dev:$f" 2>/dev/null; then
+          printf '100644 %s\t%s\n' "$(git rev-parse "origin/dev:$f")" "$f" | git update-index --index-info
+        else git update-index --force-remove "$f"; fi
+      done
+  tree=$(git write-tree); unset GIT_INDEX_FILE
+  git diff --stat origin/main "$tree"   # documentation only, nothing else
+  git commit-tree "$tree" -p origin/main -m "docs: …"
+  ```
+
+  A `docs:` message, no tag, no version bump: only a `vX.Y.Z` tag is offered as an update, so this
+  commit shows no one an update. A page that documents a change still waiting on `dev` waits with
+  it; leave that file out. The release that follows still copies `dev`'s whole tree, which holds
+  the same documentation, so nothing is lost or doubled.
+
+### Release cadence
+
+The fork is promoted to people who install it, so every tag reaches strangers' phones. This section
+is the one place that says when to release; the agent proposes, the operator approves.
+
+- **At most one release a week.** Fixes collect on `dev`. 28 tags in 11 days (2026-10-01 to 10-11,
+  8 on 10-10) is the pattern this rule stops.
+- **Same-day only for an urgent patch:** data loss, a security fix, or a broken update path, the
+  three cases *Versioning* step 1 gives the `**Urgent.**` line. Anything else waits for the week.
+- **An upstream sync rides the next weekly release** rather than taking a release of its own.
+- **The agent proposes the release; it never cuts one unasked.** When `dev` holds something worth
+  shipping and a week has passed, propose it with the range (`git diff --stat origin/main
+  origin/dev`), the number and the sentence of *Version numbers* that picked the axis. Cut it only
+  after the operator says yes. Propose without being asked; the operator should not have to
+  remember.
+- **The operator's phone checks `dev` before `main` moves.** A release reaches `main` only after the
+  change was accepted on the operator's iPhone against a dev instance running that `dev` commit.
+  Until that dev instance exists, the phone check stays after the tag, as before.
+- **Docs-only changes batch per working session.** One `main` commit per session, after the link
+  check and CI, not one per edit. They need no weekly wait: no tag means no update offer.
 
 ### Version numbers
 
