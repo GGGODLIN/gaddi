@@ -16,6 +16,27 @@ struct Agent: Decodable {
 
   struct Description: Decodable {
     let now: String?
+    let source: String?
+    let parts: Parts?
+
+    /// What a blocked or prompt `now` was built from (bridge/description/resolve.ts). `now` itself
+    /// is Chinese, kept for the push body and for an app that predates `parts`.
+    struct Parts: Decodable {
+      let tool: String?
+      let target: String?
+      let prompt: String?
+    }
+
+    /// `now` in this app's language. A recap, or a bridge that sends no parts, reads as sent;
+    /// web/src/lib/description-now.ts is the same rule for the phone's page.
+    var line: String? {
+      guard let parts else { return now }
+      if source == "prompt", let prompt = parts.prompt { return String(localized: "You: \(prompt)") }
+      guard source == "blocked" else { return now }
+      guard let tool = parts.tool else { return String(localized: "Waiting for your approval") }
+      let named = parts.target.map { "\(tool) · \($0)" } ?? tool
+      return String(localized: "Waiting for your approval: \(named)")
+    }
   }
 }
 
@@ -52,7 +73,7 @@ func summarize(_ agents: [Agent], showDetail: Bool) -> IslandAttributes.ContentS
     ready: count(.ready),
     working: count(.working),
     headline: title ?? "Gaddi",
-    detail: showDetail ? (top?.agent.description?.now ?? "") : "",
+    detail: showDetail ? (top?.agent.description?.line ?? "") : "",
     paneId: top?.agent.paneId,
     bucket: top?.bucket ?? .recent,
     offline: false)

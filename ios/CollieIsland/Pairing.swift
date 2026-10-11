@@ -43,9 +43,9 @@ enum Pairing {
   static func state(_ issue: PairingIssue) -> IslandAttributes.ContentState {
     let (headline, detail): (String, String) =
       switch issue {
-      case .unpaired: ("Gaddi 尚未配對", "點一下開始配對（collie pair）")
-      case .revoked: ("Gaddi 配對已失效", "配對已被撤銷，點一下重新配對")
-      case .expired: ("Gaddi 配對已到期", "點一下重新配對（collie pair）")
+      case .unpaired: (String(localized: "Gaddi isn't paired"), String(localized: "Tap to pair (collie pair)"))
+      case .revoked: (String(localized: "Gaddi's pairing was revoked"), String(localized: "Tap to pair again"))
+      case .expired: (String(localized: "Gaddi's pairing expired"), String(localized: "Tap to pair again (collie pair)"))
       }
     return IslandAttributes.ContentState(
       needs: 0, ready: 0, working: 0, headline: headline, detail: detail, paneId: nil, bucket: .recent,

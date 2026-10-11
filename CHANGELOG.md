@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Changed
 
 - **A pane's waiting or prompt line now reads in the phone's language.** The bridge sends the tool, target or prompt it built that line from beside the Chinese sentence, and the phone words it with its own dictionary; push bodies and recaps read as before.
+- **The iPhone app and its island speak English as well as Traditional Chinese.** They follow the iPhone's language, or the per-app language in Settings, and fall back to English; the island's waiting or prompt line is worded the same way as the phone's page. Reinstall the IPA over the existing app to get it; your pairing stays.
 
 ## [2.0.2] - 2026-10-11
 

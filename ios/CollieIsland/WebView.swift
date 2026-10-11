@@ -108,7 +108,7 @@ struct WebView: UIViewRepresentable {
       guard isLocalDownload(action) else { decisionHandler(.cancel); return }
       guard downloads.isEmpty, exportFile == nil else {
         decisionHandler(.cancel)
-        downloadFailed("請先完成目前的檔案儲存。")
+        downloadFailed(String(localized: "Finish saving the current file first."))
         return
       }
       decisionHandler(.download)
@@ -126,7 +126,7 @@ struct WebView: UIViewRepresentable {
       let name = (suggestedFilename as NSString).lastPathComponent
       guard !name.isEmpty, name != ".", name != "..", name != "/" else {
         completionHandler(nil)
-        downloadFailed("檔案名稱無效。")
+        downloadFailed(String(localized: "The file name isn't valid."))
         return
       }
       let directory = FileManager.default.temporaryDirectory
@@ -187,8 +187,8 @@ struct WebView: UIViewRepresentable {
 
     private func downloadFailed(_ reason: String) {
       DiagLog.write("download failed: \(reason)")
-      let alert = UIAlertController(title: "下載失敗", message: reason, preferredStyle: .alert)
-      alert.addAction(UIAlertAction(title: "好", style: .default))
+      let alert = UIAlertController(title: String(localized: "Download failed"), message: reason, preferredStyle: .alert)
+      alert.addAction(UIAlertAction(title: String(localized: "OK"), style: .default))
       presenter?.present(alert, animated: true)
     }
 

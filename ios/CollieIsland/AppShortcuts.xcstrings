@@ -1,0 +1,16 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Restart ${applicationName} island": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重啟 ${applicationName} 靈動島"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
