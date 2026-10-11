@@ -1,6 +1,30 @@
 import { describe, expect, it } from "vitest";
 
-import { displayWidth, WIDE_RANGES, COMBINING_RANGES } from "./text-width";
+import { cellsByColumn, displayWidth, widePieces, WIDE_RANGES, COMBINING_RANGES } from "./text-width";
+
+describe("widePieces", () => {
+  it("cuts each double-width cluster out alone and keeps the narrow runs between them whole", () => {
+    expect(widePieces("│ 廚房 │")).toEqual([
+      { text: "│ ", wide: false },
+      { text: "廚", wide: true },
+      { text: "房", wide: true },
+      { text: " │", wide: false },
+    ]);
+  });
+});
+
+describe("cellsByColumn", () => {
+  it("keys each cluster by the column it starts at, leaving a wide cluster's second column empty", () => {
+    expect([...cellsByColumn("│ 廚房 │")]).toEqual([
+      [0, "│"],
+      [1, " "],
+      [2, "廚"],
+      [4, "房"],
+      [6, " "],
+      [7, "│"],
+    ]);
+  });
+});
 
 describe("displayWidth", () => {
   it("counts ASCII as one column each", () => {
