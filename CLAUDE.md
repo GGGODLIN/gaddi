@@ -553,6 +553,11 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   composer, an argument-taking row includes one trailing space, and only the explicit Send action
   submits it. The harness bar is the separate direct-action surface
   ([ADR 9002](./.adr/9002-the-agent-palette-stages-never-sends.md)).
+- **On a Claude pane the palette also lists what Claude Code would load there** — the bridge reads
+  the skills and command files from disk (`bridge/claude-commands.ts`, `GET
+  /api/pane/<id>/claude-commands`) and they join the same list and search; `commands.toml` rows still
+  come first and win a name. It mirrors Claude Code's loader, it is not a registry, and it is fork-only
+  ([ADR 9009](./.adr/9009-the-palette-lists-what-claude-code-would-load.md)).
 - **The composition rule runs PER SURFACE, and the harness bar still replaces** — a row with
   `bar = true` goes on the bar above the keys as well as into the palette, and the bar's
   replace-or-fall-back runs over the `bar = true` rows ALONE
@@ -861,7 +866,8 @@ is the one place that says when to release; the agent proposes, the operator app
 - **Same-day only for an urgent patch:** data loss, a security fix, or a broken update path, the
   three cases *Versioning* step 1 gives the `**Urgent.**` line. Anything else waits for the week.
   These limits bind what the agent proposes. An explicit ask from the operator is the approval at
-  any time; the agent says once that it falls inside the week and cuts it.
+  any time; the agent says once that it falls inside the week, confirms the number (*Version
+  numbers*), and cuts it.
 - **An upstream sync rides the next weekly release** rather than taking a release of its own.
 - **The agent proposes the release; it never cuts one unasked.** When `dev` holds something worth
   shipping and a week has passed, propose it with the range (`git diff --stat origin/main
@@ -882,6 +888,10 @@ From fork 2.0.0 the fork's number is its own SemVer; upstream's code still merge
 number does not ([ADR 9008](./.adr/9008-the-fork-numbers-its-own-releases.md), which also records
 the two rules before it). Fork `1.19.3` is the last number derived from upstream's.
 
+- **The operator picks the number.** Before the release commit, propose a number with the sentence
+  below that picked its axis, and wait for the operator to choose one. An ask to release approves
+  the release, not a number, inside the week too. This overrides *Versioning* step 1's "the person
+  cutting the release decides".
 - **Pick the axis from what the release means to someone running Gaddi** (*Versioning* step 1). A
   sync takes the axis its upstream changes amount to for them, which can differ from the one
   upstream moved. A fork-only fix is a patch, a fork feature a minor.

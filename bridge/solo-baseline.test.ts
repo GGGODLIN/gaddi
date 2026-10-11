@@ -633,6 +633,9 @@ describe("solo zero-tax — routes", () => {
       // gated on an authorised device and forwarded to the owning member like `changes`.
       "/^\\/api\\/pane\\/([^/]+)(?:\\/(reply|keys|upload|close|rename|history|chat|changes|files|focus))?$/",
       "/^\\/api\\/pane\\/([^/]+)\\/(switch-account|retell)$/",
+      // The slash commands Claude Code would load in the pane's cwd (ADR 9009): a read of this
+      // machine's disk, asked only when the palette opens, so a solo instance pays nothing per poll.
+      "/^\\/api\\/pane\\/([^/]+)\\/claude-commands$/",
       "/^\\/api\\/pane\\/([^/]+)\\/deliverables(?:\\/([^/]+))?$/",
       // Which paths exist under the Files root (ADR 0088), asked in one batch for the pane view's
       // links: a read with the Files gate, one `lstat` per path, not forwarded across a crew link.

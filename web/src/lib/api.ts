@@ -1176,6 +1176,35 @@ export async function probePort(paneId: string, port: number, scope?: Scope, sig
   };
 }
 
+/** One slash command Claude Code would load in a pane's cwd, read off its machine's disk (ADR 9009). */
+export interface ClaudeCommand {
+  command: string;
+  description: string;
+  argHint: string;
+}
+
+/**
+ * The commands this pane's Claude Code would offer, from the skills and command files on its machine.
+ * Throws on a fault, including a crew member's 501 and an older bridge's 404; the palette then shows
+ * what it had before this read existed.
+ */
+export async function fetchClaudeCommands(paneId: string, scope?: Scope, signal?: AbortSignal): Promise<ClaudeCommand[]> {
+  const got = await doReq<JsonObject>(withScope(`/api/pane/${encodeURIComponent(paneId)}/claude-commands`, scope), {
+    signal,
+    timeoutMs: GET_TIMEOUT_MS,
+  });
+  const rows = Array.isArray(got.commands) ? got.commands : [];
+  const out: ClaudeCommand[] = [];
+  for (const raw of rows) {
+    const row = asJsonObject(raw);
+    if (row === undefined) continue;
+    const command = asJsonString(row.command);
+    if (command === undefined || !command.startsWith("/")) continue;
+    out.push({ command, description: asJsonString(row.description) ?? "", argHint: asJsonString(row.argHint) ?? "" });
+  }
+  return out;
+}
+
 function asJsonBooleanSafe(value: JsonValue | undefined): boolean | undefined {
   return value === true || value === false ? value : undefined;
 }

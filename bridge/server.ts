@@ -77,6 +77,7 @@ import {
   type WorktreeReceipt,
   type WorktreeReceiptSurface,
 } from "./worktree-receipts.ts";
+import { claudeConfigDir, discoverClaudeCommands } from "./claude-commands.ts";
 import { createOperatorCommands } from "./operator-commands.ts";
 import { createOperatorKeys } from "./operator-keys.ts";
 import { createOperatorQuickReplies } from "./operator-quick-replies.ts";
@@ -469,6 +470,14 @@ const PANE_DELIVERABLE_ROUTE = /^\/api\/pane\/([^/]+)\/deliverables(?:\/([^/]+))
  * always did.
  */
 const PANE_PORT_ROUTE = /^\/api\/pane\/([^/]+)\/port\/([^/]+)$/;
+
+/**
+ * `GET /api/pane/<id>/claude-commands`: the slash commands Claude Code would load in that pane's cwd,
+ * read off this machine's disk (ADR 9009). The pane id is only looked up in the snapshot; the cwd the
+ * read starts from is the one the multiplexer reported, never the request's. Not in `FORWARDABLE`: a
+ * pane on a crew member answers the lead's 501, and the phone keeps the palette it already had.
+ */
+const PANE_CLAUDE_COMMANDS_ROUTE = /^\/api\/pane\/([^/]+)\/claude-commands$/;
 
 /**
  * `GET /api/machines/<id>/history` and `POST /api/machines/<id>/alerts` (ADR 0084). The id is a
@@ -1675,6 +1684,31 @@ export function startServer(opts: {
       const port = parseProbePort(portMatch[2]!);
       if (port === null) return text("bad port", 400);
       return json(await probePort(port, tailnetIPv4(networkInterfaces()), dialTcp), req.headers.get("accept-encoding"));
+    }
+
+    const claudeCommandsMatch = pathname.match(PANE_CLAUDE_COMMANDS_ROUTE);
+    if (claudeCommandsMatch) {
+      const denied = caller.gate("read");
+      if (denied) return denied;
+      if (req.method !== "GET") return text("method not allowed", 405);
+      const rt = await caller.resolve();
+      if (rt instanceof Response) return rt;
+      let paneId: string;
+      try {
+        paneId = decodeURIComponent(claudeCommandsMatch[1]!);
+      } catch {
+        return text("malformed URL", 400);
+      }
+      const { agents, shellPanes } = rt.engine.current();
+      const pane = [...agents, ...shellPanes].find((p) => p.paneId === paneId);
+      if (pane === undefined) return json({ commands: [] }, req.headers.get("accept-encoding"));
+      const home = homedir();
+      const commands = await discoverClaudeCommands({
+        home,
+        cwd: pane.cwd === "" ? null : pane.cwd,
+        configDir: claudeConfigDir(cfg.journalRoots.claude, home),
+      });
+      return json({ commands }, req.headers.get("accept-encoding"));
     }
 
     // ── Worktrees: list / create / open / remove, all scoped to a space (ADR 0032) ──

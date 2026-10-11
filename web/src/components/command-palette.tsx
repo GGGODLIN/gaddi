@@ -5,6 +5,9 @@ import { cn } from "@/lib/utils";
 import { BottomSheet } from "@/components/ui/sheet";
 import { AgentIcon } from "@/components/agent-icon";
 import { commandsFor, type AgentCommand } from "@/lib/agent-commands";
+import { fetchClaudeCommands, type ClaudeCommand } from "@/lib/api";
+import { canonicalAgent } from "@/lib/operator-scope";
+import type { Scope } from "@/lib/scope";
 import type { OperatorCommand } from "@/lib/types";
 import { t } from "@/lib/i18n";
 import { useLocale } from "@/hooks/use-locale";
@@ -13,6 +16,9 @@ interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
   agent: string | undefined | null;
+  /** The pane the palette types into; its machine is asked which skills Claude Code would load there. */
+  paneId?: string;
+  scope?: Scope;
   /** The operator's own rows (`commands.toml`); Claude merges them, other harnesses replace. */
   mine?: readonly OperatorCommand[];
   /** Put the command in the composer for review; arg-taking commands include a trailing space. */
@@ -23,12 +29,35 @@ export function CommandPalette({
   open,
   onClose,
   agent,
+  paneId,
+  scope,
   mine,
   onInsert,
 }: CommandPaletteProps) {
   useLocale();
-  const all = commandsFor(agent, mine);
+  const [found, setFound] = useState<readonly ClaudeCommand[]>([]);
+  const all = commandsFor(agent, mine, found);
   const [query, setQuery] = useState("");
+  const isClaude = canonicalAgent(agent?.toLowerCase().trim() ?? "") === "claude";
+  const host = scope?.host;
+  const session = scope?.session;
+
+  // Asked on every open, because a skill installed a minute ago should be there; a failed read
+  // (an older bridge, a crew member) leaves the palette as it was before ADR 9009.
+  useEffect(() => {
+    if (!open || !isClaude || paneId === undefined) return;
+    const ac = new AbortController();
+    const run = async () => {
+      try {
+        const rows = await fetchClaudeCommands(paneId, scope, ac.signal);
+        if (!ac.signal.aborted) setFound(rows);
+      } catch {
+        // The palette keeps the reference catalog and the operator's rows; nothing to say.
+      }
+    };
+    void run();
+    return () => ac.abort();
+  }, [open, isClaude, paneId, host, session, scope]);
 
   useEffect(() => {
     if (open) setQuery("");

@@ -144,6 +144,8 @@ describe("the route table read off server.ts", () => {
       "/api/workspace/id1/files/image",
       // The dev-server port probe (ADR 9007): a read of this machine, so it needs the token too.
       "/api/pane/id1/port/id1",
+      // The Claude commands a pane would load (ADR 9009): names and descriptions off this disk.
+      "/api/pane/id1/claude-commands",
     ]) {
       expect(paths).toContain(known);
     }

@@ -16,6 +16,7 @@
 //
 // To regenerate: re-run the per-agent doc-fetch agents (see CHANGELOG) and replace the arrays.
 
+import type { ClaudeCommand } from "@/lib/api";
 import { canonicalAgent, rowsFor } from "@/lib/operator-scope";
 import type { OperatorCommand } from "@/lib/types";
 
@@ -309,8 +310,9 @@ const CATALOG = new Map<string, readonly AgentCommand[]>([
 export function commandsFor(
   agent: string | undefined | null,
   mine: readonly OperatorCommand[] = [],
+  found: readonly ClaudeCommand[] = [],
 ): readonly AgentCommand[] {
-  const shipped = catalogFor(agent);
+  const shipped = withFound(agent, catalogFor(agent), found);
   const aimed = rowsFor(mine, agent, (row) => row.command);
   if (aimed.length === 0) return shipped;
   const byName = new Map(shipped.map((c) => [c.command, c] as const));
@@ -326,6 +328,39 @@ export function commandsFor(
   if (family !== "claude") return operator;
   const operatorNames = new Set(operator.map((row) => row.command));
   return [...operator, ...shipped.filter((row) => !operatorNames.has(row.command))];
+}
+
+/**
+ * The reference catalog with the commands found on the pane's machine folded in (ADR 9009), Claude
+ * only: one list, as Claude Code's own `/` menu is one list. A found command naming a reference row
+ * takes that row's place, since Claude Code runs the local skill over the built-in, and keeps its
+ * `dangerous` classification. Found rows are searchable, not on the first screen, which stays the
+ * operator's rows and the common reference ones.
+ */
+function withFound(
+  agent: string | undefined | null,
+  shipped: readonly AgentCommand[],
+  found: readonly ClaudeCommand[],
+): readonly AgentCommand[] {
+  if (found.length === 0 || canonicalAgent(agent?.toLowerCase().trim() ?? "") !== "claude") return shipped;
+  const local = new Map(found.map((row) => [row.command, row] as const));
+  const merged = shipped.map((row) => {
+    const hit = local.get(row.command);
+    if (hit === undefined) return row;
+    local.delete(row.command);
+    return { ...row, description: hit.description || row.description };
+  });
+  for (const row of local.values()) {
+    merged.push({
+      command: row.command,
+      description: row.description,
+      takesArg: row.argHint !== "",
+      argHint: row.argHint,
+      common: false,
+      dangerous: false,
+    });
+  }
+  return merged;
 }
 
 /** The agent names the shipped catalog is filed under — pinned against AGENT_FAMILIES in the tests. */

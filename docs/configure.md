@@ -161,6 +161,9 @@ bar_label = "Status"
 ```
 
 On a Claude pane, matching rows appear first and the maintained reference commands remain searchable.
+The palette also searches every skill and command Claude Code would load in that pane's folder, so
+you do not have to copy your skills into this file; add a row only to give one a description of your
+own or a place on the first screen.
 An exact-name row replaces that reference row without lowering its dangerous classification. Other harnesses
 still display only matching rows. The narrowest scope wins, as documented in
 [ADR 9001](../.adr/9001-claude-operator-commands-join-the-reference-catalog.md).
