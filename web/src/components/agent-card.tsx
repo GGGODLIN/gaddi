@@ -10,6 +10,7 @@ import { PaneHint } from "@/components/pane-hint";
 import { BranchLabel } from "@/components/ui/branch-label";
 import { paneGitHead } from "@/lib/git-head";
 import { paneCwdLine, paneName, panePlaceParts, soleTabName } from "@/lib/pane-name";
+import { descriptionNow } from "@/lib/description-now";
 import { statusLabel, statusLabelPast } from "@/lib/types";
 import type { AgentView } from "@/lib/types";
 import { useLocale } from "@/hooks/use-locale";
@@ -174,7 +175,7 @@ export function AgentCard({
   // thing you find a row by; the description changes every turn, and the smaller line 2 fits more of
   // it. The two lines keep their 20px / 16px slots and truncate, so a described row is the same
   // height as any other (DESIGN.md §2). Absent, the row is unchanged.
-  const described = agent.description?.now;
+  const described = agent.description === undefined ? undefined : descriptionNow(agent.description);
   const placed: RowLines = inPlace
     ? {
         primary: paneName(agent),

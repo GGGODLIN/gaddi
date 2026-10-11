@@ -463,6 +463,9 @@ export const en = {
   "pane.description.goal": "Goal",
   "pane.description.now": "Now",
   "pane.description.next": "Next",
+  "pane.description.blocked": "Waiting for your approval",
+  "pane.description.blockedOn": "Waiting for your approval: {tool}",
+  "pane.description.prompt": "You: {text}",
 
   // --- chat.mode (the pane menu's body switch, ADR 0071's shape) ---
   // The row names WHERE IT TAKES YOU, the way "Find in output" and "Conversation history" beside it

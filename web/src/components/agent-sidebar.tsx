@@ -11,6 +11,7 @@ import { paneRowKey } from "@/lib/hosts";
 import { groupPanesByWorkspace } from "@/lib/pane-groups";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
 import { pinMatcher, type Pin } from "@/lib/pins";
+import { descriptionNow } from "@/lib/description-now";
 import { paneName, panePlaceParts } from "@/lib/pane-name";
 import { shortenHome } from "@/lib/shorten-home";
 import { bucketOf, isAttention, triage, worstTriage, type TriageKey } from "@/lib/triage";
@@ -485,7 +486,7 @@ function PaneRow({
   // A described pane reads the way its dashboard row does (agent-card.tsx): its name on line 1,
   // what it is doing on line 2 in place of where it sits. The switcher is where you pick a pane to
   // jump to, so it must not be the one list that still says only the name.
-  const described = pane.description?.now;
+  const described = pane.description === undefined ? undefined : descriptionNow(pane.description);
   return (
     <button
       id={id}

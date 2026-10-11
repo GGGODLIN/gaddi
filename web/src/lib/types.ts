@@ -218,6 +218,8 @@ export interface PaneDescription {
   next?: string;
   source: "recap" | "blocked" | "prompt";
   at: number;
+  /** What a blocked or prompt `now` was built from, for the phone's own language (lib/description-now.ts). */
+  parts?: { tool?: string; target?: string; prompt?: string };
 }
 
 /**

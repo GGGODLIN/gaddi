@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Changed
+
+- **A pane's waiting or prompt line now reads in the phone's language.** The bridge sends the tool, target or prompt it built that line from beside the Chinese sentence, and the phone words it with its own dictionary; push bodies and recaps read as before.
+
 ## [2.0.2] - 2026-10-11
 
 ### Changed

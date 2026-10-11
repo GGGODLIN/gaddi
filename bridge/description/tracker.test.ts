@@ -206,6 +206,7 @@ describe("reading cost", () => {
       now: "在等你批准 exec_command · rm -rf build",
       source: "blocked",
       at: 42,
+      parts: { tool: "exec_command", target: "rm -rf build" },
     });
   });
 

@@ -11,8 +11,11 @@
 //   3. the journal has a prompt → the operator's own newest prompt, on one line
 //   4. otherwise                → nothing at all (absent, never a placeholder — the `cache` rule)
 //
-// The fixed strings are Chinese on purpose: this fork's recap text is Chinese, and a push body is
-// exempt from i18n (CLAUDE.md § frontend data layer). Blocked costs no model call and no network.
+// The fixed strings in `now` are Chinese on purpose: this fork's recap text is Chinese, and a push
+// body is exempt from i18n (CLAUDE.md § frontend data layer). A blocked or prompt description also
+// carries the `parts` it was built from, so the phone and the island say the sentence in their own
+// language; `now` stays whole for the push body and for a client that predates `parts`. Blocked
+// costs no model call and no network.
 
 import { HOST } from "../host.ts";
 import type { AgentStatus } from "../types.ts";
@@ -26,6 +29,18 @@ export interface PaneDescription {
   source: "recap" | "blocked" | "prompt";
   /** Epoch ms the words describe: the recap's own `at`, the prompt's timestamp, or the blocked read. */
   at: number;
+  /**
+   * What a blocked or prompt `now` was composed from, without its Chinese prefix. Blocked: the
+   * pending tool and its target, each absent when `now` names none. Prompt: the operator's line.
+   * Absent on a recap, whose words are the agent's own.
+   */
+  parts?: DescriptionParts;
+}
+
+export interface DescriptionParts {
+  tool?: string;
+  target?: string;
+  prompt?: string;
 }
 
 /** A recap file, as the Claude Code plugin writes it to `~/.cache/cc-recap/<sessionId>.json`. */
@@ -82,10 +97,15 @@ export function toolTarget(tool: { name: string; summary: string }): string | un
   return undefined;
 }
 
-function blockedNow(tool: JournalFacts["pendingTool"]): string {
-  if (tool === undefined) return BLOCKED_PREFIX;
+function blockedParts(tool: JournalFacts["pendingTool"]): DescriptionParts {
+  if (tool === undefined) return {};
   const target = toolTarget(tool);
-  return target === undefined ? `${BLOCKED_PREFIX} ${tool.name}` : `${BLOCKED_PREFIX} ${tool.name} · ${target}`;
+  return target === undefined ? { tool: tool.name } : { tool: tool.name, target };
+}
+
+function blockedNow(parts: DescriptionParts): string {
+  if (parts.tool === undefined) return BLOCKED_PREFIX;
+  return parts.target === undefined ? `${BLOCKED_PREFIX} ${parts.tool}` : `${BLOCKED_PREFIX} ${parts.tool} · ${parts.target}`;
 }
 
 function withRecapExtras(d: PaneDescription, recap: Recap | undefined): PaneDescription {
@@ -99,14 +119,16 @@ function withRecapExtras(d: PaneDescription, recap: Recap | undefined): PaneDesc
 export function describePane(input: DescribeInput): PaneDescription | undefined {
   const { status, recap, facts } = input;
   if (status === "blocked") {
-    return withRecapExtras({ now: blockedNow(facts?.pendingTool), source: "blocked", at: input.now }, recap);
+    const parts = blockedParts(facts?.pendingTool);
+    return withRecapExtras({ now: blockedNow(parts), source: "blocked", at: input.now, parts }, recap);
   }
   const prompt = facts?.prompt;
   if (recap !== undefined && (prompt === undefined || prompt.at <= recap.at)) {
     return withRecapExtras({ now: recap.now, source: "recap", at: recap.at }, recap);
   }
   if (prompt !== undefined) {
-    return { now: `${PROMPT_PREFIX}${clipLine(prompt.text, PROMPT_MAX)}`, source: "prompt", at: prompt.at };
+    const line = clipLine(prompt.text, PROMPT_MAX);
+    return { now: `${PROMPT_PREFIX}${line}`, source: "prompt", at: prompt.at, parts: { prompt: line } };
   }
   return undefined;
 }

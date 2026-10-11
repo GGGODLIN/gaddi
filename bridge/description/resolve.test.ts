@@ -20,7 +20,7 @@ describe("describePane — first match wins", () => {
       facts: { pendingTool: { name: "Edit", summary: "/Users/me/p/src/app.ts" } },
       now: T + 5,
     });
-    expect(d).toEqual({ now: "在等你批准 Edit · app.ts", source: "blocked", at: T + 5 });
+    expect(d).toEqual({ now: "在等你批准 Edit · app.ts", source: "blocked", at: T + 5, parts: { tool: "Edit", target: "app.ts" } });
   });
 
   test("rule 1: a shell call's target is its first line, clipped to 40", () => {
@@ -32,7 +32,7 @@ describe("describePane — first match wins", () => {
   });
 
   test("rule 1: no readable tool call is the bare sentence", () => {
-    expect(describePane({ status: "blocked", now: T })).toEqual({ now: "在等你批准", source: "blocked", at: T });
+    expect(describePane({ status: "blocked", now: T })).toEqual({ now: "在等你批准", source: "blocked", at: T, parts: {} });
   });
 
   test("rule 1: blocked copies goal and next from a recap, even a stale one", () => {
@@ -48,6 +48,7 @@ describe("describePane — first match wins", () => {
       next: "等待你的下一個指令",
       source: "blocked",
       at: T + 2000,
+      parts: { tool: "WebFetch" },
     });
   });
 
@@ -73,7 +74,7 @@ describe("describePane — first match wins", () => {
       facts: { prompt: { text: "改成\n兩行   的指令", at: T + 1 } },
       now: T + 2,
     });
-    expect(d).toEqual({ now: "你：改成 兩行 的指令", source: "prompt", at: T + 1 });
+    expect(d).toEqual({ now: "你：改成 兩行 的指令", source: "prompt", at: T + 1, parts: { prompt: "改成 兩行 的指令" } });
   });
 
   test("rule 3: a long prompt is clipped to 80 with an ellipsis", () => {
