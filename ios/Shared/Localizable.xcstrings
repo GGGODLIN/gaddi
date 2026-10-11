@@ -1,0 +1,422 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "%lld done": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 完成"
+          }
+        }
+      }
+    },
+    "%lld waiting": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 等你"
+          }
+        }
+      }
+    },
+    "%lld working": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 工作中"
+          }
+        }
+      }
+    },
+    "Can't connect: %@. The phone has to be on the tailnet of Gaddi's machine.": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連不上：%@。手機要在 Gaddi 那台機器的 tailnet 上。"
+          }
+        }
+      }
+    },
+    "Can't reach Gaddi": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連不到 Gaddi"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "Change URL": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改網址"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除"
+          }
+        }
+      }
+    },
+    "Clear the app's web data?": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除 app 裡的網頁資料？"
+          }
+        }
+      }
+    },
+    "Connect and save": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線並儲存"
+          }
+        }
+      }
+    },
+    "Connecting…": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線中…"
+          }
+        }
+      }
+    },
+    "Download failed": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下載失敗"
+          }
+        }
+      }
+    },
+    "Enter the URL `collie start` printed. It connects once before saving to make sure it's Gaddi. A different Gaddi needs pairing again over there.": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輸入 `collie start` 印出的網址。儲存前會先連一次，確認是 Gaddi。換成另一台 Gaddi 要在那邊重新配對。"
+          }
+        }
+      }
+    },
+    "Expired": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已到期"
+          }
+        }
+      }
+    },
+    "Finish saving the current file first.": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請先完成目前的檔案儲存。"
+          }
+        }
+      }
+    },
+    "Gaddi Island": {
+      "shouldTranslate": false
+    },
+    "Gaddi address": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gaddi 位址"
+          }
+        }
+      }
+    },
+    "Gaddi app stopped updating": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gaddi app 已停止更新"
+          }
+        }
+      }
+    },
+    "Gaddi isn't paired": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gaddi 尚未配對"
+          }
+        }
+      }
+    },
+    "Gaddi's pairing expired": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gaddi 配對已到期"
+          }
+        }
+      }
+    },
+    "Gaddi's pairing was revoked": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gaddi 配對已失效"
+          }
+        }
+      }
+    },
+    "It answered, but it isn't Gaddi.": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有回應，但不是 Gaddi。"
+          }
+        }
+      }
+    },
+    "It answered, but sent no Gaddi data (HTTP %lld).": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有回應，但沒有拿到 Gaddi 的資料（HTTP %lld）。"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        }
+      }
+    },
+    "Offline": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "離線"
+          }
+        }
+      }
+    },
+    "Reopen Gaddi's island and keep it updating.": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新開啟 Gaddi 的靈動島，並繼續更新。"
+          }
+        }
+      }
+    },
+    "Restart Gaddi island": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重啟 Gaddi 靈動島"
+          }
+        }
+      }
+    },
+    "Restart island": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重啟靈動島"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重試"
+          }
+        }
+      }
+    },
+    "Revoked": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已失效"
+          }
+        }
+      }
+    },
+    "Stopped": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停止"
+          }
+        }
+      }
+    },
+    "Tap to pair (collie pair)": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點一下開始配對（collie pair）"
+          }
+        }
+      }
+    },
+    "Tap to pair again": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配對已被撤銷，點一下重新配對"
+          }
+        }
+      }
+    },
+    "Tap to pair again (collie pair)": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點一下重新配對（collie pair）"
+          }
+        }
+      }
+    },
+    "That isn't a URL. It looks like https://your-mac.your-tailnet.ts.net:8443": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這不是網址。格式像 https://your-mac.your-tailnet.ts.net:8443"
+          }
+        }
+      }
+    },
+    "The file name isn't valid.": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檔案名稱無效。"
+          }
+        }
+      }
+    },
+    "This link is for testing the backup. Unsent drafts are deleted; settings and pairing come back from the Keychain.": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這是測試備份用的連結。未送出的草稿會被刪掉，設定和配對會從 Keychain 還原。"
+          }
+        }
+      }
+    },
+    "Unpaired": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未配對"
+          }
+        }
+      }
+    },
+    "Waiting %lld · Done %lld · Working %lld": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等你 %1$lld · 完成 %2$lld · 工作中 %3$lld"
+          }
+        }
+      }
+    },
+    "Waiting for your approval": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在等你批准"
+          }
+        }
+      }
+    },
+    "Waiting for your approval: %@": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在等你批准 %@"
+          }
+        }
+      }
+    },
+    "You: %@": {
+      "localizations": {
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你：%@"
+          }
+        }
+      }
+    },
+    "https://your-mac.your-tailnet.ts.net:8443": {
+      "shouldTranslate": false
+    }
+  },
+  "version": "1.0"
+}

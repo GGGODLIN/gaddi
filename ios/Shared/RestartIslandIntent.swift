@@ -5,8 +5,8 @@ import AppIntents
 // without opening the app. The system runs it in the app's process, so the work lives there;
 // the widget extension only needs the type so its Control Center button can name it.
 struct RestartIslandIntent: LiveActivityIntent {
-  static let title: LocalizedStringResource = "重啟靈動島"
-  static let description = IntentDescription("重新開啟 Gaddi 的靈動島，並繼續更新。")
+  static let title: LocalizedStringResource = "Restart island"
+  static let description = IntentDescription("Reopen Gaddi's island and keep it updating.")
 
   func perform() async throws -> some IntentResult {
     #if !WIDGET_EXTENSION

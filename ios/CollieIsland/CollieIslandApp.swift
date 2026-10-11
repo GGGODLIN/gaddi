@@ -68,14 +68,14 @@ struct CollieIslandApp: App {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
           if phase == .active { webReady = true }
         }
-        .alert("清除 app 裡的網頁資料？", isPresented: $confirmWipe) {
-          Button("清除", role: .destructive) {
+        .alert("Clear the app's web data?", isPresented: $confirmWipe) {
+          Button("Clear", role: .destructive) {
             DiagLog.write("debug-wipe confirmed")
             NotificationCenter.default.post(name: WebStateBackup.wipeNotification, object: nil)
           }
-          Button("取消", role: .cancel) { DiagLog.write("debug-wipe cancelled") }
+          Button("Cancel", role: .cancel) { DiagLog.write("debug-wipe cancelled") }
         } message: {
-          Text("這是測試備份用的連結。未送出的草稿會被刪掉，設定和配對會從 Keychain 還原。")
+          Text("This link is for testing the backup. Unsent drafts are deleted; settings and pairing come back from the Keychain.")
         }
     }
   }

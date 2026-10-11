@@ -16,10 +16,10 @@ struct RestartIslandControl: ControlWidget {
     // drop the button from every Control Center it has already been added to.
     StaticControlConfiguration(kind: "com.gggodlin.collieisland.restart") {
       ControlWidgetButton(action: RestartIslandIntent()) {
-        Label("重啟靈動島", systemImage: "pawprint.fill")
+        Label("Restart island", systemImage: "pawprint.fill")
       }
     }
-    .displayName("重啟 Gaddi 靈動島")
+    .displayName("Restart Gaddi island")
   }
 }
 
@@ -114,25 +114,25 @@ private func markColor(_ s: IslandAttributes.ContentState, stale: Bool) -> Color
 }
 
 private func compactLabel(_ s: IslandAttributes.ContentState, stale: Bool) -> String {
-  if stale { return "已停止" }
+  if stale { return String(localized: "Stopped") }
   switch s.pairing {
-  case .unpaired: return "未配對"
-  case .revoked: return "已失效"
-  case .expired: return "已到期"
+  case .unpaired: return String(localized: "Unpaired")
+  case .revoked: return String(localized: "Revoked")
+  case .expired: return String(localized: "Expired")
   case nil: break
   }
-  if s.offline { return "離線" }
-  if s.needs > 0 { return "\(s.needs) 等你" }
-  if s.ready > 0 { return "\(s.ready) 完成" }
-  if s.working > 0 { return "\(s.working) 工作中" }
+  if s.offline { return String(localized: "Offline") }
+  if s.needs > 0 { return String(localized: "\(s.needs) waiting") }
+  if s.ready > 0 { return String(localized: "\(s.ready) done") }
+  if s.working > 0 { return String(localized: "\(s.working) working") }
   return "—"
 }
 
 private func countsLine(_ s: IslandAttributes.ContentState, stale: Bool) -> String {
-  if stale { return "Gaddi app 已停止更新" }
+  if stale { return String(localized: "Gaddi app stopped updating") }
   // Nothing: the expanded island's rounded trailing corner clipped even a four-character label, and
   // the detail line under the headline already says to tap.
   if s.pairing != nil { return "" }
-  if s.offline { return "連不到 Gaddi" }
-  return "等你 \(s.needs) · 完成 \(s.ready) · 工作中 \(s.working)"
+  if s.offline { return String(localized: "Can't reach Gaddi") }
+  return String(localized: "Waiting \(s.needs) · Done \(s.ready) · Working \(s.working)")
 }

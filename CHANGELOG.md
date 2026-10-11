@@ -23,6 +23,14 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-11
+
+### Changed
+
+- **Built on upstream Collie 1.19.2.** AltanS/collie v1.19.2, commit aacece40. Also carries upstream main's unreleased 7b2a50de.
+- **A pane's waiting or prompt line now reads in the phone's language.** The bridge sends the tool, target or prompt it built that line from beside the Chinese sentence, and the phone words it with its own dictionary; push bodies and recaps read as before. ([637e7e70](https://github.com/GGGODLIN/gaddi/commit/637e7e70))
+- **The iPhone app and its island speak English as well as Traditional Chinese.** They follow the iPhone's language, or the per-app language in Settings, and fall back to English; the island's waiting or prompt line is worded the same way as the phone's page. Reinstall the IPA over the existing app to get it; your pairing stays. ([fbd369a5](https://github.com/GGGODLIN/gaddi/commit/fbd369a5))
+
 ## [2.0.2] - 2026-10-11
 
 ### Changed

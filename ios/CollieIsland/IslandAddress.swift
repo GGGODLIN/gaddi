@@ -21,15 +21,15 @@ enum IslandAddress {
     var message: String {
       switch self {
       case .invalid:
-        return "這不是網址。格式像 https://your-mac.your-tailnet.ts.net:8443"
+        return String(localized: "That isn't a URL. It looks like https://your-mac.your-tailnet.ts.net:8443")
       case .unreachable(let why):
         // The system's reason already ends in its own full stop ("…to the server.").
         let reason = why.trimmingCharacters(in: CharacterSet(charactersIn: ".。 "))
-        return "連不上：\(reason)。手機要在 Gaddi 那台機器的 tailnet 上。"
+        return String(localized: "Can't connect: \(reason). The phone has to be on the tailnet of Gaddi's machine.")
       case .notCollie(let status):
         return status == 200
-          ? "有回應，但不是 Gaddi。"
-          : "有回應，但沒有拿到 Gaddi 的資料（HTTP \(status)）。"
+          ? String(localized: "It answered, but it isn't Gaddi.")
+          : String(localized: "It answered, but sent no Gaddi data (HTTP \(status)).")
       }
     }
   }
@@ -120,9 +120,9 @@ struct AddressSetupView: View {
             .onSubmit(submit)
             .disabled(checking)
         } header: {
-          Text("Gaddi 位址")
+          Text("Gaddi address")
         } footer: {
-          Text("輸入 `collie start` 印出的網址。儲存前會先連一次，確認是 Gaddi。換成另一台 Gaddi 要在那邊重新配對。")
+          Text("Enter the URL `collie start` printed. It connects once before saving to make sure it's Gaddi. A different Gaddi needs pairing again over there.")
         }
         if let error {
           Section { Text(error).foregroundStyle(.red) }
@@ -130,7 +130,7 @@ struct AddressSetupView: View {
         Section {
           Button(action: submit) {
             HStack {
-              Text(checking ? "連線中…" : "連線並儲存")
+              Text(checking ? String(localized: "Connecting…") : String(localized: "Connect and save"))
               if checking { Spacer(); ProgressView() }
             }
           }
@@ -140,7 +140,7 @@ struct AddressSetupView: View {
       .navigationTitle("Gaddi Island")
       .toolbar {
         if let onCancel {
-          ToolbarItem(placement: .cancellationAction) { Button("取消", action: onCancel) }
+          ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onCancel) }
         }
       }
     }
@@ -176,12 +176,12 @@ struct LoadFailedView: View {
   var body: some View {
     VStack(spacing: 16) {
       Image(systemName: "wifi.exclamationmark").font(.largeTitle).foregroundStyle(.secondary)
-      Text("連不上 Gaddi").font(.headline)
+      Text("Can't reach Gaddi").font(.headline)
       Text(address.absoluteString).font(.footnote.monospaced()).foregroundStyle(.secondary)
       Text(reason).font(.footnote).multilineTextAlignment(.center).foregroundStyle(.secondary)
       HStack(spacing: 12) {
-        Button("重試", action: onRetry).buttonStyle(.bordered)
-        Button("改網址", action: onChange).buttonStyle(.borderedProminent)
+        Button("Retry", action: onRetry).buttonStyle(.bordered)
+        Button("Change URL", action: onChange).buttonStyle(.borderedProminent)
       }
     }
     .padding(24)
