@@ -381,8 +381,10 @@ export type MarkdownVariant = "chat" | "document";
 function CodeBlock({ text }: { text: string }) {
   useLocale();
   const [wrapped, setWrapped] = useState(false);
-  const besideCopy = canCopyText();
   const label = t("codeBlock.wrap");
+  // Three source lines are tall enough to stack the toggle under the copy icon, which hides one icon's
+  // width of the first line instead of two. Shorter blocks keep the pair side by side.
+  const place = !canCopyText() ? "alone" : text.split("\n").length >= 3 ? "below" : "beside";
   return (
     <CopyableBlock text={text}>
       <ToggleButton
@@ -391,11 +393,13 @@ function CodeBlock({ text }: { text: string }) {
         label={label}
         title={label}
         icon={<WrapText className="size-3.5" />}
-        // The copy icon's 24px box and 44px reach, except on the right: a full reach would cover the
-        // copy icon's left edge, since this button comes later and wins the overlap.
+        // The copy icon's 24px box and 44px reach, cut short on the side that faces the copy icon: this
+        // button comes later and would otherwise win taps on the copy icon's edge.
         className={cn(
-          "absolute top-0.5 z-[1] size-6 border border-border bg-card shadow-xs before:absolute before:inset-y-[-11px] before:left-[-11px] before:right-[-3px] before:content-['']",
-          besideCopy ? "right-8" : "right-0.5",
+          "absolute z-[1] size-6 border border-border bg-card shadow-xs before:absolute before:-inset-[11px] before:content-['']",
+          place === "below" && "top-8 right-0.5 before:top-[-3px]",
+          place === "beside" && "top-0.5 right-8 before:right-[-3px]",
+          place === "alone" && "top-0.5 right-0.5",
         )}
       />
       <pre
@@ -405,7 +409,17 @@ function CodeBlock({ text }: { text: string }) {
         )}
       >
         {/* Wrapped text cannot be scrolled out from under the buttons, so the first lines flow around them. */}
-        {wrapped && <span aria-hidden className={cn("float-right h-5", besideCopy ? "w-[52px]" : "w-[22px]")} />}
+        {wrapped && (
+          <span
+            aria-hidden
+            className={cn(
+              "float-right",
+              place === "below" && "h-[50px] w-[22px]",
+              place === "beside" && "h-5 w-[52px]",
+              place === "alone" && "h-5 w-[22px]",
+            )}
+          />
+        )}
         <Hit text={text} />
       </pre>
     </CopyableBlock>

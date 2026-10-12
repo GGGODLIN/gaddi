@@ -99,11 +99,15 @@ describe("MarkdownText fenced block wrap toggle", () => {
     );
   });
 
-  it("sits beside the copy icon, and in the corner when there is no copy icon", () => {
+  it("sits beside the copy icon on a short block, under it on a tall one, in the corner alone", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn() } });
+    const toggle = () => screen.getByRole("button", { name: "Wrap long lines" }).className.split(" ");
     const { unmount } = render(<MarkdownText text={source} />);
-    expect(screen.getByRole("button", { name: "Wrap long lines" }).className.split(" ")).toContain("right-8");
+    expect(toggle()).toEqual(expect.arrayContaining(["top-0.5", "right-8"]));
     unmount();
+    const tall = render(<MarkdownText text={"```\none\ntwo\nthree\n```"} />);
+    expect(toggle()).toEqual(expect.arrayContaining(["top-8", "right-0.5"]));
+    tall.unmount();
     Reflect.deleteProperty(navigator, "clipboard");
     render(<MarkdownText text={source} />);
     expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();

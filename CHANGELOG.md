@@ -25,7 +25,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ### Added
 
-- **A code block in a reply can wrap its long lines.** A button beside the copy icon wraps that one block, and a second press brings back sideways scrolling; blocks still scroll by default, so trees and aligned output keep their columns. The choice is not remembered, and Copy still takes the block's text as written.
+- **A code block in a reply can wrap its long lines.** A button beside the copy icon, or under it on a block of three lines or more, wraps that one block, and a second press brings back sideways scrolling; blocks still scroll by default, so trees and aligned output keep their columns. The choice is not remembered, and Copy still takes the block's text as written.
 
 ### Fixed
 
