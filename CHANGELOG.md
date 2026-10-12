@@ -23,6 +23,22 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-10-12
+
+### Changed
+
+- **Built on upstream Collie 1.20.1.** AltanS/collie v1.20.1, commit 3c08e4f2.
+
+### Fixed
+
+- **pi and Oh My Pi session names are recognised by the journal reader.** pi 1.1.0 writes a `session_info` row and Oh My Pi 18.10 writes `title` and `title_change` rows; all three only name the session, and the journal reader now knows them, so the canary's unknown-row check passes on both. ([9efcd81a](https://github.com/GGGODLIN/gaddi/commit/9efcd81a))
+- **Codex 0.159 keeps its input box after the first reply.** Once a thread has a title, Codex paints the space before a status-row separator in the previous field's colour; the status row was refused, so the pane showed the unread card and refused every later send as blocked. ([899dbc48](https://github.com/GGGODLIN/gaddi/commit/899dbc48))
+- **An Antigravity draft with a pasted rule stays sendable.** A `────` line typed into the draft was read as the input box's top border, so the pane reported no input box and refused the send. ([659d6b27](https://github.com/GGGODLIN/gaddi/commit/659d6b27))
+- **Oh My Pi 18.10 sends multi-line messages again.** It paints a draft's later lines under the prompt row, where they were read as autocomplete; the send guard never saw the message's end and held every multi-line send, and a blank line in the draft hid the input box. ([e1d1667d](https://github.com/GGGODLIN/gaddi/commit/e1d1667d))
+- **A Muse draft with an indented line stays sendable.** A line that began with spaces was read as a torn frame, so the input box disappeared and the send was refused while that draft sat there. ([5a542009](https://github.com/GGGODLIN/gaddi/commit/5a542009))
+- **The unread-dialog card no longer flashes when Codex, Grok or Muse starts or exits.** The card now also needs evidence that the agent's own dialog is up: a footer naming Escape on Codex, a key-hint footer on Grok, Muse's own frame on Muse. On Grok the card had offered to send ctrl+c to the shell the agent left behind. ([8b142045](https://github.com/GGGODLIN/gaddi/commit/8b142045))
+- **Codex's context compaction row is a known row.** Codex 0.159 writes a `compacted` row when it compacts a long session; the journal reader now knows it and draws nothing for it, as for Codex's other bookkeeping rows. ([2869dae3](https://github.com/GGGODLIN/gaddi/commit/2869dae3))
+
 ## [2.3.0] - 2026-10-12
 
 ### Changed

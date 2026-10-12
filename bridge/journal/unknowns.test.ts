@@ -107,6 +107,7 @@ describe("codex", () => {
     row({ timestamp: "t", type: "token_usage_record", payload: {} }),
     row({ timestamp: "t", type: "turn_context", payload: {} }),
     row({ timestamp: "t", type: "world_state", payload: {} }),
+    row({ timestamp: "t", type: "compacted", payload: { message: "a hand-off summary", replacement_history: [] } }),
     item({ type: "message", role: "user", content: [{ type: "input_text", text: "fix the types" }] }),
     item({ type: "message", role: "assistant", content: [{ type: "output_text", text: "Looking." }] }),
     // Injected system prompts: a role the grammar refuses by name.
@@ -393,6 +394,10 @@ describe("pi", () => {
     // An extension's own bookkeeping: `customType` + `data`, no `display`, nothing to show.
     row({ type: "custom", id: "c12", parentId: "p0", customType: "pi.todo", data: {} }),
     ...["model_change", "thinking_level_change", "usage", "label"].map((type) => row({ type, id: `k-${type}`, parentId: "p0" })),
+    // Session names: pi 1.1.0's `session_info`, and Oh My Pi's id-less `title` and its `title_change`.
+    row({ type: "session_info", id: "n1", parentId: "p0", name: "a name" }),
+    row({ type: "title", v: 1, title: "", updatedAt: "t" }),
+    row({ type: "title_change", id: "n2", parentId: "n1", title: "OK", source: "auto" }),
   ];
 
   test("the whole measured inventory counts nothing", () => {
