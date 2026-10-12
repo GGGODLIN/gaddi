@@ -46,7 +46,7 @@ read = ["/usr/bin/pbpaste"]
   answers the counter, runs `count` at most once per 4 seconds however many phones ask, and is gated
   like any read. The phone polls it every 10 seconds while it is visible. A closed app asks nothing,
   and the bridge runs no timer.
-- **The text is read when the phone opens the sheet, and only then.** `GET
+- **The text is sent when the phone opens the sheet, and only then.** `GET
   /api/host-clipboard/text` is gated `device-read`, like the Files view, and writes an audit line
   with the size, never the words. The counter is read before and after `read`; a write in between is
   read once more, and a clipboard that keeps moving is said to be moving.
@@ -56,6 +56,16 @@ read = ["/usr/bin/pbpaste"]
   counter is checked with one read; text identical to what was copied is marked seen, anything else
   (a failed read included) is news. The copied text is held in the phone's memory for those 30
   seconds and never stored (added 2026-10-11, after the dev-lane check).
+- **One read per change, to know whether there is anything to show** (added 2026-10-12). The
+  operator was told of a change, opened the sheet and found nothing: `pbpaste` printed nothing while
+  the clipboard was in a state even Claude Code's own image probe could not refresh (`-22` in the
+  macOS log, 13:08 to 13:20 that day). So when the counter moves, the bridge runs `read` once under
+  it and keeps only a yes or no beside the counter; `GET /api/host-clipboard` answers `text` with
+  it, and the phone raises no banner and no mark when it is no. The words never leave the host this
+  way, and a counter that does not move is not read again, so the cost is one `read` per change,
+  about 20 ms, and only while a phone is polling. A read that fails in the sheet puts the waiting
+  news down too. Not covered: text that stops coming out after the banner rose without the counter
+  moving; catching that would need a timer re-reading the clipboard, which this record declines.
 - **Nothing is kept.** No history, no copy of the text in the bridge between requests, and on the
   phone only the counter it last saw (`collie:host-clipboard:v1`). The first counter a phone ever
   reads is a baseline, not news.

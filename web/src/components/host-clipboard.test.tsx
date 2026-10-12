@@ -83,6 +83,23 @@ describe("host clipboard", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("/usr/bin/pbpaste did not answer within 5s"));
   });
 
+  it("a read that fails puts the waiting news down", async () => {
+    withClipboard(true);
+    localStorage.setItem(
+      "collie:host-clipboard:v1",
+      JSON.stringify({ seen: "7", pending: { version: "8", since: 1 }, dismissed: null }),
+    );
+    __resetHostClipboard();
+    server.use(
+      http.get("/api/host-clipboard/text", () => HttpResponse.json({ ok: false, kind: "failed", reason: "pbpaste exited with status 1" })),
+    );
+    renderBoth();
+    expect(await screen.findByRole("img", { name: "Changed since you last looked" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Computer clipboard" }));
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("img", { name: "Changed since you last looked" })).toBeNull();
+  });
+
   it("too large is said, not cut", async () => {
     withClipboard(true);
     server.use(http.get("/api/host-clipboard/text", () => HttpResponse.json({ ok: false, kind: "too-large", version: "3" })));

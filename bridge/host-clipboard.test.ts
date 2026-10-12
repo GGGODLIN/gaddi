@@ -116,14 +116,33 @@ describe("createHostClipboard", () => {
 
   test("the count runs once per window however often it is asked", async () => {
     let clock = 1_000;
-    const { spawn, calls } = scripted(["7", "8"], []);
+    const { spawn, calls } = scripted(["7", "7", "7", "8", "8", "8"], [child("a"), child("b")]);
     const clip = createHostClipboard(configured, spawn, () => clock);
-    expect(await clip.version()).toEqual({ ok: true, version: "7" });
+    expect(await clip.version()).toEqual({ ok: true, version: "7", text: true });
     clock += 1_000;
-    expect(await clip.version()).toEqual({ ok: true, version: "7" });
+    expect(await clip.version()).toEqual({ ok: true, version: "7", text: true });
     clock += 4_000;
-    expect(await clip.version()).toEqual({ ok: true, version: "8" });
-    expect(calls).toEqual(["count-cmd", "count-cmd"]);
+    expect(await clip.version()).toEqual({ ok: true, version: "8", text: true });
+    expect(calls.filter((name) => name === "read-cmd")).toHaveLength(2);
+  });
+
+  test("a counter is read once, and only the yes or no is kept", async () => {
+    let clock = 1_000;
+    const { spawn, calls } = scripted(["3", "3", "3", "3"], [child("secret")]);
+    const clip = createHostClipboard(configured, spawn, () => clock);
+    expect(await clip.version()).toEqual({ ok: true, version: "3", text: true });
+    clock += 5_000;
+    expect(await clip.version()).toEqual({ ok: true, version: "3", text: true });
+    expect(calls).toEqual(["count-cmd", "count-cmd", "read-cmd", "count-cmd", "count-cmd"]);
+    expect(JSON.stringify(await clip.version())).not.toContain("secret");
+  });
+
+  test("a counter with no text, or with text that will not come out, is not news", async () => {
+    const empty = scripted(["4", "4", "4"], [child("")]);
+    expect(await createHostClipboard(configured, empty.spawn).version()).toEqual({ ok: true, version: "4", text: false });
+
+    const broken = scripted(["4", "4", "4"], [child("", 1, "no data")]);
+    expect(await createHostClipboard(configured, broken.spawn).version()).toEqual({ ok: true, version: "4", text: false });
   });
 
   test("a count that prints no number says so", async () => {

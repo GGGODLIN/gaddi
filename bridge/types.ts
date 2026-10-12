@@ -1074,8 +1074,11 @@ export type RetellResponse =
   | { ok: true; mode: "plain" | "lost"; label: string; answer: string; cached: boolean; source: string }
   | { ok: false; error: string; code?: ErrorCode; detail?: ApiErrorDetail };
 
-/** GET /api/host-clipboard — the host clipboard's change counter, never its text (ADR 9010). */
-export type HostClipboardVersionResponse = { ok: true; version: string } | { ok: false; reason: string };
+/**
+ * GET /api/host-clipboard — the host clipboard's change counter, never its text (ADR 9010). `text`
+ * says whether the sheet would find text under that counter.
+ */
+export type HostClipboardVersionResponse = { ok: true; version: string; text: boolean } | { ok: false; reason: string };
 
 /** GET /api/host-clipboard/text — the text as it is now, read when a phone opens the sheet (ADR 9010). */
 export type HostClipboardTextResponse =

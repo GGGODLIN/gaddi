@@ -9,9 +9,9 @@ import { createOperatorFileReader, diskIo, type OperatorFileIo } from "./operato
 //
 // Two commands, because they answer different questions at very different costs. `count` says
 // whether the clipboard changed (macOS: NSPasteboard.changeCount) and runs at most once per
-// VERSION_CACHE_MS however many phones poll. `read` returns the text, and runs only when a phone
-// opens the clipboard sheet. Nothing is kept: no history, no copy of the text in memory between
-// requests. A history would hold what a password manager already cleared (the GPT-6 Pro review of
+// VERSION_CACHE_MS however many phones poll. `read` returns the text: once per counter, kept only as
+// whether text came out, and again each time a phone opens the clipboard sheet. Nothing else is kept:
+// no history, no copy of the text in memory between requests. A history would hold what a password manager already cleared (the GPT-6 Pro review of
 // 2026-10-11), and nobody asked for one.
 //
 // There is no bridge timer. A phone that is not looking asks nothing, so a closed app costs the
@@ -196,6 +196,13 @@ export function parseCount(stdout: Uint8Array): string | null {
 
 export type VersionResult = { readonly ok: true; readonly version: string } | { readonly ok: false; readonly reason: string };
 
+/**
+ * The counter, and whether the sheet would find text under it. `text` is false for an empty
+ * clipboard, an image, a file, and a clipboard that lists text it cannot hand over: a phone told of
+ * such a change opened the sheet onto nothing (2026-10-12).
+ */
+export type CheckedVersion = { readonly ok: true; readonly version: string; readonly text: boolean } | { readonly ok: false; readonly reason: string };
+
 export type ReadResult =
   | { readonly ok: true; readonly text: string; readonly bytes: number; readonly version: string }
   | { readonly ok: false; readonly kind: "empty"; readonly version: string }
@@ -203,8 +210,11 @@ export type ReadResult =
   | { readonly ok: false; readonly kind: "failed"; readonly reason: string };
 
 export interface HostClipboard {
-  /** The change counter, cached for {@link VERSION_CACHE_MS}. `null` while no `clipboard.toml`. */
-  version(): Promise<VersionResult | null>;
+  /**
+   * The change counter, cached for {@link VERSION_CACHE_MS}, and whether text is readable under it.
+   * `null` while no `clipboard.toml`.
+   */
+  version(): Promise<CheckedVersion | null>;
   /** The text as it is now. `null` while no `clipboard.toml`. */
   read(): Promise<ReadResult | null>;
 }
@@ -216,6 +226,10 @@ export function createHostClipboard(
 ): HostClipboard {
   let cached: { at: number; result: VersionResult } | null = null;
   let inflight: Promise<VersionResult> | null = null;
+  // One read per counter, kept as a yes or no and never as the text, so the phone is told of a
+  // change only when its sheet would show something. A counter that does not move is not read again.
+  let checked: { version: string; text: boolean } | null = null;
+  let checking: Promise<{ version: string; text: boolean }> | null = null;
 
   async function countNow(config: HostClipboardConfig): Promise<VersionResult> {
     const run = await runClipboardChild(spawn, config.count, COUNT_MAX_BYTES);
@@ -252,22 +266,44 @@ export function createHostClipboard(
     return { ok: true, text, bytes: run.stdout.byteLength, version: after.version };
   }
 
+  async function readSettled(config: HostClipboardConfig): Promise<ReadResult> {
+    // Once more if a write landed mid-read; a clipboard that keeps moving is said to, not guessed.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = await readOnce(config);
+      if (result !== "moved") return result;
+    }
+    return { ok: false, kind: "failed", reason: "the clipboard changed while it was being read" };
+  }
+
+  async function check(config: HostClipboardConfig, version: string): Promise<{ version: string; text: boolean }> {
+    if (checked?.version === version) return checked;
+    if (checking) return checking;
+    checking = readSettled(config).then((result) => {
+      // Too large is still text: the sheet says where to find it, which is not an empty answer.
+      const text = result.ok || result.kind === "too-large";
+      checked = { version: result.ok || result.kind !== "failed" ? result.version : version, text };
+      return checked;
+    });
+    try {
+      return await checking;
+    } finally {
+      checking = null;
+    }
+  }
+
   return {
     async version() {
       const [config] = await getConfig();
       if (!config) return null;
-      if (cached && now() - cached.at < VERSION_CACHE_MS) return cached.result;
-      return freshVersion(config);
+      const counted = cached && now() - cached.at < VERSION_CACHE_MS ? cached.result : await freshVersion(config);
+      if (!counted.ok) return counted;
+      const { version, text } = await check(config, counted.version);
+      return { ok: true, version, text };
     },
     async read() {
       const [config] = await getConfig();
       if (!config) return null;
-      // Once more if a write landed mid-read; a clipboard that keeps moving is said to, not guessed.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const result = await readOnce(config);
-        if (result !== "moved") return result;
-      }
-      return { ok: false, kind: "failed", reason: "the clipboard changed while it was being read" };
+      return readSettled(config);
     },
   };
 }

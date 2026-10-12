@@ -573,6 +573,9 @@ The phone asks for the change counter every 10 seconds while it is open, and the
 open the sheet. A closed app asks nothing, so a change waits for your next look. Nothing is kept:
 no history, and the strip never names who copied.
 
+The computer runs `read` once per change and tells the phone only whether text came out. An empty
+clipboard, an image or a file raises no strip; the clipboard button still opens the sheet.
+
 | Key | What it prints | Limit |
 | --- | --- | --- |
 | `count` | the clipboard's change counter, a whole number | 5 seconds |

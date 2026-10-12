@@ -14,7 +14,7 @@ import {
 } from "./connection-health";
 import { markDead as markPaneDead, markLive as markPaneLive } from "./liveness";
 import { abortSignalAfter, abortSignalAny } from "./env";
-import { asJsonNumber, asJsonObject, asJsonString, parseJsonObject, type JsonObject, type JsonValue } from "./json";
+import { asJsonBoolean, asJsonNumber, asJsonObject, asJsonString, parseJsonObject, type JsonObject, type JsonValue } from "./json";
 import { authHeader, clearNotPaired, EXPIRED_BODY, markExpired, markNotPaired, NOT_PAIRED_BODY } from "./pairing";
 import { pairingRefused } from "./wipe";
 import { fileVersionOf } from "./file-image-cache";
@@ -1408,8 +1408,11 @@ export function retellPane(
   );
 }
 
-/** The host clipboard's change counter, or why it could not be read (ADR 9010). Never its text. */
-export type HostClipboardVersion = { ok: true; version: string } | { ok: false; reason: string };
+/**
+ * The host clipboard's change counter, or why it could not be read (ADR 9010). Never its text; `text`
+ * says only whether the sheet would find some.
+ */
+export type HostClipboardVersion = { ok: true; version: string; text: boolean } | { ok: false; reason: string };
 
 /** The host clipboard's text as it was when the sheet asked, or what stood in the way (ADR 9010). */
 export type HostClipboardText =
@@ -1421,7 +1424,8 @@ export type HostClipboardText =
 export async function fetchHostClipboardVersion(signal?: AbortSignal): Promise<HostClipboardVersion> {
   const got = await doReq<JsonObject>("/api/host-clipboard", { signal, timeoutMs: GET_TIMEOUT_MS });
   const version = asJsonString(got.version);
-  if (got.ok === true && version !== undefined) return { ok: true, version };
+  // A bridge from before 2026-10-12 does not check, so its every change is news, as it was then.
+  if (got.ok === true && version !== undefined) return { ok: true, version, text: asJsonBoolean(got.text) ?? true };
   return { ok: false, reason: asJsonString(got.reason) ?? "" };
 }
 
