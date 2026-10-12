@@ -29,6 +29,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **Codex 0.159 keeps its input box after the first reply.** Once a thread has a title, Codex paints the space before a status-row separator in the previous field's colour; the status row was refused, so the pane showed the unread card and refused every later send as blocked.
 - **An Antigravity draft with a pasted rule stays sendable.** A `────` line typed into the draft was read as the input box's top border, so the pane reported no input box and refused the send.
 - **Oh My Pi 18.10 sends multi-line messages again.** It paints a draft's later lines under the prompt row, where they were read as autocomplete; the send guard never saw the message's end and held every multi-line send, and a blank line in the draft hid the input box.
+- **A Muse draft with an indented line stays sendable.** A line that began with spaces was read as a torn frame, so the input box disappeared and the send was refused while that draft sat there.
 
 ## [2.3.0] - 2026-10-12
 
