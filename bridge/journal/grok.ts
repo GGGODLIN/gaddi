@@ -29,9 +29,9 @@
 // itself keeps of the session each live process holds. A resumed session that had no prompt is
 // dropped from that list, but one that had a prompt stays beside the resumed one under the same pid
 // (live-verified 2026-10-11, grok 1.0.50), so a listed id can still be stale. That file is grok's
-// own and undocumented, so anything short of one unambiguous live match leaves Herdr's id alone. The reconcile step is a
-// workaround for herdrdev/herdr#2683 and is to be removed once the Herdr version Collie requires
-// takes a grok session start with source `load`.
+// own and undocumented, so anything short of one unambiguous live match leaves Herdr's id alone.
+// The reconcile step is a workaround for herdrdev/herdr#2683 and is to be removed once the Herdr
+// version Collie requires takes a grok session start with source `load`.
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";

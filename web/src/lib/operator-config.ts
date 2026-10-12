@@ -11,6 +11,7 @@ import type {
   OperatorQuickReplyRow,
   SttCapability,
   UploadCapability,
+  WhistleStatus,
 } from "@/lib/types";
 
 // The startup-resolved half of /api/config, read ONCE and held in module state: the operator's own
@@ -67,8 +68,16 @@ let currentAccounts: readonly string[] = [];
 let currentRetell = false;
 // Whether `clipboard.toml` names both commands (ADR 9010). False until a read succeeds, like retell.
 let currentHostClipboard = false;
+// `null` until a read succeeds, on a bridge older than the field, and on a crew member's own answer.
+// All three mean "this collie offers no Whistle setup", which Settings answers by drawing nothing.
+// Unlike the rest of this store it moves at runtime: the setup tap starts a download and the poll
+// reports it, so `noteWhistleStatus` (below) writes the newest answer back.
+let currentWhistle: WhistleStatus | null = null;
 let inflight: Promise<void> | null = null;
 let loaded = false;
+// True once any read has succeeded, and unlike `loaded` it stays true through `refreshOperatorConfig`,
+// so a page that must tell "not asked yet" from "asked, and nothing was offered" does not flicker.
+let everLoaded = false;
 const listeners = new Set<() => void>();
 
 function emit(): void {
@@ -104,7 +113,9 @@ export function loadOperatorCommands(): Promise<void> {
       currentAccounts = cfg.accounts ?? [];
       currentRetell = cfg.retell === true;
       currentHostClipboard = cfg.hostClipboard === true;
+      currentWhistle = cfg.whistle ?? null;
       loaded = true;
+      everLoaded = true;
       emit();
     } catch {
       // Additive feature — see the header. Leave the list empty and allow a later retry.
@@ -113,6 +124,16 @@ export function loadOperatorCommands(): Promise<void> {
     }
   })();
   return inflight;
+}
+
+/**
+ * Read the config again, once, now. For the few facts a person's own tap changes on the host: the
+ * Whistle switch turns the `stt` provider on and off, and the composer's microphone follows it.
+ * Everything else here is startup config and is not asked twice.
+ */
+export function refreshOperatorConfig(): Promise<void> {
+  loaded = false;
+  return loadOperatorCommands();
 }
 
 export function getOperatorCommands(): readonly OperatorCommand[] {
@@ -341,11 +362,29 @@ export function __resetOperatorCommands(): void {
   currentFonts = [];
   currentMux = null;
   currentStt = null;
+  currentWhistle = null;
   currentUpload = null;
   currentAccounts = [];
   currentRetell = false;
   currentHostClipboard = false;
   inflight = null;
   loaded = false;
+  everLoaded = false;
   listeners.clear();
+}
+
+/** Whether a read of the config has ever succeeded in this page session. */
+export function operatorConfigRead(): boolean {
+  return everLoaded;
+}
+
+/** The host's Whistle model status, or `null` when this collie offers none. Read through lib/stt.ts. */
+export function getWhistleStatus(): WhistleStatus | null {
+  return currentWhistle;
+}
+
+/** Record a newer Whistle status, from the setup tap, a poll or a switch, and tell every reader. */
+export function noteWhistleStatus(status: WhistleStatus): void {
+  currentWhistle = status;
+  emit();
 }
