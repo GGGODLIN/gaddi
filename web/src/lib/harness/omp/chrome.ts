@@ -447,16 +447,20 @@ export function composerPrompt(lines: StyledLine[]): string | null {
   // Decline the binding when omp has painted too much below the box for the bridge to accept it.
   // `verifyExpectedPrompt` (bridge/prompt-binding.ts) matches the region against the fresh read's
   // NON-BLANK rows and requires the match to end inside the last DEFAULT_PROMPT_TAIL_LINES (6) of
-  // them — so a one-row region needs at most 5 non-blank rows beneath it. Every row in
-  // `(bottom, suggestEnd)` is non-blank by construction (locateComposer step (a) rejects a blank
-  // inside the run) and everything past `suggestEnd` is trailing blanks the bridge's normalization
-  // drops, so that count is exactly `suggestEnd - bottom - 1`. The slash palette lives down there
-  // and MAX_SUGGESTION_ROWS admits 64 rows of it, so a long enough palette would put the composer's
-  // own row out of reach and 409 EVERY destructive sweep with "The input box changed while clearing
-  // it" — a permanent, unexplainable refusal on a screen where nothing is wrong. Null instead means
-  // an unbound write, which is exactly what this adapter did before it named a region at all: the
-  // sweep loses its binding, never its pre-flight.
-  if (box.suggestEnd - box.bottom - 1 > BRIDGE_PROMPT_TAIL_LINES - 1) return null;
+  // them — so a one-row region needs at most 5 non-blank rows beneath it. Only non-blank rows count:
+  // an autocomplete run has none blank, but the later lines of a draft under OMP 18.10's open prompt
+  // may (a blank line in the message), and the bridge's normalization drops those, as it drops the
+  // trailing blanks past `suggestEnd`. The slash palette lives down there and MAX_SUGGESTION_ROWS
+  // admits 64 rows of it, and a draft runs to MAX_DRAFT_ROWS, so a long enough one would put the
+  // composer's own row out of reach and 409 EVERY destructive sweep with "The input box changed while
+  // clearing it" — a permanent, unexplainable refusal on a screen where nothing is wrong. Null instead
+  // means an unbound write, which is exactly what this adapter did before it named a region at all:
+  // the sweep loses its binding, never its pre-flight.
+  let nonBlankBelow = 0;
+  for (let i = box.bottom + 1; i < box.suggestEnd; i++) {
+    if (!isBlank(lineText(lines[i]!))) nonBlankBelow++;
+  }
+  if (nonBlankBelow > BRIDGE_PROMPT_TAIL_LINES - 1) return null;
 
   const row = rstrip(lineText(lines[box.bottom]!));
   return row.length === 0 ? null : row;

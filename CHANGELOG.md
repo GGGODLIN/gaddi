@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **An Oh My Pi draft with blank lines keeps its send check.** The check that the screen has not moved before a key goes out counted a draft's blank lines toward its window, so a draft made tall by blank lines lost the check; only lines with text count now, as the check itself reads them.
+
 ## [2.3.1] - 2026-10-12
 
 ### Changed

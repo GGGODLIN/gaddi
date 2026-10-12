@@ -416,6 +416,19 @@ describe("locateComposer — OMP 18.1.2's open-ended prompt row", () => {
     it("a trailing blank run is padding, not a draft line", () => {
       expect(extractInputDraft(composerWith("   some text", "", ""))).toBe("Reply with only OK. some text");
     });
+
+    // The bridge matches the binding against NON-blank rows only, so blank lines in the draft must not
+    // count toward its tail window: seven rows under the prompt, four of them text, still bind.
+    it("binds the prompt row when the draft's blank lines are what make it tall", () => {
+      const buffer = composerWith("   a", "", "   b", "", "   c", "", "   d");
+      expect(composerPrompt(buffer)).toBe("╰─ Reply with only OK.");
+    });
+
+    it("takes the unbound write once six later lines hold text, as for a long palette", () => {
+      const rows = ["   1", "   2", "   3", "   4", "   5"];
+      expect(composerPrompt(composerWith(...rows))).toBe("╰─ Reply with only OK.");
+      expect(composerPrompt(composerWith(...rows, "   6"))).toBeNull();
+    });
   });
 
   it("locates the live two-row shape and re-surfaces its status and draft", () => {
