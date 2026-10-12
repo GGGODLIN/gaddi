@@ -3,8 +3,12 @@
 import { resolve } from "node:path";
 import { DEFAULT_SCENARIOS, DIALOG_SCENARIOS, SCENARIOS, isScenarioId, type ScenarioId } from "./verdict";
 
-export const CANARY_AGENTS = ["claude", "codex", "opencode", "pi"] as const;
+export const CANARY_AGENTS = ["claude", "codex", "opencode", "pi", "grok", "hermes", "agy"] as const;
 export type CanaryAgent = (typeof CANARY_AGENTS)[number];
+
+/** What runs without `--agent`. grok, hermes and agy are asked for by name: their sends spend each
+ *  vendor's own quota, which a plain `bun run canary` should not do behind anyone's back. */
+export const DEFAULT_AGENTS: readonly CanaryAgent[] = ["claude", "codex", "opencode", "pi"];
 
 export function isCanaryAgent(value: string): value is CanaryAgent {
   return CANARY_AGENTS.some((a) => a === value);
@@ -36,10 +40,10 @@ export const DEFAULT_OUT = "/tmp/collie-canary";
 
 export const USAGE = `Usage: bun run canary [options]
 
-Drives claude, codex, opencode and pi in a Herdr session of its own (collie-canary) and judges each
+Drives claude, codex, opencode and pi (and grok, hermes, agy when named) in a Herdr session of its own (collie-canary) and judges each
 screen and send with Collie's own readers. See scripts/harness-canary/README.md.
 
-  --agent a,b        agents to run (default: ${CANARY_AGENTS.join(",")})
+  --agent a,b        agents to run (default: ${DEFAULT_AGENTS.join(",")}; known: ${CANARY_AGENTS.join(",")})
   --scenario a,b     scenarios to run (default: ${DEFAULT_SCENARIOS.join(",")}; known: ${SCENARIOS.join(",")})
   --dialogs          also run ${DIALOG_SCENARIOS.join(" and ")}: real dialogs and a send to a busy agent (more model turns)
   --cols N           terminal width for the wide scenarios, 40 to ${MAX_COLS} (default: the pane's own)
@@ -52,7 +56,7 @@ screen and send with Collie's own readers. See scripts/harness-canary/README.md.
 
 /** Parse argv (without the runtime and script). Throws a one-line message on anything unknown. */
 export function parseArgs(argv: readonly string[], repoRoot: string): CanaryOptions | "help" {
-  let agents: CanaryAgent[] = [...CANARY_AGENTS];
+  let agents: CanaryAgent[] = [...DEFAULT_AGENTS];
   let scenarios: ScenarioId[] = [...DEFAULT_SCENARIOS];
   let dialogs = false;
   let cols: number | null = null;

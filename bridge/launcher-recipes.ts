@@ -78,6 +78,28 @@ const RECIPE_TABLE = {
     { id: "continue", label: "Continue last", args: "--continue" },
     { id: "thinking-high", label: "Thinking: high", args: "--thinking=high" },
   ],
+  // grok 1.0.50, hermes v0.21.7 and agy 1.3.3, read off each `--help` on 2026-10-12 and started
+  // with every option by the harness canary's `options` scenario. No model chips: their model names
+  // move faster than a release.
+  grok: [
+    { id: "approve", label: "Always approve", args: "--always-approve", noPrompts: true },
+    { id: "continue", label: "Continue last", args: "--continue" },
+  ],
+  hermes: [
+    { id: "yolo", label: "Skip approvals", args: "--yolo", noPrompts: true },
+    { id: "continue", label: "Continue last", args: "--continue" },
+  ],
+  agy: [
+    {
+      id: "skip",
+      label: "Skip permission prompts",
+      args: "--dangerously-skip-permissions",
+      group: "permissions",
+      noPrompts: true,
+    },
+    { id: "plan", label: "Plan mode", args: "--mode plan", group: "permissions" },
+    { id: "continue", label: "Continue last", args: "--continue" },
+  ],
 } satisfies Record<string, readonly RecipeOption[]>;
 
 /** The options each harness offers. A harness with no entry offers none: its recipe is its binary. */
@@ -159,6 +181,7 @@ export function scanNoPrompts(line: string): boolean {
     // Short or generic spellings count only for the CLI that owns them.
     if (first === "codex" && word === "-a" && next === "never") return true;
     if (first === "opencode" && word === "--auto") return true;
+    if (first === "grok" && word === "--always-approve") return true;
   }
   return false;
 }

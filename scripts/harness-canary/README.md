@@ -12,12 +12,18 @@ bun run canary --dialogs                # plus dialogs and busy (more model turn
 bun run canary --agent claude,codex     # some agents
 bun run canary --scenario idle,drafts   # some scenarios, no model turns
 bun run canary --keep                   # leave the session up for a look
+bun run canary --agent grok,hermes,agy --scenario options   # each New-sheet option, started once
 bun run canary --record                 # write clean agents into the ledger
 bun run canary --readers /tmp/c1131     # judge with another checkout's readers
 ```
 
 Exit 1 means a scenario failed. Captures and `summary.json` go to
 `/tmp/collie-canary/<run-id>/<agent>-<version>/`. They are never copied into `web/src/fixtures/`.
+
+grok, hermes and agy run only when `--agent` names them, because their sends spend each vendor's own
+quota. The `options` scenario is never part of a default run: it starts the agent once per option
+the New sheet offers (`bridge/launcher-recipes.ts`), with the line the bridge builds, and passes when
+Herdr shows the agent up, idle or asking a question first. It makes no model turn.
 
 ## What it checks
 

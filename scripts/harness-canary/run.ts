@@ -13,6 +13,9 @@ import { claude } from "./agents/claude";
 import { codex } from "./agents/codex";
 import { opencode } from "./agents/opencode";
 import { pi } from "./agents/pi";
+import { grok } from "./agents/grok";
+import { hermes } from "./agents/hermes";
+import { agy } from "./agents/agy";
 import type { AgentProfile } from "./agents/profile";
 import { CANARY_SESSION, CanarySession, listSessions } from "./herdr";
 import { canaryJournals } from "./journal";
@@ -25,7 +28,7 @@ import { runAgent } from "./scenarios";
 import { installTransport } from "./transport";
 import { applyKnownGaps, exitCode, notReachedCase, recordable, renderTable, scenarioResult, type ScenarioResult } from "./verdict";
 
-const PROFILES = { claude, codex, opencode, pi } satisfies Record<CanaryAgent, AgentProfile>;
+const PROFILES = { claude, codex, opencode, pi, grok, hermes, agy } satisfies Record<CanaryAgent, AgentProfile>;
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 function log(line: string): void {

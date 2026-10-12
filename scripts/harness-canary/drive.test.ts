@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { claude } from "./agents/claude";
 import { codex } from "./agents/codex";
 import { backspaceSweep, launchLine } from "./agents/profile";
-import { CANARY_AGENTS, parseArgs } from "./args";
+import { DEFAULT_AGENTS, parseArgs } from "./args";
 import { colorAnswers, unfinishedTail } from "./client";
 import { cleanEnv } from "./herdr";
 import { JOURNAL_MESSAGE, MESSAGES, README_TOKEN, NARROW_DRAFT_IDS, SEND_IDS, messageById } from "./messages";
@@ -17,15 +17,23 @@ const ESC = String.fromCodePoint(0x1b);
 const BEL = String.fromCodePoint(0x07);
 
 describe("parseArgs", () => {
-  test("defaults run every agent and the six default scenarios at the pane's own width", () => {
+  test("defaults run the four default agents and the six default scenarios at the pane's own width", () => {
     const o = parseArgs([], "/repo");
     expect(o).not.toBe("help");
     if (o === "help") return;
-    expect(o.agents).toEqual([...CANARY_AGENTS]);
+    expect(o.agents).toEqual([...DEFAULT_AGENTS]);
     expect(o.scenarios).toEqual([...DEFAULT_SCENARIOS]);
     expect(o.cols).toBeNull();
     expect(o.readers).toBe("/repo");
     expect(o.record).toBe(false);
+  });
+
+  test("grok, hermes and agy run only when named, and options only when asked for", () => {
+    const o = parseArgs(["--agent", "grok,hermes,agy", "--scenario", "options"], "/repo");
+    if (o === "help") throw new Error("help");
+    expect(o.agents).toEqual(["grok", "hermes", "agy"]);
+    expect(o.scenarios).toEqual(["options"]);
+    expect(DEFAULT_SCENARIOS).not.toContain("options");
   });
 
   test("--agent, --scenario, --cols, --readers", () => {
@@ -39,7 +47,7 @@ describe("parseArgs", () => {
   });
 
   test("refuses what it does not know", () => {
-    expect(() => parseArgs(["--agent", "grok"], "/repo")).toThrow(/unknown agent/);
+    expect(() => parseArgs(["--agent", "muse"], "/repo")).toThrow(/unknown agent/);
     expect(() => parseArgs(["--scenario", "plan"], "/repo")).toThrow(/unknown scenario/);
     expect(() => parseArgs(["--cols", "200"], "/repo")).toThrow(/--cols/);
     expect(() => parseArgs(["--readers"], "/repo")).toThrow(/needs a value/);
