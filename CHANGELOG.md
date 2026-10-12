@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **pi and Oh My Pi session names are recognised by the journal reader.** pi 1.1.0 writes a `session_info` row and Oh My Pi 18.10 writes `title` and `title_change` rows; all three only name the session, and the journal reader now knows them, so the canary's unknown-row check passes on both.
+
 ## [2.3.0] - 2026-10-12
 
 ### Changed
