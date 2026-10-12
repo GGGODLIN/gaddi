@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   exitLineShown,
   inputRowEmpty,
+  lastPermissionMode,
+  resumeLine,
   settingsChangedSinceLastTurn,
   switchAccount,
   type SwitchClock,
@@ -73,6 +75,7 @@ const plan = (interrupt: SwitchPlan["interrupt"]): SwitchPlan => ({
   paneId: "w1:p1",
   sessionId: SID,
   command: "cc -personal",
+  permissionMode: null,
   interrupt,
 });
 /** Claude's faint next-step suggestion in an empty input box, as Herdr's styled read returns it. */
@@ -83,6 +86,12 @@ describe("switchAccount", () => {
     const { mux, calls } = fakeMux({ exitAfterPolls: 2 });
     expect(await switchAccount(mux, plan(null), fakeClock())).toEqual({ ok: true });
     expect(calls).toEqual(["text:/exit", "keys:Enter", `text:cc -personal --resume ${SID}`, "keys:Enter"]);
+  });
+
+  test("the session's own permission mode rides the resume line", async () => {
+    const { mux, calls } = fakeMux({ exitAfterPolls: 0 });
+    expect(await switchAccount(mux, { ...plan(null), permissionMode: "default" }, fakeClock())).toEqual({ ok: true });
+    expect(calls).toContain(`text:cc -personal --resume ${SID} --permission-mode default`);
   });
 
   test("a working pane is interrupted once, then /exit goes into the empty row", async () => {
@@ -190,6 +199,49 @@ describe("settingsChangedSinceLastTurn", () => {
     expect(settingsChangedSinceLastTurn([answer, model].join("\n"))).toBe(true);
     expect(settingsChangedSinceLastTurn([model, answer].join("\n"))).toBe(false);
     expect(settingsChangedSinceLastTurn(["{torn", answer].join("\n"))).toBe(false);
+  });
+});
+
+describe("lastPermissionMode", () => {
+  interface LogRow {
+    type: string;
+    permissionMode?: string;
+    sessionId?: string;
+    message?: { content: string | { type: string }[] };
+  }
+  const row = (o: LogRow) => JSON.stringify(o);
+  const started = (mode: string) => row({ type: "permission-mode", permissionMode: mode, sessionId: SID });
+  const prompt = (mode: string) => row({ type: "user", permissionMode: mode, message: { content: "go on" } });
+  const toolResult = row({ type: "user", message: { content: [{ type: "tool_result" }] } });
+
+  test("the last mode the log shows wins, whether a start row or a prompt carried it", () => {
+    // A Shift+Tab shows first on the next prompt; the start rows keep the mode the process began in.
+    expect(lastPermissionMode([started("default"), prompt("default"), started("default"), prompt("acceptEdits")].join("\n"))).toBe(
+      "acceptEdits",
+    );
+    expect(lastPermissionMode([prompt("acceptEdits"), started("plan"), toolResult].join("\n"))).toBe("plan");
+  });
+
+  test("no mode in the log, a torn line, or a value the flag does not take: nothing to carry", () => {
+    expect(lastPermissionMode(toolResult)).toBeNull();
+    expect(lastPermissionMode(["{torn", started("default")].join("\n"))).toBe("default");
+    // Never typed into the terminal, and never replaced by an older mode that may be stale.
+    expect(lastPermissionMode([started("default"), prompt("default; rm -rf ~")].join("\n"))).toBeNull();
+  });
+});
+
+describe("resumeLine", () => {
+  test("adds the session's mode, or nothing when there is none", () => {
+    expect(resumeLine("cc -work", SID, "default")).toBe(`cc -work --resume ${SID} --permission-mode default`);
+    expect(resumeLine("cc -work", SID, null)).toBe(`cc -work --resume ${SID}`);
+  });
+
+  test("an account command that sets its own mode keeps it", () => {
+    expect(resumeLine("claude --permission-mode plan", SID, "default")).toBe(`claude --permission-mode plan --resume ${SID}`);
+    expect(resumeLine("claude --permission-mode=plan", SID, "default")).toBe(`claude --permission-mode=plan --resume ${SID}`);
+    expect(resumeLine("claude --dangerously-skip-permissions", SID, "default")).toBe(
+      `claude --dangerously-skip-permissions --resume ${SID}`,
+    );
   });
 });
 

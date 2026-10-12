@@ -525,10 +525,13 @@ command = "cc -work"      # required; the shell line that starts Claude on this 
 The pane sheet (⋮ in a pane) then offers **Switch account**, and a second list of your labels.
 
 1. The bridge ends Claude in the same pane and waits until it has exited.
-2. It types your `command` followed by `--resume <session id>` and sends Enter.
+2. It types your `command` followed by `--resume <session id>` and the session's last permission mode, then sends Enter.
 
 `--resume` restores the session's own model, effort and context size, so the file has no model
 field. A working or blocked agent is interrupted only after a second tap on the account.
+
+The permission mode comes from the session log as `--permission-mode`, because `--resume` does not
+restore it. A `command` that sets `--permission-mode` or `--dangerously-skip-permissions` keeps its own.
 
 > **Note.** The switch is refused when `/model` or `/effort` ran after the last answer, because
 > `--resume` would bring back the old setting. Send one message first.

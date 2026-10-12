@@ -32,6 +32,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 - **Switching account works on an idle Claude and on one waiting for approval.** An idle Claude's faint placeholder or next-step suggestion was read as an unsent draft and the switch was refused; a permission dialog is now closed with Escape, since ctrl+c left it up and the switch stopped with an untranslated error. Both remaining refusals are translated.
 - **The clipboard strip no longer opens onto nothing.** When the computer's clipboard changes, the computer now reads it once and tells the phone only whether text came out; an empty clipboard, an image, a file or text that will not come out raises no strip and no mark, and a read that fails in the sheet puts the waiting news down. The text still reaches the phone only when you open the sheet, and `clipboard.toml` is unchanged.
+- **Switching account keeps the session's permission mode.** The new Claude started in its account's default mode, so a session that asked before each command could come back on one that asks for nothing. The switch now reads the mode the session last ran in and adds `--permission-mode` to the line it types, unless the account's command sets a mode itself. A mode changed with Shift+Tab after your last message is not yet in the session log and is not carried.
 
 ## [2.2.1] - 2026-10-11
 

@@ -15,7 +15,14 @@ import type { AgentView } from "./types.ts";
 const SID = "1519794a-e8f5-4a29-a687-f3154a08c1b2";
 const root = mkdtempSync(join(tmpdir(), "collie-local-routes-"));
 mkdirSync(join(root, "-work-repo"));
-writeFileSync(join(root, "-work-repo", `${SID}.jsonl`), JSON.stringify({ type: "assistant", message: { content: [] } }));
+// A session started in `default`: the route must type that mode back, not leave the account's own.
+writeFileSync(
+  join(root, "-work-repo", `${SID}.jsonl`),
+  [
+    JSON.stringify({ type: "permission-mode", permissionMode: "default", sessionId: SID }),
+    JSON.stringify({ type: "assistant", message: { content: [] } }),
+  ].join("\n"),
+);
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 const cfg: Config = { ...loadConfig({ HOME: root }), journalRoots: { ...resolveJournalRoots({}, root), claude: [root] } };
@@ -89,7 +96,7 @@ describe("POST /api/pane/:id/switch-account", () => {
     const second = await switchAccountPane(mux, engine, cfg, "w1:p1", post({ account: "Personal" }), audit, null, "s", accounts);
     expect(await second.json()).toMatchObject({ ok: false, code: "account.in_progress" });
     expect(await (await first).json()).toEqual({ ok: true });
-    expect(typed).toEqual(["/exit", `cc -personal --resume ${SID}`]);
+    expect(typed).toEqual(["/exit", `cc -personal --resume ${SID} --permission-mode default`]);
   });
 
   test("a working pane without the interrupt flag is refused and nothing is typed", async () => {

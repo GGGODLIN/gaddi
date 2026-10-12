@@ -111,7 +111,7 @@ import {
   type RecentRunSurface,
 } from "./recent-runs.ts";
 import { createOperatorAccounts, type Account } from "./operator-accounts.ts";
-import { settingsChangedSinceLastTurn, switchAccount } from "./account-switch.ts";
+import { lastPermissionMode, settingsChangedSinceLastTurn, switchAccount } from "./account-switch.ts";
 import { bunRetellSpawn, createOperatorRetell, retellArgv, runRetell, type RetellConfig, type RetellMode, type RetellSpawn } from "./retell.ts";
 import { createHostClipboard, createOperatorHostClipboard, type HostClipboard } from "./host-clipboard.ts";
 import {
@@ -4527,6 +4527,7 @@ export async function switchAccountPane(
         paneId,
         sessionId: claude.sessionId,
         command: account.command,
+        permissionMode: lastPermissionMode(log),
         interrupt: claude.status === "working" || claude.status === "blocked" ? claude.status : null,
       },
       { sleep: defaultSleep, now: () => Date.now() },

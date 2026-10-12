@@ -13,7 +13,8 @@ import type { MuxAdapter } from "./mux/types.ts";
 //     (ctrl+c leaves the dialog up: measured on 2.1.296, 2026-10-12);
 //   • ctrl+c on a non-empty input box clears it;
 //   • `/exit` then exits and prints `claude --resume <id>`, and Herdr drops the pane's agent;
-//   • `<account command> --resume <id>` restores the last turn's model, effort and 1M context.
+//   • `<account command> --resume <id>` restores the last turn's model, effort and 1M context, but
+//     not the permission mode, which the line carries itself (`lastPermissionMode`).
 // `/exit` is typed only once the screen shows an EMPTY input row: otherwise the prompt an interrupt
 // handed back would be submitted with `/exit` appended. An idle pane's draft is refused, not cleared.
 
@@ -21,6 +22,8 @@ export interface SwitchPlan {
   readonly paneId: string;
   readonly sessionId: string;
   readonly command: string;
+  /** The session's last permission mode ({@link lastPermissionMode}); null leaves the account's default. */
+  readonly permissionMode: string | null;
   /** The pane was working or blocked when the phone asked, so its turn is interrupted first; null when idle. */
   readonly interrupt: "working" | "blocked" | null;
 }
@@ -148,6 +151,54 @@ export function settingsChangedSinceLastTurn(jsonl: string): boolean {
   return changed;
 }
 
+/** What `claude --permission-mode` takes (its `--help` on 2.1.x), plus `default`, which it still accepts. */
+const PERMISSION_MODES: ReadonlySet<string> = new Set([
+  "acceptEdits",
+  "auto",
+  "bypassPermissions",
+  "default",
+  "dontAsk",
+  "manual",
+  "plan",
+]);
+
+/**
+ * The permission mode the session was last seen in, or null when the log names none that may be typed.
+ *
+ * A new Claude starts in its account's default mode, so without this a session that asked before
+ * each command could come back on an account that allows everything. Two rows carry the mode: the
+ * `permission-mode` row a process writes as it starts, and each prompt the operator sends, which is
+ * where a Shift+Tab change first shows (measured 2026-10-12). The last of either wins; a mode changed
+ * with no prompt since is not in the log yet. The value is typed into a terminal, so one outside the
+ * flag's own choices is dropped, never passed on and never swapped for an older one.
+ */
+export function lastPermissionMode(jsonl: string): string | null {
+  let mode: string | null = null;
+  for (const line of jsonl.split("\n")) {
+    if (line.trim() === "") continue;
+    let row: { type?: string; permissionMode?: string };
+    try {
+      row = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    // The set lookup is the parse: a non-string or unknown value matches nothing and is not carried.
+    if ((row.type === "permission-mode" || row.type === "user") && row.permissionMode !== undefined) {
+      mode = row.permissionMode;
+    }
+  }
+  return mode !== null && PERMISSION_MODES.has(mode) ? mode : null;
+}
+
+/** An account command that already sets a mode is the operator's choice; a second flag would contradict it. */
+const OWN_MODE_FLAG = /(?:^|\s)--(?:permission-mode|dangerously-skip-permissions)(?=[\s=]|$)/;
+
+/** The line typed into the pane once the old Claude is gone. */
+export function resumeLine(command: string, sessionId: string, mode: string | null): string {
+  const line = `${command} --resume ${sessionId}`;
+  return mode === null || OWN_MODE_FLAG.test(command) ? line : `${line} --permission-mode ${mode}`;
+}
+
 async function exited(mux: SwitchMux, plan: SwitchPlan, clock: SwitchClock): Promise<boolean> {
   const started = clock.now();
   for (;;) {
@@ -199,8 +250,7 @@ export async function switchAccount(mux: SwitchMux, plan: SwitchPlan, clock: Swi
 
   if (!(await exited(mux, plan, clock))) return { ok: false, stage: "unconfirmed" };
 
-  const line = `${plan.command} --resume ${plan.sessionId}`;
-  const launched = await mux.typeText(plan.paneId, line);
+  const launched = await mux.typeText(plan.paneId, resumeLine(plan.command, plan.sessionId, plan.permissionMode));
   if (!launched.ok) return { ok: false, stage: "launch", reason: launched.detail };
   await clock.sleep(KEY_SETTLE_MS);
   const run = await keys(["Enter"]);
