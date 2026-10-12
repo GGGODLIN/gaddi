@@ -1167,7 +1167,7 @@ describe("Codex 0.157.1 fullscreen: one key-hint row under the status row", () =
     expect(codexAdapter.composerReady!(lines)).toBe(true);
     const box = locateComposer(lines)!;
     expect(lineText(lines[box.promptRow]!).trimEnd()).toBe(`› ${PLACEHOLDER}`);
-    expect(lineText(lines[box.statusRow]!).trimEnd()).toBe("  free low · /tmp/collie-canary-project · Generate task title");
+    expect(lineText(lines[box.statusRow]!).trimEnd()).toBe("  gpt-5.6-sol low · /tmp/collie-canary-project · Generate task title");
     expect(codexAdapter.extractInputDraft(lines)).toBeNull();
     expect(buildBlocks(lines, { agent: "codex" }).map((b) => b.kind)).toEqual(["raw"]);
   });
