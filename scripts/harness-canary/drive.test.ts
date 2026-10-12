@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { claude } from "./agents/claude";
 import { CODEX_ARGS, codex } from "./agents/codex";
 import { muse } from "./agents/muse";
+import { opencode } from "./agents/opencode";
 import { backspaceSweep, launchedThrough, launchLine } from "./agents/profile";
 import { DEFAULT_AGENTS, parseArgs } from "./args";
 import { colorAnswers, unfinishedTail } from "./client";
@@ -110,6 +111,11 @@ describe("startup answers", () => {
 
   test("Codex starts without its update prompt, which would answer Update now", () => {
     expect(codex.launch(null)).toContain("-c check_for_update_on_startup=false");
+  });
+
+  test("OpenCode starts without its update dialog, whose Confirm would update the install", () => {
+    expect(opencode.launch(null)).toBe("clear; OPENCODE_DISABLE_AUTOUPDATE=1 opencode");
+    expect(launchedThrough(opencode, "/opt/free/opencode").launch(null)).toBe("clear; OPENCODE_DISABLE_AUTOUPDATE=1 /opt/free/opencode");
   });
 
   test("Codex is never cleared with Ctrl+C", () => {

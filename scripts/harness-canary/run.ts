@@ -198,7 +198,7 @@ async function main(options: CanaryOptions): Promise<number> {
   }
 
   const code = exitCode(results);
-  if (options.record) record(options, id, results, versions, adapters);
+  if (options.record) record(options, id, results, versions, adapters, launchers);
   return code;
 }
 
@@ -208,6 +208,7 @@ function record(
   results: readonly ScenarioResult[],
   versions: ReadonlyMap<string, string>,
   adapters: ReadonlyMap<string, boolean>,
+  launchers: ReadonlyMap<string, string>,
 ): void {
   if (options.readers !== REPO_ROOT) {
     log("--record: skipped, the readers came from another checkout");
@@ -220,20 +221,23 @@ function record(
       continue;
     }
     const passed = results.filter((r) => r.agent === agent && r.verdict === "pass").map((r) => r.scenario);
+    // A launcher may have pointed the agent at another model, so the record says the run was not
+    // the agent's own default; what was verified is still this version's screen and log.
+    const through = launchers.has(agent) ? ", started through a --via launcher" : "";
     const verified = id.slice(0, 4) + "-" + id.slice(4, 6) + "-" + id.slice(6, 8);
     const rec: LedgerRecord = {
       agent,
       version: versions.get(agent)!,
       verified,
       adapter: adapters.get(agent) ?? false,
-      evidence: `canary run ${id}: ${passed.join(", ")} pass`,
+      evidence: `canary run ${id}: ${passed.join(", ")} pass${through}`,
     };
     // The JOURNAL reader's own line, beside the screen reader's, and only when this run judged it:
     // the two readers drift apart on the same agent version (M41/05), so one date cannot speak for
     // both. `withRecord` writes it only where the ledger already has a journal block, which is the
     // agents this build has a journal adapter for.
     if (passed.includes("journal")) {
-      rec.journal = { version: rec.version, verified, evidence: `canary run ${id}: journal kinds asserted, nothing unrecognised` };
+      rec.journal = { version: rec.version, verified, evidence: `canary run ${id}: journal kinds asserted, nothing unrecognised${through}` };
     }
     recordVerified(rec, ledger);
     log(`--record: ${agent} ${versions.get(agent)} written to ${ledger}`);
