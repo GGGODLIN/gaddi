@@ -22,6 +22,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { HOST } from "../bridge/host.ts";
 import { buildMuxRegistry, createMux, muxEndpointVar } from "../bridge/mux/registry.ts";
 import type { MuxAdapter } from "../bridge/mux/types.ts";
 
@@ -154,7 +155,7 @@ async function e2e(mux: Mux): Promise<Result> {
   if (Bun.which(mux) === null) return { mux, verdict: "skip", lines: [`${mux} is not on PATH`] };
   // `/tmp`, not os.tmpdir(): macOS's per-user TMPDIR is long enough that zellij's socket path under
   // it passes the 104-byte Unix socket limit and zellij refuses to start.
-  const root = mkdtempSync(join(process.platform === "darwin" ? "/tmp" : tmpdir(), `cme2e-${mux}-`));
+  const root = mkdtempSync(join(HOST.platform === "darwin" ? "/tmp" : tmpdir(), `cme2e-${mux}-`));
   const env = isolatedEnv(root);
   const lines: string[] = [];
   let instance: Instance | null = null;
