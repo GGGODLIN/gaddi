@@ -9,7 +9,7 @@ const TRUST_YES = "Yes, I trust this folder";
 export const agy: AgentProfile = {
   agent: "agy",
   versionCommand: ["agy", "--version"],
-  launch: (cols) => launchLine(cols, `agy`),
+  launch: (cols, bin = "agy") => launchLine(cols, bin),
   startupAnswer(texts) {
     // The folder trust question (1.3.3, measured 2026-10-12) on the canary's fresh project, answered
     // the way a person would: Enter, only while the pointer sits on the yes row.

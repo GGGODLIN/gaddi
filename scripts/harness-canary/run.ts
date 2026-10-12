@@ -4,7 +4,7 @@
 // AND off the session each agent wrote. Specs M37/02 and M41/05; the how and the traps are in
 // ./README.md.
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,9 @@ import { pi } from "./agents/pi";
 import { grok } from "./agents/grok";
 import { hermes } from "./agents/hermes";
 import { agy } from "./agents/agy";
-import type { AgentProfile } from "./agents/profile";
+import { omp } from "./agents/omp";
+import { muse } from "./agents/muse";
+import { launchedThrough, type AgentProfile } from "./agents/profile";
 import { CANARY_SESSION, CanarySession, listSessions } from "./herdr";
 import { canaryJournals } from "./journal";
 import { loadKnownGaps } from "./known-gaps";
@@ -28,7 +30,7 @@ import { runAgent } from "./scenarios";
 import { installTransport } from "./transport";
 import { applyKnownGaps, exitCode, notReachedCase, recordable, renderTable, scenarioResult, type ScenarioResult } from "./verdict";
 
-const PROFILES = { claude, codex, opencode, pi, grok, hermes, agy } satisfies Record<CanaryAgent, AgentProfile>;
+const PROFILES = { claude, codex, opencode, pi, grok, hermes, agy, omp, muse } satisfies Record<CanaryAgent, AgentProfile>;
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 function log(line: string): void {
@@ -40,6 +42,18 @@ function installedVersion(profile: AgentProfile): string | null {
   try {
     const r = Bun.spawnSync([...profile.versionCommand], { stdout: "pipe", stderr: "pipe", timeout: 5000 });
     return /\d+\.\d+\.\d+/.exec(`${r.stdout.toString()} ${r.stderr.toString()}`)?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** `dir/<agent>` when `--via` named a folder and that file is an executable, else null. */
+function viaLauncher(dir: string | null, agent: string): string | null {
+  if (dir === null) return null;
+  const path = join(dir, agent);
+  try {
+    accessSync(path, constants.X_OK);
+    return statSync(path).isFile() ? path : null;
   } catch {
     return null;
   }
@@ -106,6 +120,7 @@ async function main(options: CanaryOptions): Promise<number> {
   process.on("SIGHUP", () => onSignal("SIGHUP"));
 
   const versions = new Map<string, string>();
+  const launchers = new Map<string, string>();
   const results: ScenarioResult[] = [];
   let audit: readonly string[] = [];
   let adapters = new Map<string, boolean>();
@@ -122,10 +137,13 @@ async function main(options: CanaryOptions): Promise<number> {
     const journals = canaryJournals();
     adapters = new Map(options.agents.map((a) => [a, readers.adapterFor(a) !== undefined]));
     for (const agent of options.agents) {
-      const profile = PROFILES[agent];
+      const launcher = viaLauncher(options.via, agent);
+      // The version is the agent's own binary's either way: a launcher only changes how it starts.
+      const profile = launcher === null ? PROFILES[agent] : launchedThrough(PROFILES[agent], launcher);
+      if (launcher !== null) launchers.set(agent, launcher);
       const version = installedVersion(profile);
       versions.set(agent, version ?? "not installed");
-      log(`${agent} ${version ?? "(not installed)"}${adapters.get(agent) ? "" : ", no adapter: raw mirror, one-step send"}`);
+      log(`${agent} ${version ?? "(not installed)"}${adapters.get(agent) ? "" : ", no adapter: raw mirror, one-step send"}${launcher === null ? (options.via === null ? "" : ", own binary: no launcher in --via") : `, via ${launcher}`}`);
       if (version === null) {
         for (const s of options.scenarios) results.push(scenarioResult(agent, s, [notReachedCase(agent, "not installed")]));
         continue;
@@ -164,6 +182,7 @@ async function main(options: CanaryOptions): Promise<number> {
     readers: options.readers,
     cols: options.cols,
     versions: Object.fromEntries(versions),
+    launchers: Object.fromEntries(launchers),
     results,
     audit,
   };

@@ -7,7 +7,7 @@ import { backspaceSweep, launchLine, type AgentProfile } from "./profile";
 export const grok: AgentProfile = {
   agent: "grok",
   versionCommand: ["grok", "--version"],
-  launch: (cols) => launchLine(cols, `grok`),
+  launch: (cols, bin = "grok") => launchLine(cols, bin),
   startupAnswer: () => null,
   clearKeys: backspaceSweep,
   clearFallback: null,

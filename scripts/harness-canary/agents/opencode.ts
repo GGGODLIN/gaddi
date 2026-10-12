@@ -8,7 +8,7 @@ import { backspaceSweep, launchLine, type AgentProfile } from "./profile";
 export const opencode: AgentProfile = {
   agent: "opencode",
   versionCommand: ["opencode", "--version"],
-  launch: (cols) => launchLine(cols, `opencode`),
+  launch: (cols, bin = "opencode") => launchLine(cols, bin),
   startupAnswer: () => null,
   clearKeys: backspaceSweep,
   clearFallback: null,

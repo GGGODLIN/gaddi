@@ -29,6 +29,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A passage of a reply can be quoted into your draft.** Select text in one agent reply in Chat and a Quote button appears over the composer; it adds the passage as `> ` lines after your draft and leaves the cursor below it for a comment. Nothing is sent and the clipboard is untouched; the passage is the text as shown, so list markers and backticks drop out.
 - **The New sheet offers options for Grok, Hermes and Antigravity.** Grok gets Always approve and Continue last, Hermes Skip approvals, and Antigravity Skip permission prompts, Plan mode and Continue last; the options that skip prompts ask before their first run, as the others do. The harness canary's new `options` scenario starts each agent once with every option it offers.
 - **A throwaway run checks tmux, zellij and tuios end to end.** `bun scripts/mux-e2e.ts` starts each multiplexer in its own temporary home and socket directory, runs the read-only probe against it, then types a command through Collie's adapter and reads the output back, and removes everything afterwards. A multiplexer that is not installed is reported as skipped, not passed.
+- **The harness canary drives omp and Muse Code, and can start an agent through your own launcher.** `--agent omp,muse` runs the two by name. `--via DIR` starts each agent through `DIR/<agent>` when that file is executable, so a run can point an agent at another provider, such as a local relay, without touching its config.
 
 ### Fixed
 

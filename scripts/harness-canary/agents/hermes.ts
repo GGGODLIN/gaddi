@@ -9,7 +9,7 @@ const TELEMETRY_NO = "(●) No thanks";
 export const hermes: AgentProfile = {
   agent: "hermes",
   versionCommand: ["hermes", "--version"],
-  launch: (cols) => launchLine(cols, `hermes`),
+  launch: (cols, bin = "hermes") => launchLine(cols, bin),
   startupAnswer(texts) {
     // The shared-metrics question v0.21.7 asks once after an update (measured 2026-10-12). Only ever
     // the no: Enter while the pointer is on "No thanks", else Down towards it, never an opt-in.
