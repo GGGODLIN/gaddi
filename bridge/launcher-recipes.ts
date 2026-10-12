@@ -85,10 +85,9 @@ const RECIPE_TABLE = {
     { id: "approve", label: "Always approve", args: "--always-approve", noPrompts: true },
     { id: "continue", label: "Continue last", args: "--continue" },
   ],
-  hermes: [
-    { id: "yolo", label: "Skip approvals", args: "--yolo", noPrompts: true },
-    { id: "continue", label: "Continue last", args: "--continue" },
-  ],
+  // No Continue last: `hermes --continue` re-execs through v0.21.7's launcher, `python3 -I -c …`,
+  // and Herdr 0.9.0 never detects that pane as hermes (canary run 20261012T084248Z).
+  hermes: [{ id: "yolo", label: "Skip approvals", args: "--yolo", noPrompts: true }],
   agy: [
     {
       id: "skip",

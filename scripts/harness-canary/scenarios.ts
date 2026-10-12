@@ -569,7 +569,7 @@ export class Driver {
   async exit(): Promise<CaseResult> {
     const id = `exit-${this.tag}`;
     this.ctx.session.sendText(this.paneId, this.ctx.profile.exitCommand);
-    await Bun.sleep(400);
+    await Bun.sleep(this.ctx.profile.exitSettleMs ?? 400);
     this.ctx.session.sendKeys(this.paneId, ["Enter"]);
     let samples = 0;
     let unreadAt: Screen | null = null;

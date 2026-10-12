@@ -28,6 +28,8 @@ export interface AgentProfile {
   readonly clearFallback: readonly string[] | null;
   /** Typed into an empty composer and submitted to leave the agent. */
   readonly exitCommand: string;
+  /** How long to wait between typing {@link exitCommand} and its Enter; 400 ms when absent. */
+  readonly exitSettleMs?: number;
 }
 
 /** `clear`, then the size, then the agent: one shell line. */

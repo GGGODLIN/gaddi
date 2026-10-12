@@ -19,4 +19,6 @@ export const hermes: AgentProfile = {
   clearKeys: backspaceSweep,
   clearFallback: null,
   exitCommand: "/exit",
+  // The slash popup is still painting at 400 ms and takes that Enter; at 1 s it submits (2026-10-12).
+  exitSettleMs: 1200,
 };

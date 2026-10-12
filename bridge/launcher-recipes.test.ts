@@ -81,7 +81,8 @@ describe("buildRecipe", () => {
 
   test("a grok, a hermes and an agy recipe", () => {
     expect(buildRecipe("grok", ["approve"])).toMatchObject({ ok: true, command: "grok --always-approve", noPrompts: true });
-    expect(buildRecipe("hermes", ["continue"])).toMatchObject({ ok: true, command: "hermes --continue", noPrompts: false });
+    expect(buildRecipe("hermes", ["yolo"])).toMatchObject({ ok: true, command: "hermes --yolo", noPrompts: true });
+    expect(buildRecipe("hermes", ["continue"])).toMatchObject({ ok: false });
     expect(buildRecipe("agy", ["plan", "continue"])).toMatchObject({ ok: true, command: "agy --mode plan --continue", noPrompts: false });
     expect(buildRecipe("agy", ["skip", "plan"])).toMatchObject({ ok: false });
   });
