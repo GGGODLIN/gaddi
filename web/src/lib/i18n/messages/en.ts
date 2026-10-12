@@ -400,6 +400,7 @@ export const en = {
   "copyable.output": "Copy command output",
   "copyable.done": "Copied to clipboard",
   "copyable.failed": "Couldn't copy to clipboard",
+  "codeBlock.wrap": "Wrap long lines",
   "chat.copyOutput.label": "Copy output",
   "chat.copyOutput.done": "Copied output to clipboard",
   "chat.copyOutput.failed": "Couldn't copy output",

@@ -301,6 +301,7 @@ export const it: Dictionary = {
   "copyable.output": "Copia l'output del comando",
   "copyable.done": "Copiato negli appunti",
   "copyable.failed": "Impossibile copiare negli appunti",
+  "codeBlock.wrap": "A capo per le righe lunghe",
   "chat.copyOutput.label": "Copia output",
   "chat.copyOutput.done": "Output copiato negli appunti",
   "chat.copyOutput.failed": "Impossibile copiare l'output",

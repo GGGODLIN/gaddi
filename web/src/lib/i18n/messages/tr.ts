@@ -301,6 +301,7 @@ export const tr: Dictionary = {
   "copyable.output": "Komut çıktısını kopyala",
   "copyable.done": "Panoya kopyalandı",
   "copyable.failed": "Panoya kopyalanamadı",
+  "codeBlock.wrap": "Uzun satırları kaydır",
   "chat.copyOutput.label": "Çıktıyı kopyala",
   "chat.copyOutput.done": "Çıktı panoya kopyalandı",
   "chat.copyOutput.failed": "Çıktı kopyalanamadı",

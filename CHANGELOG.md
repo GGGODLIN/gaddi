@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **A code block in a reply can wrap its long lines.** A button beside the copy icon wraps that one block, and a second press brings back sideways scrolling; blocks still scroll by default, so trees and aligned output keep their columns. The choice is not remembered, and Copy still takes the block's text as written.
+
 ### Fixed
 
 - **Switching account works on an idle Claude and on one waiting for approval.** An idle Claude's faint placeholder or next-step suggestion was read as an unsent draft and the switch was refused; a permission dialog is now closed with Escape, since ctrl+c left it up and the switch stopped with an untranslated error. Both remaining refusals are translated.

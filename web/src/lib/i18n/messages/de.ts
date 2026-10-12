@@ -371,6 +371,7 @@ export const de: Dictionary = {
   "copyable.output": "Befehlsausgabe kopieren",
   "copyable.done": "In die Zwischenablage kopiert",
   "copyable.failed": "Konnte nicht in die Zwischenablage kopiert werden",
+  "codeBlock.wrap": "Lange Zeilen umbrechen",
   "chat.copyOutput.label": "Ausgabe kopieren",
   "chat.copyOutput.done": "Ausgabe in die Zwischenablage kopiert",
   "chat.copyOutput.failed": "Ausgabe konnte nicht kopiert werden",

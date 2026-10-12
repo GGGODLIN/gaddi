@@ -55,6 +55,62 @@ describe("MarkdownText code draws no ligatures", () => {
   });
 });
 
+// A fenced block scrolls so a tree or an aligned log keeps its columns; the reader wraps one block on
+// demand. The toggle changes only how the block is drawn: what Copy takes is still the source.
+describe("MarkdownText fenced block wrap toggle", () => {
+  const source = "```\nnpm run build -- --filter=web --very-long-flag-name=value-that-runs-off-the-screen\n└── src\n```";
+  const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  afterEach(() => {
+    if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  });
+
+  it("scrolls by default and wraps that one block while pressed", () => {
+    const { container } = render(<MarkdownText text={`${source}\n\n${source}`} />);
+    const [first, second] = screen.getAllByRole("button", { name: "Wrap long lines" });
+    const [pre1, pre2] = Array.from(container.querySelectorAll("pre"));
+    expect(first).toHaveAttribute("aria-pressed", "false");
+    expect(pre1.className).toContain("overflow-x-auto");
+    expect(pre1.className).not.toContain("whitespace-pre-wrap");
+
+    fireEvent.click(first);
+    expect(first).toHaveAttribute("aria-pressed", "true");
+    expect(pre1.className).toContain("whitespace-pre-wrap");
+    expect(pre1.className).toContain("wrap-anywhere");
+    expect(pre1.className).not.toContain("overflow-x-auto");
+    expect(pre2.className).toContain("overflow-x-auto");
+    expect(second).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(first);
+    expect(first).toHaveAttribute("aria-pressed", "false");
+    expect(pre1.className).toContain("overflow-x-auto");
+  });
+
+  it("copies the source unchanged while wrapped", () => {
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const { container } = render(<MarkdownText text={source} />);
+    const text = container.querySelector("pre")?.textContent;
+    fireEvent.click(screen.getByRole("button", { name: "Wrap long lines" }));
+    expect(container.querySelector("pre")?.textContent).toBe(text);
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledWith(
+      "npm run build -- --filter=web --very-long-flag-name=value-that-runs-off-the-screen\n└── src",
+    );
+  });
+
+  it("sits beside the copy icon, and in the corner when there is no copy icon", () => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn() } });
+    const { unmount } = render(<MarkdownText text={source} />);
+    expect(screen.getByRole("button", { name: "Wrap long lines" }).className.split(" ")).toContain("right-8");
+    unmount();
+    Reflect.deleteProperty(navigator, "clipboard");
+    render(<MarkdownText text={source} />);
+    expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Wrap long lines" }).className.split(" ")).toContain("right-0.5");
+  });
+});
+
 describe("MarkdownText headings", () => {
   const md = "# One\n\n## Two\n\n### Three\n\n#### Four\n\nbody";
   const level = (container: HTMLElement, n: number) => container.querySelector(`[data-heading-level="${n}"]`);

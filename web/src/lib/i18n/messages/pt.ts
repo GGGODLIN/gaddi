@@ -301,6 +301,7 @@ export const pt: Dictionary = {
   "copyable.output": "Copiar a saída do comando",
   "copyable.done": "Copiado para a área de transferência",
   "copyable.failed": "Não foi possível copiar para a área de transferência",
+  "codeBlock.wrap": "Quebrar linhas longas",
   "chat.copyOutput.label": "Copiar saída",
   "chat.copyOutput.done": "Saída copiada para a área de transferência",
   "chat.copyOutput.failed": "Não foi possível copiar a saída",
