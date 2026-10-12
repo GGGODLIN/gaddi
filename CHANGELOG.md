@@ -27,6 +27,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 - **pi and Oh My Pi session names are recognised by the journal reader.** pi 1.1.0 writes a `session_info` row and Oh My Pi 18.10 writes `title` and `title_change` rows; all three only name the session, and the journal reader now knows them, so the canary's unknown-row check passes on both.
 - **Codex 0.159 keeps its input box after the first reply.** Once a thread has a title, Codex paints the space before a status-row separator in the previous field's colour; the status row was refused, so the pane showed the unread card and refused every later send as blocked.
+- **An Antigravity draft with a pasted rule stays sendable.** A `────` line typed into the draft was read as the input box's top border, so the pane reported no input box and refused the send.
 
 ## [2.3.0] - 2026-10-12
 
