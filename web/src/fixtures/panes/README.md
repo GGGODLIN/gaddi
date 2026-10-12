@@ -330,7 +330,7 @@ indented row straight under the status row as the hint row (`isHintRow` in
 ## Codex 0.159.3 thread title (captured 2026-10-12, herdr 0.9.0, harness canary)
 
 A `format:ansi` capture from the harness canary's own Herdr session, after the first reply of a
-thread, cut to its last 32 rows. Once a thread has a title, Codex paints the status row as
+thread, cut to its last 33 rows. Once a thread has a title, Codex paints the status row as
 `<path> ` in the path's colour, then `· ` unpainted, then the title: the space before the separator
 carries the previous field's paint. Before the reader moved that space back onto the separator
 (`rejoinSplitSeparators` in `lib/harness/codex/markers.ts`), the row was refused, so after the first
