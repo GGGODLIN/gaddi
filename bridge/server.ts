@@ -111,7 +111,7 @@ import {
   type RecentRunSurface,
 } from "./recent-runs.ts";
 import { createOperatorAccounts, type Account } from "./operator-accounts.ts";
-import { settingsChangedSinceLastTurn, switchAccount } from "./account-switch.ts";
+import { lastPermissionMode, settingsChangedSinceLastTurn, switchAccount } from "./account-switch.ts";
 import { bunRetellSpawn, createOperatorRetell, retellArgv, runRetell, type RetellConfig, type RetellMode, type RetellSpawn } from "./retell.ts";
 import { createHostClipboard, createOperatorHostClipboard, type HostClipboard } from "./host-clipboard.ts";
 import {
@@ -171,6 +171,17 @@ import type { CrewHandler, CrewSurface } from "./crew/router.ts";
 import type { CrewTlsOptions } from "./crew/transport.ts";
 import { createSttAdmission, MAX_STT_AUDIO_BYTES, sttCapability, transcribeRequest } from "./stt/http.ts";
 import type { SttProvider } from "./stt/provider.ts";
+import { createWhistleModelStore, type WhistleModelStore } from "./stt/whistle-model.ts";
+import type { CodexDetector } from "./stt/codex-detect.ts";
+import { createHostCodexDetector, sttHostGet, sttHostPut, type SttHostRouteDeps } from "./stt/host-http.ts";
+import {
+  modelResponse,
+  whistleGet,
+  whistleRemove,
+  whistleStart,
+  whistleStatus,
+  type WhistleRouteDeps,
+} from "./stt/whistle-http.ts";
 import { uploadTooLarge } from "./uploads.ts";
 import { MUX_LOGO_PATH, OPERATOR_FONTS_PATH, journalAgentOf, toPaneWire } from "./types.ts";
 import type { LaunchCheckResponse, MachineAlertsResponse } from "./types.ts";
@@ -182,8 +193,6 @@ import type {
   AgentView,
   BridgeConfig,
   CreateResponse,
-  WorktreeListResponse,
-  WorktreeOpenResponse,
   WorktreeCreateResponse,
   WorktreePlanResponse,
   DeviceAuth,
@@ -222,6 +231,7 @@ import type {
   PaneWire,
   SnapshotResponse,
   SttCapability,
+  WhistleStatus,
   UpdateStatus,
   UploadCapability,
   UploadResponse,
@@ -280,6 +290,9 @@ const CONTENT_TYPES = new Map<string, string>([
   [".svg", "image/svg+xml"],
   [".ico", "image/x-icon"],
   [".woff2", "font/woff2"],
+  // The vendored speech engine (ADR 0096). The exact type is what lets a browser compile it
+  // streaming, and `nosniff` (SECURITY_HEADERS) means no other type would be read as wasm at all.
+  [".wasm", "application/wasm"],
 ]);
 
 // Strict CSP. Scripts are external, hashed bundles (script-src 'self'); pane text is rendered by
@@ -291,6 +304,20 @@ const CSP =
   "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; " +
   "style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self'; " +
   "manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; form-action 'self'";
+
+/**
+ * The policy every `.js` under `stt/` is served with: the speech worker and the engine glue it loads
+ * (ADR 0096 Decision 8). A dedicated worker loaded from a URL runs under the policy ITS OWN response
+ * carries, so this is the one place wasm may compile, and the document's {@link CSP} never gains
+ * `'wasm-unsafe-eval'`. `default-src 'none'` also closes `connect-src`: the worker cannot fetch, and
+ * `importScripts` reaches this origin only. The page hands it the wasm and the model as bytes.
+ */
+export const STT_WORKER_CSP = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; base-uri 'none'";
+
+/** The served path (mount already stripped) of a script that runs under {@link STT_WORKER_CSP}. */
+export function isSttWorkerScript(rel: string): boolean {
+  return rel.startsWith("stt/") && extname(rel) === ".js";
+}
 
 // Hardening headers set on EVERY response (static + API), applied centrally in the fetch wrapper.
 // nosniff stops content-type confusion; no-referrer keeps the tailnet URL out of any Referer.
@@ -395,6 +422,13 @@ const MAX_HISTORY_LIMIT = 5000;
 const TAB_ACTION_ROUTE = /^\/api\/tab\/([^/]+)\/(rename|close)$/;
 
 /**
+ * `GET /api/stt/model/<sha256>` (ADR 0096 Decision 9). The segment is matched as an opaque value and
+ * only ever COMPARED with the held model's hash (bridge/stt/whistle-http.ts), never made into a path.
+ * Lead-local: `bridge/crew/forward.ts` does not list it.
+ */
+const STT_MODEL_ROUTE = /^\/api\/stt\/model\/([^/]+)$/;
+
+/**
  * `GET /api/blobs/<hash>` — one content-addressed image out of a pi/omp journal's blob store.
  *
  * The hash is matched as an opaque segment here and validated by {@link isBlobHash} in the handler,
@@ -406,19 +440,11 @@ const TAB_ACTION_ROUTE = /^\/api\/tab\/([^/]+)\/(rename|close)$/;
 const BLOB_ROUTE = /^\/api\/blobs\/([^/]+)$/;
 
 /**
- * Worktree routes, all hung off the SPACE that asked (ADR 0032).
- *
- * The space is the repo context — its `repoRoot` comes off the snapshot Herdr already sends — so no
- * route takes a path to a repo, only the checkout path inside one.
- */
-const WORKTREE_LIST_ROUTE = /^\/api\/workspace\/([^/]+)\/worktrees$/;
-/**
- * How long a worktree create or open may hold its connection open, in seconds (ADR 0089). Above
- * Herdr's own 60 s worktree budget plus the launcher's wait, so the bridge always answers before the
- * listener gives up. The phone waits 75 s (web/src/lib/api.ts).
+ * How long a worktree create may hold its connection open, in seconds (ADR 0089). Above Herdr's own
+ * 60 s worktree budget plus the launcher's wait, so the bridge always answers before the listener
+ * gives up. The phone waits 75 s (web/src/lib/api.ts).
  */
 const WORKTREE_ROUTE_BUDGET_S = 90;
-const WORKTREE_ACTION_ROUTE = /^\/api\/workspace\/([^/]+)\/worktree(?:\/(open))?$/;
 
 /**
  * `GET /api/workspace/<id>/changes` — the Changes view asked by workspace rather than by pane
@@ -840,6 +866,8 @@ export function bridgeConfigBody(opts: {
   retell?: boolean;
   /** Whether `clipboard.toml` names both commands. Omitted when it does not (ADR 9010). */
   hostClipboard?: boolean;
+  /** The Whistle model and the host engine's switch (ADR 0096). Omitted when absent, like `stt`. */
+  whistle?: WhistleStatus;
   /**
    * What this host accepts as an attachment. Optional here for the reason `mux` is — the crew-mode
    * assertions build this body by hand and are about the crew — and always passed by the real
@@ -884,6 +912,8 @@ export function bridgeConfigBody(opts: {
   if (opts.accounts !== undefined && opts.accounts.length > 0) wire.accounts = [...opts.accounts];
   if (opts.retell === true) wire.retell = true;
   if (opts.hostClipboard === true) wire.hostClipboard = true;
+  // Right after `stt`, and omit-when-absent: no key is an older bridge or a crew member's own answer.
+  if (opts.whistle !== undefined) wire.whistle = opts.whistle;
   // Same omit-when-absent rule, and the same reading on the other end: no key is an older bridge,
   // which the phone falls back to the pre-attachment contract for (images, 10 MB).
   if (opts.upload !== undefined) wire.upload = opts.upload;
@@ -1044,6 +1074,17 @@ export function startServer(opts: {
    */
   stt?: () => Promise<SttProvider | null>;
   /**
+   * The Whistle model on this host (ADR 0096). Absent means this function builds the store over
+   * `cfg.stateDir`, which is what the real bridge does; a test passes one with a fake fetch.
+   */
+  whistle?: WhistleModelStore;
+  /**
+   * Whether the host's `codex` is installed and signed in, for Settings' Host speech provider card
+   * (ADR 0097). Absent means this function builds the real one (`codex login status`, cached); a test
+   * passes a fake so no `codex` runs.
+   */
+  sttCodex?: CodexDetector;
+  /**
    * The journal registry, built once by the caller. Absent means this function builds its own, which
    * is what every test does; `bridge/index.ts` passes one so the cache tracker and the history route
    * share the adapters' memoised path caches.
@@ -1166,6 +1207,25 @@ export function startServer(opts: {
   // One gate per Bun server, not per request: two slow uploads and their two provider calls share
   // the same bounded process-local capacity (bridge/stt/http.ts).
   const sttAdmission = createSttAdmission();
+  // The Whistle routes' world (ADR 0096): the model store, and where `stt.json` is. Never forwarded,
+  // like `/api/stt`: no whistle route reads `?host=` or is in the crew's FORWARDABLE list. A crew
+  // member answers its own whistle routes about its own model and `stt.json`, as it answers its own
+  // `/api/stt`; the one difference on a peer is that `/api/config` leaves `whistle` out.
+  const whistleDeps: WhistleRouteDeps = {
+    store: opts.whistle ?? createWhistleModelStore({ stateDir: cfg.stateDir, version: opts.version }),
+    stateDir: cfg.stateDir,
+    env: process.env,
+  };
+  // The host's speech provider (ADR 0097): the same `stt.json` and model store, the gate's provider for
+  // what the microphone gets, one Codex sign-in check shared by every device, one switch at a time.
+  const sttHostDeps: SttHostRouteDeps = {
+    stateDir: cfg.stateDir,
+    env: process.env,
+    stt,
+    store: whistleDeps.store,
+    codex: opts.sttCodex ?? createHostCodexDetector(cfg.stateDir, process.env),
+    gate: { busy: false },
+  };
   /** Who the requester is, across both device gates — see {@link requestDevice}. */
   const whois = (req: Request): DeviceAuth => requestDevice(req, cfg, pairingGate);
   const crewLead = opts.crewLead;
@@ -1720,20 +1780,10 @@ export function startServer(opts: {
       return json({ commands }, req.headers.get("accept-encoding"));
     }
 
-    // ── Worktrees: list / create / open / remove, all scoped to a space (ADR 0032) ──
-    const worktreeListMatch = pathname.match(WORKTREE_LIST_ROUTE);
-    if (worktreeListMatch && req.method === "GET") {
-      // A read, gated as one. It was the one route in this block with no gate at all, so it skipped
-      // the host allowlist too; found by the open-route test (ADR 0086).
-      const denied = caller.gate("read");
-      if (denied) return denied;
-      const rt = await caller.resolve();
-      if (rt instanceof Response) return rt;
-      return listWorktrees(rt.herdr, rt.engine, decodeURIComponent(worktreeListMatch[1]!), req);
-    }
-    // A branch made from a FOLDER rather than a space (M48, ADR 0093): the New sheet's Where field
-    // names the repo by its folder. Lead-local like the space-scoped routes above and below: neither is
-    // in the crew's FORWARDABLE list, so a `?host=` call answers 501 before it reaches this.
+    // ── Worktrees: a branch from a folder (ADR 0093) ──
+    // A branch made from a FOLDER (M48, ADR 0093): the New sheet's Where field names the repo by its
+    // folder. Lead-local: neither route is in the crew's FORWARDABLE list, so a `?host=` call answers
+    // 501 before it reaches this.
     if (pathname === "/api/worktree/plan" && req.method === "GET") {
       const denied = caller.gate("read");
       if (denied) return denied;
@@ -1755,37 +1805,6 @@ export function startServer(opts: {
         folders,
       });
     }
-    const worktreeMatch = pathname.match(WORKTREE_ACTION_ROUTE);
-    if (worktreeMatch && req.method === "POST") {
-      const denied = caller.gate("write");
-      if (denied) return denied;
-      const rt = await caller.resolve();
-      if (rt instanceof Response) return rt;
-      const spaceId = decodeURIComponent(worktreeMatch[1]!);
-      const action = worktreeMatch[2];
-      const device = caller.device();
-      // Bun closes a request that has been idle for 10 s, and a worktree call may wait on Herdr for
-      // WORKTREE_TIMEOUT_MS (60 s) and then on a launcher. Without this the create finishes on the
-      // host and the phone is handed a dropped connection (ADR 0089). Probed on Bun 1.4.1.
-      server.timeout(req, WORKTREE_ROUTE_BUDGET_S);
-      if (action === "open") {
-        return openWorktree(rt.herdr, rt.engine, spaceId, req, caller.audit, device, rt.name);
-      }
-      return createWorktree(
-        rt.herdr,
-        rt.engine,
-        spaceId,
-        req,
-        caller.audit,
-        device,
-        rt.name,
-        allowedLaunchers,
-        worktreeReceipts,
-        {},
-        { bases: worktreeBases },
-      );
-    }
-
     // ── Tab actions: rename (set its label) / close (kill it + every pane in it) ──
     const tabMatch = pathname.match(TAB_ACTION_ROUTE);
     if (tabMatch && req.method === "POST") {
@@ -2394,6 +2413,9 @@ export function startServer(opts: {
         // live, and this is where the phone learns whether to draw a microphone at all. `?? undefined`
         // because "no provider" must OMIT the key, never send a null one (CREW_PROTOCOL.md §11).
         const sttWire = (await sttCapability(await stt())) ?? undefined;
+        // The lead's (or a solo collie's) model, so Settings can offer the setup tap. A `?host=`
+        // read carries it like `stt`, because speech is lead-only; a peer's own answer leaves it out.
+        const whistleWire = crew.mode === "peer" ? undefined : await whistleStatus(whistleDeps);
         return json(
           bridgeConfigBody({
             push: push.enabled,
@@ -2414,6 +2436,7 @@ export function startServer(opts: {
             accounts: (await operatorAccounts()).map((a) => a.label),
             retell: (await operatorRetell()).length > 0,
             hostClipboard: (await operatorClipboard()).length > 0,
+            whistle: whistleWire,
             // This host's own limits, read from cfg on every request like everything else here.
             // A crew member answers with ITS number, which is the number that will judge the bytes.
             upload: {
@@ -2850,6 +2873,69 @@ export function startServer(opts: {
         // One line per attempt, and route metadata only: the recording, the transcript and the
         // provider's own words never reach the audit log.
         audit.record({ action: "stt", device: whois(req).device, detail: { ...attempt } });
+        return secure(response);
+      }
+
+      // ── The Whistle model and the host engine (bridge/stt/whistle-http.ts, ADR 0096) ──────
+      // Lead-local like `/api/stt`: none of these reads `?host=` and none is in the crew's
+      // FORWARDABLE list. The writes are gated exactly like `POST /api/stt`; the reads need the
+      // pairing token and nothing more (ADR 0086). Each write and each model copy is one audit line
+      // of route metadata. The status read is not audited: Settings polls it once a second while a
+      // download runs, and it changes nothing.
+      if (pathname === "/api/stt/whistle") {
+        if (req.method === "GET") {
+          const denied = guard(req, cfg, "read", pairingGate);
+          if (denied) return denied;
+          return secure(await whistleGet(whistleDeps));
+        }
+        if (req.method !== "POST" && req.method !== "DELETE") return text("method not allowed", 405);
+        const denied = guard(req, cfg, "write", pairingGate);
+        if (denied) return denied;
+        const { response, attempt } =
+          req.method === "POST" ? await whistleStart(whistleDeps) : await whistleRemove(whistleDeps, pairedLabel(req, pairingGate));
+        audit.record({
+          action: req.method === "POST" ? "stt.whistle.download" : "stt.whistle.remove",
+          device: whois(req).device,
+          detail: { ...attempt },
+        });
+        return secure(response);
+      }
+      // ── The host's speech provider (bridge/stt/host-http.ts, ADR 0097) ───────────────────
+      // Lead-local like the routes above: neither reads `?host=` and neither is forwardable. The read
+      // needs the pairing token and is not audited (Settings reads it when Voice opens). The write is
+      // gated like `POST /api/stt`, because it chooses where room audio goes, and is one audit line of
+      // route metadata: the choice and the outcome, never a reason's text or a path.
+      if (pathname === "/api/stt/host") {
+        if (req.method === "GET") {
+          const denied = guard(req, cfg, "read", pairingGate);
+          if (denied) return denied;
+          return secure(await sttHostGet(sttHostDeps));
+        }
+        if (req.method !== "PUT") return text("method not allowed", 405);
+        const denied = guard(req, cfg, "write", pairingGate);
+        if (denied) return denied;
+        let body: JsonValue | undefined;
+        try {
+          // SAFETY: `Request.json()` output IS a JsonValue by construction; `parseSttHostRequest`
+          // reads the two fields it needs and refuses anything else.
+          body = (await req.json()) as JsonValue;
+        } catch {
+          body = undefined;
+        }
+        // The pairing label, and only that, is kept as "Last changed by": never a token, an address
+        // or a proxy header's value (a header names a device for the gate, not for a screen).
+        const { response, attempt } = await sttHostPut(sttHostDeps, body, pairedLabel(req, pairingGate));
+        audit.record({ action: "stt.host", device: whois(req).device, detail: { ...attempt } });
+        return secure(response);
+      }
+      const sttModelMatch = pathname.match(STT_MODEL_ROUTE);
+      if (sttModelMatch && req.method === "GET") {
+        // A plain read (ADR 0096 Decision 9): the bytes are public and asking for them changes
+        // nothing. The hash is compared with the held file's, never joined into a path.
+        const denied = guard(req, cfg, "read", pairingGate);
+        if (denied) return denied;
+        const { response, attempt } = await modelResponse(whistleDeps, sttModelMatch[1]!, req.signal);
+        audit.record({ action: "stt.model.read", device: whois(req).device, detail: { ...attempt } });
         return secure(response);
       }
 
@@ -4523,7 +4609,13 @@ export async function switchAccountPane(
     if (settingsChangedSinceLastTurn(log)) return refuse("account.settings_pending", 409);
     outcome = await switchAccount(
       herdr,
-      { paneId, sessionId: claude.sessionId, command: account.command, interrupt: busy },
+      {
+        paneId,
+        sessionId: claude.sessionId,
+        command: account.command,
+        permissionMode: lastPermissionMode(log),
+        interrupt: claude.status === "working" || claude.status === "blocked" ? claude.status : null,
+      },
       { sleep: defaultSleep, now: () => Date.now() },
     );
   } finally {
@@ -4540,6 +4632,9 @@ export async function switchAccountPane(
   if (outcome.ok) return json({ ok: true } satisfies ActionResponse, ae);
   if (outcome.stage === "unconfirmed") return refuse("account.exit_unconfirmed", 200);
   if (outcome.stage === "draft") return refuse("account.draft_present", 409);
+  if (outcome.stage === "input_row") {
+    return refuse(outcome.row === "missing" ? "account.input_row_missing" : "account.input_row_stuck", 200);
+  }
   return refuse(outcome.stage === "exit" ? "account.exit_failed" : "account.launch_failed", 200, {
     reason: outcome.reason,
   });
@@ -4862,14 +4957,9 @@ export async function createWorkspace(
 
 // ── Worktrees ────────────────────────────────────────────────────────────────
 //
-// Every route is scoped to a SPACE, and the space is how the repo is known: `repoRoot` rides on the
-// snapshot Herdr already sends, so nothing here walks a filesystem looking for `.git` (ADR 0032).
-
-/** The repo a space sits in, or a 400 saying it sits in none. */
-function repoRootOf(engine: StateEngine, spaceId: string): string | null {
-  const space = engine.current().workspaces.find((w) => w.workspaceId === spaceId);
-  return space?.repoRoot ?? null;
-}
+// A branch is made from a FOLDER the New sheet names (ADR 0093): `repoForBranch` finds the repo from
+// it, and the folder rule (bridge/worktree-folder.ts) runs at plan and again at create. The older
+// routes scoped to a SPACE (ADR 0032) had no caller left and were removed in 1.20.0.
 
 /**
  * Which catalogued code a worktree refusal is.
@@ -4884,59 +4974,6 @@ function worktreeCode(detail: string, fallback: ErrorCode): ErrorCode {
   if (detail.includes("ambiguous_worktree_branch")) return "worktree.ambiguous_branch";
   if (detail.includes("not_git_worktree")) return "worktree.not_a_repo";
   return fallback;
-}
-
-/**
- * `GET /api/workspace/:id/worktrees` — the repo's worktrees, and the branch a create with
- * `base: { kind: "default" }` would start from (`defaultBranch`, `null` when there is none).
- */
-export async function listWorktrees(
-  herdr: MuxAdapter,
-  engine: StateEngine,
-  spaceId: string,
-  req: Request,
-  ask: GitAsk = askGit,
-): Promise<Response> {
-  const ae = req.headers.get("accept-encoding");
-  const repoRoot = repoRootOf(engine, spaceId);
-  if (repoRoot === null) {
-    return json(
-      {
-        ok: false,
-        ...apiError("worktree.not_a_repo", { reason: "this space is not in a Git work tree" }),
-      } satisfies WorktreeListResponse,
-      ae,
-    );
-  }
-  const [outcome, defaultBranch] = await Promise.all([
-    herdr.listWorktrees({ repoRoot }),
-    resolveDefaultBranch(repoRoot, ask),
-  ]);
-  if (!outcome.ok) {
-    return json(
-      {
-        ok: false,
-        ...apiError(worktreeCode(outcome.detail, "worktree.list_failed"), { reason: outcome.detail }),
-      } satisfies WorktreeListResponse,
-      ae,
-    );
-  }
-  return json(
-    {
-      ok: true,
-      // What a create with `base: { kind: "default" }` would start from, so the sheet can name it.
-      // `null` when the repo has no branch to name (the create then starts from Herdr's own HEAD).
-      defaultBranch,
-      worktrees: outcome.value.map((w) => ({
-        path: w.path,
-        branch: w.branch,
-        openWorkspaceId: w.openSpaceId,
-        linked: w.linked,
-        prunable: w.prunable,
-      })),
-    } satisfies WorktreeListResponse,
-    ae,
-  );
 }
 
 /**
@@ -4968,145 +5005,6 @@ function replayOf(receipt: WorktreeReceipt, engine: StateEngine): WorktreeCreate
 async function joined(running: Promise<WorktreeCreateResponse>): Promise<WorktreeCreateResponse> {
   const answer = await running;
   return answer.ok ? { ...answer, replayed: true } : answer;
-}
-
-/**
- * `POST /api/workspace/:id/worktree` — a new branch in a new worktree, opened as its own space, and
- * optionally an agent started in it (ADR 0032, ADR 0089).
- *
- * The body is `{ branch, requestId?, launcher?, base? }`:
- *
- * - `branch` is checked by {@link isValidWorktreeBranch} before anything else runs: 400 when it
- *   would read as a flag or Git would refuse it.
- * - `requestId` is a UUID the phone mints per intent. A known id replays its receipt and runs
- *   nothing; an id still in flight is joined. Absent is a fresh request with no receipt, which is
- *   the body the dashboard's sheet has always sent.
- * - `launcher` names a `launchers.toml` row by its `command`, the same allowlist `/api/launch`
- *   matches; anything else is a 400 before the multiplexer is touched. After the create, the
- *   command is typed into the new root pane by {@link typeIntoFreshShell}.
- *
- * - `base` says where the new branch starts: `{ kind: "default" }` (the repo's default branch, resolved
- *   by {@link resolveDefaultBranch}) or `{ kind: "ref", ref }` (a ref that must name a commit in the
- *   repo). A malformed or unknown one is a 400 (`worktree.invalid_base`) before the multiplexer is
- *   touched. Absent keeps the old behaviour: nothing is passed, so Herdr starts from its own HEAD.
- *   Nothing is fetched. After a successful create the ref is stored by folder
- *   (`bridge/worktree-bases.ts`).
- *
- * A launcher that fails after the create still answers 200 with the worktree and its pane, and
- * `launcherStarted: false`: the worktree exists, so the recovery is "open it", never "create it
- * again". Nothing is rolled back and nothing is removed.
- *
- * Lead-local: the crew does not forward this route, and `trust_repository` is never sent (the
- * operator trusts a repository in Herdr, not from the phone).
- */
-export async function createWorktree(
-  herdr: MuxAdapter,
-  engine: StateEngine,
-  spaceId: string,
-  req: Request,
-  audit: AuditLog,
-  device: string | null,
-  session: string,
-  getLaunchers: () => Promise<Launcher[]>,
-  receipts: WorktreeReceiptSurface,
-  // The clock the launcher's wait runs on, injected so the tests drive it on a fake one.
-  wait: PaneReadyOptions = {},
-  // The starting-point half (ADR 0089, amended): where the base is remembered and how git is asked.
-  // Both default to the real thing, so a caller that predates `base` passes neither.
-  deps: { bases?: WorktreeBaseSurface; ask?: GitAsk } = {},
-): Promise<Response> {
-  const ae = req.headers.get("accept-encoding");
-  let body: JsonValue;
-  try {
-    // SAFETY: `Request.json()` output IS a JsonValue by construction; every field is checked below.
-    body = (await req.json()) as JsonValue;
-  } catch {
-    return text("bad body", 400);
-  }
-  const fields = asJsonRecord(body) ?? {};
-
-  // The id first, because a known one answers without any other field being looked at again: the
-  // body that made the receipt was already checked.
-  const rawId = fields.requestId;
-  if (rawId !== undefined && !isRequestId(rawId)) return text("bad requestId", 400);
-  const requestId = rawId;
-  if (requestId !== undefined) {
-    const stored = receipts.get(requestId);
-    if (stored) return json(replayOf(stored, engine), ae);
-    const running = receipts.inflight(requestId);
-    if (running) return json(await joined(running), ae);
-  }
-
-  const branch = typeof fields.branch === "string" ? fields.branch.trim() : "";
-  if (branch === "") {
-    return json(
-      { ok: false, ...apiError("worktree.branch_required", {}) } satisfies WorktreeCreateResponse,
-      ae,
-    );
-  }
-  if (!isValidWorktreeBranch(branch)) {
-    return json({ ok: false, ...apiError("worktree.invalid_branch") } satisfies WorktreeCreateResponse, ae, 400);
-  }
-
-  // Where the branch starts, read strictly. Resolved against the repo below, once it is known.
-  const parsedBase = parseBase(fields.base);
-  if (!parsedBase.ok) {
-    return json({ ok: false, ...apiError("worktree.invalid_base") } satisfies WorktreeCreateResponse, ae, 400);
-  }
-
-  // The client names a row; the bridge supplies the command line. Absent or null is a plain shell.
-  let row: Launcher | undefined;
-  const rawLauncher = fields.launcher;
-  if (rawLauncher !== undefined && rawLauncher !== null) {
-    const command = typeof rawLauncher === "string" ? rawLauncher.trim() : "";
-    row = command === "" ? undefined : (await getLaunchers()).find((r) => r.command === command);
-    if (!row) {
-      return json({ ok: false, ...apiError("launch.not_allowlisted") } satisfies WorktreeCreateResponse, ae, 400);
-    }
-  }
-
-  const repoRoot = repoRootOf(engine, spaceId);
-  if (repoRoot === null) {
-    return json(
-      {
-        ok: false,
-        ...apiError("worktree.not_a_repo", { reason: "this space is not in a Git work tree" }),
-      } satisfies WorktreeCreateResponse,
-      ae,
-    );
-  }
-
-  // Git answers here (a few small reads, never a fetch), so this stays ABOVE the second check below.
-  const resolved = await resolveBase(parsedBase.base, repoRoot, deps.ask);
-  if (!resolved.ok) {
-    return json({ ok: false, ...apiError("worktree.invalid_base") } satisfies WorktreeCreateResponse, ae, 400);
-  }
-
-  // Checked again with no await between it and `track`, so two requests with one id that both got
-  // past the check above cannot both start a create.
-  if (requestId !== undefined) {
-    const stored = receipts.get(requestId);
-    if (stored) return json(replayOf(stored, engine), ae);
-    const running = receipts.inflight(requestId);
-    if (running) return json(await joined(running), ae);
-  }
-  const work = runWorktreeCreate(
-    herdr,
-    engine,
-    repoRoot,
-    branch,
-    resolved.ref,
-    row,
-    requestId,
-    audit,
-    device,
-    session,
-    receipts,
-    deps.bases ?? memoryWorktreeBases(),
-    wait,
-  );
-  if (requestId !== undefined) receipts.track(requestId, work);
-  return json(await work, ae);
 }
 
 /** The half of a create that touches the multiplexer, run at most once per `requestId`. */
@@ -5206,11 +5104,11 @@ async function runWorktreeCreate(
 
 // ── A branch from a FOLDER: the New sheet's Where field (M48, ADR 0093) ──────────────────────────
 //
-// The space-scoped routes above learn the repo from the snapshot. The New sheet names a FOLDER (typed,
-// or from Recent and Favourites), which may be open in no space at all, so these two find the repo
-// from the folder: the nearest `.git` at or above it, then git's own `--git-common-dir` to reach the
-// MAIN checkout of a linked worktree, the folder Herdr calls the repo root. Git runs hardened and
-// argv only (`askGit`, bridge/worktree-base.ts). Lead-local, like every worktree route.
+// The New sheet names a FOLDER (typed, or from Recent and Favourites), which may be open in no space
+// at all, so these two find the repo from the folder: the nearest `.git` at or above it, then git's
+// own `--git-common-dir` to reach the MAIN checkout of a linked worktree, the folder Herdr calls the
+// repo root. Git runs hardened and argv only (`askGit`, bridge/worktree-base.ts). Lead-local, like
+// every worktree route.
 
 /** The repo a folder belongs to, as real paths. */
 interface FolderRepo {
@@ -5332,7 +5230,7 @@ export async function planWorktree(
  * `parseBase`'s shape (ADR 0089). `folder` is `{ kind: "default" }` (absent means the same: no `path`
  * is sent and Herdr decides) or `{ kind: "parent", parent }`, which runs the whole folder rule
  * (bridge/worktree-folder.ts) right here, every time. The launch kinds are `POST /api/launch`'s; none
- * at all is a plain shell. `requestId` replays through the worktree receipts, as the space route does.
+ * at all is a plain shell. `requestId` replays through the worktree receipts (ADR 0089).
  */
 export async function createWorktreeAt(
   herdr: MuxAdapter,
@@ -5406,7 +5304,8 @@ export async function createWorktreeAt(
     path = outcome.path;
   }
 
-  // Checked again with no await between it and `track` (see createWorktree).
+  // Checked again with no await between it and `track`, so two requests with one id that both got
+  // past the check above cannot both start a create.
   if (requestId !== undefined) {
     const stored = receipts.get(requestId);
     if (stored) return json(replayOf(stored, engine), ae);
@@ -5456,73 +5355,6 @@ function parseFolderChoice(
   }
   return null;
 }
-
-async function openWorktree(
-  herdr: MuxAdapter,
-  engine: StateEngine,
-  spaceId: string,
-  req: Request,
-  audit: AuditLog,
-  device: string | null,
-  session: string,
-): Promise<Response> {
-  const ae = req.headers.get("accept-encoding");
-  let body: JsonValue;
-  try {
-    // SAFETY: as createWorktree — checked below, never trusted as declared.
-    body = (await req.json()) as JsonValue;
-  } catch {
-    return text("bad body", 400);
-  }
-  const fields = asJsonRecord(body) ?? {};
-  const path = typeof fields.path === "string" ? fields.path.trim() : "";
-  if (path === "") return text("bad body", 400);
-  const repoRoot = repoRootOf(engine, spaceId);
-  if (repoRoot === null) {
-    return json(
-      {
-        ok: false,
-        ...apiError("worktree.not_a_repo", { reason: "this space is not in a Git work tree" }),
-      } satisfies WorktreeOpenResponse,
-      ae,
-    );
-  }
-  const outcome = await herdr.openWorktree({ repoRoot, path });
-  if (!outcome.ok) {
-    return json(
-      {
-        ok: false,
-        ...apiError(worktreeCode(outcome.detail, "worktree.open_failed"), { reason: outcome.detail }),
-      } satisfies WorktreeOpenResponse,
-      ae,
-    );
-  }
-  const { pane, alreadyOpen } = outcome.value;
-  audit.record({
-    action: "worktree.open",
-    paneId: pane.paneId,
-    session,
-    device,
-    detail: { path, alreadyOpen: String(alreadyOpen) },
-  });
-  await settleTopology(herdr, engine);
-  return json(
-    {
-      ok: true,
-      alreadyOpen,
-      pane: {
-        paneId: pane.paneId,
-        workspaceId: pane.spaceId,
-        workspaceLabel: pane.spaceLabel,
-        tabId: pane.tabId,
-        cwd: pane.cwd,
-      },
-    } satisfies WorktreeOpenResponse,
-    ae,
-  );
-}
-
-
 
 // GET /api/launchers — this host's own rows, read live off its `launchers.toml`. Exported and
 // pulled out of the inline route so it's directly testable with a fake `getLaunchers`, exactly like
@@ -6721,6 +6553,23 @@ export function requestDevice(req: Request, cfg: Config, pairing?: PairingGate):
 }
 
 /**
+ * The label of the paired device that sent `req`, or null: no pairing on this bridge, no token, an
+ * expired or unknown one, the host's own local credential, or a registry that cannot be read. Used
+ * where a change is credited by name on screen (Settings → Voice, "Last changed by"), so it is the
+ * label the device's owner chose at pairing and never the token, an address or a header value.
+ */
+export function pairedLabel(req: Request, pairing?: PairingGate): string | null {
+  if (pairing === undefined) return null;
+  const token = bearerToken(req.headers);
+  if (pairing.local?.(token, req) === true) return null;
+  try {
+    return pairing.resolve(token)?.label ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Optional per-device authorisation, layered on top of {@link checkAccess}. Off by default; enabled
  * by setting COLLIE_DEVICE_HEADER to the header a trusted upstream proxy injects, carrying an opaque
  * device identifier. The header is trusted only because the bridge binds loopback behind the proxy,
@@ -7173,6 +7022,9 @@ export async function serveStatic(
     "cache-control": cacheControlFor(rel),
   };
   if (ext === ".html") headers["content-security-policy"] = CSP;
+  // Keyed on the path relative to web/dist, which is the mount-stripped request path (ADR 0052), so
+  // the worker keeps its policy under a mount too.
+  else if (isSttWorkerScript(rel)) headers["content-security-policy"] = STT_WORKER_CSP;
   if (rel === "sw.js") headers["service-worker-allowed"] = "/";
 
   // Under a mount the app shell is the one file not served as it lies on disk: its root-absolute
@@ -7206,6 +7058,9 @@ export async function serveStatic(
  */
 const COMPRESSIBLE_EXT = new Set([
   ".js",
+  // Not text, but the speech engine's wasm (ADR 0096) shrinks from 929 KB to 340 KB, which is most
+  // of what a phone fetches to turn on "This phone".
+  ".wasm",
   ".mjs",
   ".css",
   ".html",

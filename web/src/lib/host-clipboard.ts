@@ -29,9 +29,13 @@ export interface ClipboardMarks {
   readonly dismissed: string | null;
 }
 
-/** Fold one counter reading into the marks. Pure, so the whole rule is a table of cases in a test. */
-export function foldVersion(marks: ClipboardMarks | null, version: string, now: number): ClipboardMarks {
-  if (marks === null) return { seen: version, pending: null, dismissed: null };
+/**
+ * Fold one counter reading into the marks. Pure, so the whole rule is a table of cases in a test.
+ * A counter the sheet would find no text under is seen at once: news that opens onto nothing is
+ * worse than none, and whatever was pending before it has been overwritten.
+ */
+export function foldVersion(marks: ClipboardMarks | null, version: string, now: number, text = true): ClipboardMarks {
+  if (marks === null || !text) return { seen: version, pending: null, dismissed: null };
   if (version === marks.seen) return { seen: marks.seen, pending: null, dismissed: null };
   if (marks.pending?.version === version) return marks;
   return { seen: marks.seen, pending: { version, since: now }, dismissed: null };
@@ -135,8 +139,14 @@ async function readNow(): Promise<void> {
     next = { phase: "error", reason: err instanceof Error ? err.message : String(err) };
   }
   if (mine !== ticket) return;
-  // What the sheet now shows is the news the banner was about, so the news is seen.
-  const version = next.phase === "done" && (next.result.ok || next.result.kind !== "failed") ? next.result.version : null;
+  // What the sheet now shows is the news the banner was about, so the news is seen. A clipboard that
+  // would not be read puts the pending news down too: the banner has nothing more to offer.
+  const version =
+    next.phase !== "done"
+      ? null
+      : next.result.ok || next.result.kind !== "failed"
+        ? next.result.version
+        : (state.marks?.pending?.version ?? null);
   set(version === null ? { reading: next } : { reading: next, marks: markSeen(version) });
 }
 
@@ -176,7 +186,7 @@ export async function pollHostClipboard(): Promise<void> {
     if (!got.ok) return;
     const now = Date.now();
     const copy = copied;
-    if (copy !== null && needsBounceCheck(state.marks, got.version, copy, now)) {
+    if (got.text && copy !== null && needsBounceCheck(state.marks, got.version, copy, now)) {
       // The one read outside the sheet, and it is caused by the operator's own copy: identical text
       // is that copy coming back, not news. Anything else, a failed read included, is news.
       const expected = copy.text;
@@ -188,7 +198,7 @@ export async function pollHostClipboard(): Promise<void> {
       }
     }
     if (copied !== null && now > copied.until) copied = null;
-    set({ marks: foldVersion(state.marks, got.version, now) });
+    set({ marks: foldVersion(state.marks, got.version, now, got.text) });
   } catch {
     // A failed poll changes nothing: no banner from a guess, and the next poll tries again.
   }

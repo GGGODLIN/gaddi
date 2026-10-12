@@ -258,8 +258,8 @@ describe("GrokTranscriptSource.reconcile", () => {
   });
 
   const CWD = "/Users/you/proj";
-  const STALE = "01a11b46-1e64-74d0-991e-aad07d14bf76";
-  const RESUMED = "01a11b44-fac4-7833-9c3f-42e41c346195";
+  const STALE = "00000000-0000-7000-8000-00000000a001";
+  const RESUMED = "00000000-0000-7000-8000-00000000b002";
   const alive = (): boolean => true;
 
   async function grokHome(active: string | null): Promise<string> {
@@ -274,7 +274,7 @@ describe("GrokTranscriptSource.reconcile", () => {
     session_id: sessionId,
     pid,
     cwd,
-    opened_at: "2026-10-08T11:29:28.938239Z",
+    opened_at: "2026-01-01T00:00:00.000000Z",
   });
 
   test("a stale reported id gives way to the one live session in the pane's cwd", async () => {
@@ -292,7 +292,7 @@ describe("GrokTranscriptSource.reconcile", () => {
   // Live-verified 2026-10-11, grok 1.0.50: `/resume` from a session that already had a prompt
   // leaves that session's row in place and adds the resumed one under the same pid.
   test("a reported id whose process opened a later session gives way to that session", async () => {
-    const later = { ...row(RESUMED), opened_at: "2026-10-08T11:35:21.334258Z" };
+    const later = { ...row(RESUMED), opened_at: "2026-01-01T00:05:00.000000Z" };
     const root = await grokHome(JSON.stringify([row(STALE), later]));
     const src = new GrokTranscriptSource(root, alive);
     expect(await src.reconcile({ kind: "id", value: STALE }, CWD)).toEqual({ kind: "id", value: RESUMED });
@@ -301,15 +301,15 @@ describe("GrokTranscriptSource.reconcile", () => {
   // A fresh session resumed away before any prompt leaves the list; a second /resume after a prompt
   // then leaves two rows of the one process, neither of them Herdr's id.
   test("an unlisted reported id gives way to the latest session of the one process in the cwd", async () => {
-    const first = { ...row(OTHER), opened_at: "2026-10-08T11:30:00.000000Z" };
-    const latest = { ...row(RESUMED), opened_at: "2026-10-08T11:35:21.334258Z" };
+    const first = { ...row(OTHER), opened_at: "2026-01-01T00:02:00.000000Z" };
+    const latest = { ...row(RESUMED), opened_at: "2026-01-01T00:05:00.000000Z" };
     const root = await grokHome(JSON.stringify([first, latest]));
     const src = new GrokTranscriptSource(root, alive);
     expect(await src.reconcile({ kind: "id", value: STALE }, CWD)).toEqual({ kind: "id", value: RESUMED });
   });
 
   test("a later session under another pid does not move a listed reported id", async () => {
-    const later = { ...row(RESUMED, CWD, 4343), opened_at: "2026-10-08T11:35:21.334258Z" };
+    const later = { ...row(RESUMED, CWD, 4343), opened_at: "2026-01-01T00:05:00.000000Z" };
     const root = await grokHome(JSON.stringify([row(STALE), later]));
     const src = new GrokTranscriptSource(root, alive);
     expect(await src.reconcile({ kind: "id", value: STALE }, CWD)).toEqual({ kind: "id", value: STALE });

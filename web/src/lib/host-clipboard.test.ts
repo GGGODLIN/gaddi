@@ -61,6 +61,7 @@ describe("host clipboard marks", () => {
   it("a counter that went back to the seen value is no longer news", () => {
     const pending = foldVersion(foldVersion(null, "100", 1), "101", 50);
     expect(hasUnseen(foldVersion(pending, "100", 60))).toBe(false);
+    expect(foldVersion(pending, "102", 60, false)).toEqual({ seen: "102", pending: null, dismissed: null });
   });
 });
 
@@ -132,6 +133,39 @@ describe("the bounce of this phone's own copy", () => {
     serve(() => v, () => "something the agent copied");
     await pollHostClipboard();
     noteCopiedToPhone("same prompt");
+    v = "11";
+    await pollHostClipboard();
+    expect(showsBanner(stored())).toBe(true);
+  });
+
+  it("a change the bridge found no text under is seen at once, and reads nothing here", async () => {
+    let v = "10";
+    let text = true;
+    let reads = 0;
+    server.use(
+      http.get("/api/host-clipboard", () => HttpResponse.json({ ok: true, version: v, text })),
+      http.get("/api/host-clipboard/text", () => {
+        reads += 1;
+        return HttpResponse.json({ ok: false, kind: "empty", version: v });
+      }),
+    );
+    await pollHostClipboard();
+    v = "11";
+    await pollHostClipboard();
+    expect(showsBanner(stored())).toBe(true);
+    v = "12";
+    text = false;
+    noteCopiedToPhone("anything");
+    await pollHostClipboard();
+    expect(hasUnseen(stored())).toBe(false);
+    expect(stored()?.seen).toBe("12");
+    expect(reads).toBe(0);
+  });
+
+  it("a bridge that does not say whether there is text keeps every change as news", async () => {
+    let v = "10";
+    server.use(http.get("/api/host-clipboard", () => HttpResponse.json({ ok: true, version: v })));
+    await pollHostClipboard();
     v = "11";
     await pollHostClipboard();
     expect(showsBanner(stored())).toBe(true);

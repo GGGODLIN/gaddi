@@ -26,13 +26,13 @@
 
     "paths": { "@/*": ["./src/*"] }
   },
-  // src/sw.ts runs in a service-worker (not DOM) context — type-checked separately via
-  // tsconfig.worker.json (both run under `bun run typecheck`).
+  // src/sw.ts runs in a service-worker (not DOM) context, and src/stt/worker.ts in a dedicated
+  // worker — both type-checked separately via tsconfig.worker.json (both run under `bun run typecheck`).
   // `e2e` and `playwright.config.ts` are in the app project on purpose: the browser cases import the
   // unit layer's fixtures out of `src/test/`, so a fixture that changes shape has to break
   // `bun run typecheck` rather than a browser run five minutes later.
   // `e2e/tester-army` stays out of this project: its SDK is optional, and an ordinary install never
   // downloads it. CI typechecks that directory with its own frozen install, instead of skipping it.
   "include": ["src", "vite.config.ts", "playwright.config.ts", "e2e", "playground-fixtures"],
-  "exclude": ["src/sw.ts", "e2e/tester-army"]
+  "exclude": ["src/sw.ts", "src/stt/worker.ts", "e2e/tester-army"]
 }

@@ -6,19 +6,27 @@ import { withConversion } from "./convert.ts";
 import { createLocalCliSttProvider } from "./local-cli.ts";
 import { createOpenAiSttProvider } from "./openai.ts";
 import type { SttProvider } from "./provider.ts";
+import { createWhistleSttProvider } from "./whistle.ts";
 
 // Where settings become a provider. One switch, over the provider name the settings parsed to —
 // a third provider is one arm here plus its own module, and nothing else in the bridge learns that
 // there is more than one kind.
 
+/** What a provider may need beyond its settings: today only `whistle`, which reads the state dir. */
+export interface SttProviderContext {
+  stateDir: string;
+}
+
 /** Build the provider the settings name. Total over {@link SttSettings} by construction. */
-export function createSttProvider(settings: SttSettings): SttProvider {
+export function createSttProvider(settings: SttSettings, context: SttProviderContext): SttProvider {
   const provider =
     settings.provider === "codex"
       ? createCodexSttProvider(settings)
       : settings.provider === "local-cli"
         ? createLocalCliSttProvider(settings)
-        : createOpenAiSttProvider(settings);
+        : settings.provider === "whistle"
+          ? createWhistleSttProvider({ stateDir: context.stateDir })
+          : createOpenAiSttProvider(settings);
   return settings.convert === undefined ? provider : withConversion(provider, settings.convert);
 }
 
@@ -49,7 +57,7 @@ export function createSttGate(opts: {
   env?: Record<string, string | undefined>;
   io?: OperatorFileIo;
   /** The builder, injected ONLY so the tests can watch this cache without spawning a real child. */
-  create?: (settings: SttSettings) => SttProvider;
+  create?: (settings: SttSettings, context: SttProviderContext) => SttProvider;
 }): SttGate {
   const readSettings = createSttSettingsReader(opts);
   const build = opts.create ?? createSttProvider;
@@ -72,7 +80,7 @@ export function createSttGate(opts: {
     const key = JSON.stringify(settings);
     if (cached?.key !== key) {
       retire();
-      cached = { key, provider: build(settings) };
+      cached = { key, provider: build(settings, { stateDir: opts.stateDir }) };
     }
     return cached.provider;
   };

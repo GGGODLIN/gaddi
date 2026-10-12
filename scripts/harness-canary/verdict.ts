@@ -18,7 +18,7 @@ export type Verdict = CaseVerdict | "known-gap";
  * `journal` sits next to `sends` because it reads what those sends wrote: it makes no model turn of
  * its own and it has nothing to read unless `sends` ran in the same pane.
  */
-export const SCENARIOS = ["idle", "drafts", "sends", "journal", "narrow", "start-exit", "dialogs", "busy"] as const;
+export const SCENARIOS = ["idle", "drafts", "sends", "journal", "narrow", "start-exit", "dialogs", "busy", "options"] as const;
 export type ScenarioId = (typeof SCENARIOS)[number];
 
 /** What a run without `--scenario` does: the five screens and sends of M37/02, plus M41/05's read of

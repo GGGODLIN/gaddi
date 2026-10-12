@@ -12,12 +12,37 @@ bun run canary --dialogs                # plus dialogs and busy (more model turn
 bun run canary --agent claude,codex     # some agents
 bun run canary --scenario idle,drafts   # some scenarios, no model turns
 bun run canary --keep                   # leave the session up for a look
+bun run canary --agent grok,hermes,agy --scenario options   # each New-sheet option, started once
 bun run canary --record                 # write clean agents into the ledger
 bun run canary --readers /tmp/c1131     # judge with another checkout's readers
 ```
 
 Exit 1 means a scenario failed. Captures and `summary.json` go to
 `/tmp/collie-canary/<run-id>/<agent>-<version>/`. They are never copied into `web/src/fixtures/`.
+
+grok, hermes, agy, omp and muse run only when `--agent` names them, because their sends spend each
+vendor's own quota. The `options` scenario is never part of a default run: it starts the agent once per option
+the New sheet offers (`bridge/launcher-recipes.ts`), with the line the bridge builds, and passes when
+Herdr shows the agent up, idle or asking a question first. It makes no model turn.
+
+### Another provider: `--via`
+
+```sh
+COLLIE_GROK_ROOT=~/canary-free/grok-home/sessions \
+  bun run canary --agent claude,grok --via ~/canary-free
+```
+
+`--via DIR` starts an agent through `DIR/<agent>` when that file is executable, in place of the
+agent's own command word; the rest of the line stays the canary's. An agent with no launcher there
+starts as usual, and the log line says which. The version is still the agent's own binary's.
+
+A launcher is yours to write, outside this repo: it points the agent at another provider (a local
+relay, a free tier) and ends in `exec <agent> "$@"`, so Herdr sees the agent itself. It covers the
+six default scenarios only; `dialogs`, `busy` and `options` start their own lines.
+
+A launcher that moves the agent's home (`GROK_HOME`, `PI_CODING_AGENT_DIR`, `HOME`) moves its log
+too. Point the journal at it with the bridge's own override for that agent, `COLLIE_GROK_ROOT`,
+`COLLIE_PI_ROOT` or `COLLIE_MUSE_ROOT` (a comma list), in the canary's environment.
 
 ## What it checks
 
@@ -33,9 +58,8 @@ Six scenarios per agent. Only `sends` makes model turns: four per agent.
 | `start-exit` | samples every 150 ms while starting and after exiting         | no unread card                                         |
 
 The message kinds live in `messages.ts`: the 14 hand kinds of 2026-09-26, plus `15-rule`, a
-pasted `────` line. claude, codex and opencode are read with their adapters. pi has no adapter. For
-it a draft passes when its words show on the raw mirror, and a send goes through the one-step path
-the phone uses.
+pasted `────` line. All four agents are read with their adapters, pi since 2026-10-12, so a pi send
+goes through the guarded path and its draft must read back.
 
 ### The journal (spec M41/05)
 

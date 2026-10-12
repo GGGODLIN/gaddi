@@ -525,10 +525,13 @@ command = "cc -work"      # required; the shell line that starts Claude on this 
 The pane sheet (⋮ in a pane) then offers **Switch account**, and a second list of your labels.
 
 1. The bridge ends Claude in the same pane and waits until it has exited.
-2. It types your `command` followed by `--resume <session id>` and sends Enter.
+2. It types your `command` followed by `--resume <session id>` and the session's last permission mode, then sends Enter.
 
 `--resume` restores the session's own model, effort and context size, so the file has no model
 field. A working or blocked agent is interrupted only after a second tap on the account.
+
+The permission mode comes from the session log as `--permission-mode`, because `--resume` does not
+restore it. A `command` that sets `--permission-mode` or `--dangerously-skip-permissions` keeps its own.
 
 > **Note.** The switch is refused when `/model` or `/effort` ran after the last answer, because
 > `--resume` would bring back the old setting. Send one message first.
@@ -572,6 +575,9 @@ the gear on the dashboard. Opening it reads the text once and offers **Copy to t
 The phone asks for the change counter every 10 seconds while it is open, and the text only when you
 open the sheet. A closed app asks nothing, so a change waits for your next look. Nothing is kept:
 no history, and the strip never names who copied.
+
+The computer runs `read` once per change and tells the phone only whether text came out. An empty
+clipboard, an image or a file raises no strip; the clipboard button still opens the sheet.
 
 | Key | What it prints | Limit |
 | --- | --- | --- |

@@ -62,6 +62,7 @@ const KEYS = new Map<string, KeyFate>([
   // at most one banner, and it says nothing about what the clipboard held.
   ["collie:host-clipboard:v1", { area: "local", prefix: false, fate: "kept", why: "the host clipboard counter this phone saw" }],
   ["collie:stt-hands-free:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
+  ["collie:stt-engine:v1", { area: "local", prefix: false, fate: "kept", why: "preference, Host or This phone for speech (ADR 0096)" }],
   ["collie:zen-enabled:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
   ["collie:auto-zen-enabled:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
   ["collie:pins:v1", { area: "local", prefix: false, fate: "kept", why: "pinned pane ids, no content" }],
@@ -81,6 +82,7 @@ const KEYS = new Map<string, KeyFate>([
   ["collie:update-mode:v1", { area: "session", prefix: false, fate: "kept", why: "update screen state" }],
   ["collie:auto-reloaded-for=", { area: "session", prefix: true, fate: "kept", why: "reload guard, a build id" }],
   ["collie:pwa:guardReload:v1", { area: "session", prefix: false, fate: "kept", why: "reload guard" }],
+  ["collie:preload-reload", { area: "session", prefix: false, fate: "kept", why: "reload guard, a timestamp" }],
   ["collie.nav.booted", { area: "session", prefix: false, fate: "kept", why: "navigation state" }],
   ["collie.nav.seeded", { area: "session", prefix: false, fate: "kept", why: "navigation state, an app path" }],
   ["collie.nav.pendingOpen", { area: "session", prefix: false, fate: "kept", why: "navigation state, an app path" }],

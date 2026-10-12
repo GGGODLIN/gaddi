@@ -66,6 +66,7 @@ function world(duringPull: (seed: string) => void) {
     getJson: () => Promise.resolve(unreachable),
     download: () => Promise.resolve(unreachable),
     probe: () => Promise.resolve(unreachable),
+    tlsCertificate: () => Promise.resolve(unreachable),
   };
   const deps: UpdateDeps = {
     ctx: context({ COLLIE_UPDATE_REPO: "GGGODLIN/gaddi" }, { root: clone }),

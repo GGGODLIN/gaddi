@@ -71,7 +71,10 @@ EOF
   fi
 
   echo "pre-push: running web test suite (vitest)…" >&2
-  if ! (cd "$ROOT/web" && bun run test); then
+  # Half the cores, not Vitest's cores-minus-one: on a 15-core laptop already busy with other work,
+  # 14 workers doubled each test's own time (585s vs 278s at 4, 2026-10-12) and pushed the slow ones
+  # past their waits. CI keeps the default; its runners have few cores to share.
+  if ! (cd "$ROOT/web" && bun run test -- --maxWorkers=50%); then
     cat >&2 <<'EOF'
 ✗ pre-push: web tests failed — push aborted.
   Fix the failing tests, or override once with: SKIP_TESTS=1 git push

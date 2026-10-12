@@ -321,7 +321,11 @@ export const ItemView = memo(function ItemView({ item }: { item: ChatItem }) {
       return <UserTurn text={item.text} ts={item.ts} />;
     case "reply":
       // Agent prose: MarkdownText wears `font-content`, never the app face (DESIGN.md §5).
-      return <MarkdownText text={item.text} />;
+      return (
+        <div data-quote-source="">
+          <MarkdownText text={item.text} />
+        </div>
+      );
     case "thinking":
       return (
         <Disclosure label={t("chat.card.thinking")} icon={ChevronRight}>
