@@ -31,6 +31,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A throwaway run checks tmux, zellij and tuios end to end.** `bun scripts/mux-e2e.ts` starts each multiplexer in its own temporary home and socket directory, runs the read-only probe against it, then types a command through Collie's adapter and reads the output back, and removes everything afterwards. A multiplexer that is not installed is reported as skipped, not passed.
 - **The harness canary drives omp and Muse Code, and can start an agent through your own launcher.** `--agent omp,muse` runs the two by name. `--via DIR` starts each agent through `DIR/<agent>` when that file is executable, so a run can point an agent at another provider, such as a local relay, without touching its config.
 
+### Changed
+
+- **Claude Code 2.1.296 and OpenCode 1.18.34 are the verified versions.** A harness canary run passed every default scenario for both, the session log included, so the verified-versions record moves to them; the other agents keep their older records until a clean run.
+
 ### Fixed
 
 - **Switching account works on an idle Claude and on one waiting for approval.** An idle Claude's faint placeholder or next-step suggestion was read as an unsent draft and the switch was refused; a permission dialog is now closed with Escape, since ctrl+c left it up and the switch stopped with an untranslated error. Both remaining refusals are translated.
