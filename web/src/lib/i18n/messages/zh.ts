@@ -355,6 +355,7 @@ export const zh: Dictionary = {
   "copyable.done": "已复制到剪贴板",
   "copyable.failed": "无法复制到剪贴板",
   "codeBlock.wrap": "长行自动换行",
+  "quote.selection": "引用",
   "chat.copyOutput.label": "复制输出",
   "chat.copyOutput.done": "已将输出复制到剪贴板",
   "chat.copyOutput.failed": "无法复制输出",

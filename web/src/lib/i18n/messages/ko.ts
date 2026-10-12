@@ -365,6 +365,7 @@ export const ko: Dictionary = {
   "copyable.done": "클립보드에 복사했습니다",
   "copyable.failed": "클립보드에 복사할 수 없습니다",
   "codeBlock.wrap": "긴 줄 줄바꿈",
+  "quote.selection": "인용",
   "chat.copyOutput.label": "출력 복사",
   "chat.copyOutput.done": "출력을 클립보드에 복사함",
   "chat.copyOutput.failed": "출력을 복사할 수 없음",

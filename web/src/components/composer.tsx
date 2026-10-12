@@ -15,6 +15,7 @@ import { setStatus } from "@/lib/status";
 import { buzz } from "@/lib/haptics";
 import { stampSend } from "@/lib/poll-intent";
 import { useBusyWhile } from "@/lib/busy";
+import { appendQuote } from "@/lib/quote";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ChatInput } from "@/components/ui/chat/chat-input";
@@ -82,6 +83,8 @@ export interface ComposerHandle {
    * does (ADR 9002). Used by the local-link sheet's "Ask the agent to fix it" (ADR 9007).
    */
   stage: (text: string) => void;
+  /** Put a quoted passage after any draft, a blank line apart, and focus it for a comment. Never sends. */
+  quote: (quoted: string) => void;
 }
 
 interface ComposerProps {
@@ -789,7 +792,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   useImperativeHandle(
     ref,
-    () => ({ focusInput: focusInputImmediately, stage: (value: string) => insertCommandRef.current(value) }),
+    () => ({
+      focusInput: focusInputImmediately,
+      stage: (value: string) => insertCommandRef.current(value),
+      quote: (quoted: string) => insertQuoteRef.current(quoted),
+    }),
     [],
   );
 
@@ -1277,9 +1284,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     updateInputFrom((prev) => (prev.trim() ? `${prev.trimEnd()} ${value}` : value));
     focusInputEnd();
   }
-  // The handle is built once; this ref is how it reaches the current render's `direct`.
+  function insertQuote(quoted: string) {
+    direct.deactivateSilently();
+    updateInputFrom((prev) => appendQuote(prev, quoted));
+    focusInputEnd();
+  }
+  // The handle is built once; these refs are how it reaches the current render's `direct`.
   const insertCommandRef = useRef(insertCommand);
   insertCommandRef.current = insertCommand;
+  const insertQuoteRef = useRef(insertQuote);
+  insertQuoteRef.current = insertQuote;
 
   // Upload an attachment; on success it becomes a chip above the field, and its marker lands in the
   // draft where the caret stood (ADR 0060). Shared by the file picker and clipboard paste.

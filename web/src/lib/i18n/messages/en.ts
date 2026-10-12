@@ -401,6 +401,7 @@ export const en = {
   "copyable.done": "Copied to clipboard",
   "copyable.failed": "Couldn't copy to clipboard",
   "codeBlock.wrap": "Wrap long lines",
+  "quote.selection": "Quote",
   "chat.copyOutput.label": "Copy output",
   "chat.copyOutput.done": "Copied output to clipboard",
   "chat.copyOutput.failed": "Couldn't copy output",

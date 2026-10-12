@@ -306,6 +306,7 @@ export const ru: Dictionary = {
   "copyable.done": "Скопировано в буфер обмена",
   "copyable.failed": "Не удалось скопировать в буфер обмена",
   "codeBlock.wrap": "Переносить длинные строки",
+  "quote.selection": "Цитировать",
   "chat.copyOutput.label": "Копировать вывод",
   "chat.copyOutput.done": "Вывод скопирован в буфер обмена",
   "chat.copyOutput.failed": "Не удалось скопировать вывод",

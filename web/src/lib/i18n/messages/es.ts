@@ -370,6 +370,7 @@ export const es: Dictionary = {
   "copyable.done": "Copiado al portapapeles",
   "copyable.failed": "No se pudo copiar al portapapeles",
   "codeBlock.wrap": "Ajustar líneas largas",
+  "quote.selection": "Citar",
   "chat.copyOutput.label": "Copiar salida",
   "chat.copyOutput.done": "Salida copiada al portapapeles",
   "chat.copyOutput.failed": "No se pudo copiar la salida",

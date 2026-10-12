@@ -366,6 +366,7 @@ export const ja: Dictionary = {
   "copyable.done": "クリップボードにコピーしました",
   "copyable.failed": "クリップボードにコピーできませんでした",
   "codeBlock.wrap": "長い行を折り返す",
+  "quote.selection": "引用",
   "chat.copyOutput.label": "出力をコピー",
   "chat.copyOutput.done": "出力をクリップボードにコピーしました",
   "chat.copyOutput.failed": "出力をコピーできませんでした",

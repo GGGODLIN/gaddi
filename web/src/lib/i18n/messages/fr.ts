@@ -302,6 +302,7 @@ export const fr: Dictionary = {
   "copyable.done": "Copié dans le presse-papiers",
   "copyable.failed": "Impossible de copier dans le presse-papiers",
   "codeBlock.wrap": "Renvoyer les longues lignes à la ligne",
+  "quote.selection": "Citer",
   "chat.copyOutput.label": "Copier la sortie",
   "chat.copyOutput.done": "Sortie copiée dans le presse-papiers",
   "chat.copyOutput.failed": "Impossible de copier la sortie",

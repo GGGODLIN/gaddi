@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { createRef, useState } from "react";
 import type { ComponentProps } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -13,7 +13,7 @@ import { __resetOperatorCommands } from "@/lib/operator-config";
 import { server } from "@/test/setup";
 import { fixtureServers, recordReply } from "@/test/handlers";
 import { CrewProvider } from "./crew-provider";
-import { Composer, TUI_SETTLE_MS } from "./composer";
+import { Composer, TUI_SETTLE_MS, type ComposerHandle } from "./composer";
 import { addRow, chordKey, DEFAULT_BOARD, setCell } from "@/lib/key-board";
 import { resetKeyBoard, setKeyBoard } from "@/lib/key-board-store";
 import { type ServerSummary } from "@/lib/types";
@@ -4395,5 +4395,40 @@ describe("Composer — an image is edited before it uploads", () => {
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(/Reconnect to send/));
     expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument();
     expect(uploads).toBe(0);
+  });
+});
+
+// A passage quoted from a reply is staged, never sent: it follows the draft a blank line apart and
+// leaves the caret on an empty line for the comment.
+describe("Composer quote", () => {
+  it("puts the quote after the draft and sends nothing", async () => {
+    const sendReply = vi.spyOn(api, "sendReply");
+    const ref = createRef<ComposerHandle>();
+    const props: ComponentProps<typeof Composer> = {
+      paneId: "w1:p1",
+      agent: "claude",
+      isShell: false,
+      gone: false,
+      readOnly: false,
+      dialogPresent: false,
+      text: "pane output",
+      terminalDraft: null,
+      rawTerminalDraft: null,
+      prefs: { wrap: true, fontSize: 11, draftFontSize: 14, chatFontSize: 14, fontFamily: "system", rawTerminal: false, tapToFocus: true, expandClippedReply: true },
+      display: { open: false, onToggle: vi.fn() },
+      onSent: vi.fn(),
+    };
+    const router = createMemoryRouter([{ path: "/", element: <Composer ref={ref} {...props} /> }]);
+    render(<RouterProvider router={router} />);
+    const box = await screen.findByPlaceholderText(/type a reply/i);
+    fireEvent.change(box, { target: { value: "about this:" } });
+    act(() => ref.current?.quote("> first\n> second"));
+    expect(box).toHaveValue("about this:\n\n> first\n> second\n\n");
+    // The caret moves on the next tick, after the new value has rendered (`focusInputEnd`).
+    await waitFor(() => expect(box).toHaveFocus());
+    act(() => ref.current?.quote("> again"));
+    expect(box).toHaveValue("about this:\n\n> first\n> second\n\n> again\n\n");
+    expect(sendReply).not.toHaveBeenCalled();
+    sendReply.mockRestore();
   });
 });
