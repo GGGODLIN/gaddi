@@ -78,9 +78,10 @@ const RECIPE_TABLE = {
     { id: "continue", label: "Continue last", args: "--continue" },
     { id: "thinking-high", label: "Thinking: high", args: "--thinking=high" },
   ],
-  // grok 1.0.50, hermes v0.21.7 and agy 1.3.3, read off each `--help` on 2026-10-12 and started
-  // with every option by the harness canary's `options` scenario. No model chips: their model names
-  // move faster than a release.
+  // grok 1.0.50, hermes v0.21.7 and agy 1.3.3, read off each `--help` on 2026-10-12. The harness
+  // canary's `options` scenario started grok and agy with every option. `hermes --yolo` comes up with
+  // its YOLO mark on screen, but Herdr 0.9.0 does not always name the pane hermes, so the canary
+  // cannot pass it. No model chips: their model names move faster than a release.
   grok: [
     { id: "approve", label: "Always approve", args: "--always-approve", noPrompts: true },
     { id: "continue", label: "Continue last", args: "--continue" },
