@@ -28,7 +28,7 @@ import { loadReaders } from "./readers";
 import { runBusy, runDialogs } from "./dialogs";
 import { runAgent } from "./scenarios";
 import { installTransport } from "./transport";
-import { applyKnownGaps, exitCode, notReachedCase, recordable, renderTable, scenarioResult, type ScenarioResult } from "./verdict";
+import { DEFAULT_SCENARIOS, applyKnownGaps, exitCode, notReachedCase, recordable, renderTable, scenarioResult, type ScenarioResult } from "./verdict";
 
 const PROFILES = { claude, codex, opencode, pi, grok, hermes, agy, omp, muse } satisfies Record<CanaryAgent, AgentProfile>;
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -136,14 +136,18 @@ async function main(options: CanaryOptions): Promise<number> {
     // of the canary has always been this checkout's (README § "Proof against 1.13.1").
     const journals = canaryJournals();
     adapters = new Map(options.agents.map((a) => [a, readers.adapterFor(a) !== undefined]));
+    const usesProfileLaunch = options.scenarios.some((s) => DEFAULT_SCENARIOS.includes(s));
     for (const agent of options.agents) {
-      const launcher = viaLauncher(options.via, agent);
-      // The version is the agent's own binary's either way: a launcher only changes how it starts.
+      // Only the default scenarios start through the profile; `dialogs`, `busy` and `options` type
+      // their own lines, so a launcher is neither used nor credited when none of those run.
+      const launcher = usesProfileLaunch ? viaLauncher(options.via, agent) : null;
+      // The version comes from the profile's own command on PATH, never through the launcher; the
+      // canary does not check that a launcher runs that same binary.
       const profile = launcher === null ? PROFILES[agent] : launchedThrough(PROFILES[agent], launcher);
       if (launcher !== null) launchers.set(agent, launcher);
       const version = installedVersion(profile);
       versions.set(agent, version ?? "not installed");
-      log(`${agent} ${version ?? "(not installed)"}${adapters.get(agent) ? "" : ", no adapter: raw mirror, one-step send"}${launcher === null ? (options.via === null ? "" : ", own binary: no launcher in --via") : `, via ${launcher}`}`);
+      log(`${agent} ${version ?? "(not installed)"}${adapters.get(agent) ? "" : ", no adapter: raw mirror, one-step send"}${launcher === null ? (options.via === null ? "" : usesProfileLaunch ? ", own binary: no launcher in --via" : ", --via unused: these scenarios start their own lines") : `, via ${launcher}`}`);
       if (version === null) {
         for (const s of options.scenarios) results.push(scenarioResult(agent, s, [notReachedCase(agent, "not installed")]));
         continue;
@@ -223,7 +227,7 @@ function record(
     const passed = results.filter((r) => r.agent === agent && r.verdict === "pass").map((r) => r.scenario);
     // A launcher may have pointed the agent at another model, so the record says the run was not
     // the agent's own default; what was verified is still this version's screen and log.
-    const through = launchers.has(agent) ? ", started through a --via launcher" : "";
+    const through = launchers.has(agent) ? ", default scenarios started through a --via launcher" : "";
     const verified = id.slice(0, 4) + "-" + id.slice(4, 6) + "-" + id.slice(6, 8);
     const rec: LedgerRecord = {
       agent,

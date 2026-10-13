@@ -28,6 +28,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **An Oh My Pi draft with blank lines keeps its send check.** The check that the screen has not moved before a key goes out counted a draft's blank lines toward its window, so a draft made tall by blank lines lost the check; only lines with text count now, as the check itself reads them.
 - **A box table with an emoji like ⚠️ in a cell pans in one piece.** An emoji written with the emoji variation selector counted one column, while Claude Code pads it two, so that row's walls missed and the table split around it, the row wrapping on its own.
 - **Oh My Pi's service tier and usage rows are known rows in the journal reader.** A session started with a service tier, or one where composer predictions are on, wrote rows the harness canary reported as unknown; they draw nothing and now count as known.
+- **A canary run of only the options scenario no longer marks a version verified.** `--record` wrote the reader ledger after an `options`-only run, which proves the agent started but reads no screen; it now needs one screen scenario too. A `--via` launcher is also credited only when the default scenarios ran through it.
 
 ## [2.3.1] - 2026-10-12
 
