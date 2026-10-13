@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Changed
+
+- **The New sheet no longer offers Skip approvals for hermes.** Herdr 0.9.0 does not detect a pane started by hermes v0.21.7's launcher, so the option started an agent Collie could not see. A row added from it drops out when the launchers are read, as a row from a removed option does.
+
 ### Fixed
 
 - **An Oh My Pi draft with blank lines keeps its send check.** The check that the screen has not moved before a key goes out counted a draft's blank lines toward its window, so a draft made tall by blank lines lost the check; only lines with text count now, as the check itself reads them.

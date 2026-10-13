@@ -35,15 +35,14 @@ describe("the recipe table", () => {
         "codex:--ask-for-approval never",
         "opencode:--auto",
         "grok:--always-approve",
-        "hermes:--yolo",
         "agy:--dangerously-skip-permissions",
       ].toSorted(),
     );
   });
 
-  test("a harness that was not installed when the table was checked lists no option", () => {
-    // grok, hermes and agy were installed and their flags read off `--help` on 2026-10-12.
-    for (const id of ["muse"]) expect(recipeOptions(id)).toEqual([]);
+  test("a harness without a checked option lists none", () => {
+    // muse was not installed when the table was checked; hermes's pane goes undetected (see the header).
+    for (const id of ["hermes", "muse"]) expect(recipeOptions(id)).toEqual([]);
     expect(recipeOptions("__proto__")).toEqual([]);
   });
 });
@@ -79,10 +78,8 @@ describe("buildRecipe", () => {
     expect(buildRecipe("pi", ["auto"])).toEqual({ ok: false, reason: "unknown_option" });
   });
 
-  test("a grok, a hermes and an agy recipe", () => {
+  test("a grok and an agy recipe", () => {
     expect(buildRecipe("grok", ["approve"])).toMatchObject({ ok: true, command: "grok --always-approve", noPrompts: true });
-    expect(buildRecipe("hermes", ["yolo"])).toMatchObject({ ok: true, command: "hermes --yolo", noPrompts: true });
-    expect(buildRecipe("hermes", ["continue"])).toMatchObject({ ok: false });
     expect(buildRecipe("agy", ["plan", "continue"])).toMatchObject({ ok: true, command: "agy --mode plan --continue", noPrompts: false });
     expect(buildRecipe("agy", ["skip", "plan"])).toMatchObject({ ok: false });
   });

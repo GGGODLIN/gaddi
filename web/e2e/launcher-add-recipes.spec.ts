@@ -39,7 +39,6 @@ test.beforeEach(async ({ page }) => {
 
 const cases = [
   { agent: "Grok", skip: "Always approve", line: "grok --always-approve", other: "Continue last" },
-  { agent: "Hermes", skip: "Skip approvals", line: "hermes --yolo", other: null },
   { agent: "Antigravity", skip: "Skip permission prompts", line: "agy --dangerously-skip-permissions", other: "Plan mode" },
 ];
 
@@ -49,9 +48,7 @@ for (const c of cases) {
     await page.getByRole("combobox", { name: "Agent" }).selectOption({ label: c.agent });
     const skip = page.getByRole("button", { name: c.skip });
     await expect(skip).toHaveAttribute("aria-pressed", "false");
-    if (c.other !== null) await expect(page.getByRole("button", { name: c.other })).toBeVisible();
-    // Hermes offers no Continue last: its --continue re-execs where Herdr cannot see it.
-    else await expect(page.getByRole("button", { name: "Continue last" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: c.other })).toBeVisible();
     expect(await badgeShown(page)).toBe(false);
     await skip.click();
     await expect(skip).toHaveAttribute("aria-pressed", "true");
