@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **Grok and Muse panes wear their brand icon.** Grok's is the slashed circle from grok.com's own favicon; Muse Code's page shows no mark of its own, so its pane wears Meta's, the way Codex wears OpenAI's. Both had fallen back to an initials tile.
+
 ### Changed
 
 - **The New sheet no longer offers Skip approvals for hermes.** Herdr 0.9.0 does not detect a pane started by hermes v0.21.7's launcher, so the option started an agent Collie could not see. A row added from it drops out when the launchers are read, as a row from a removed option does.

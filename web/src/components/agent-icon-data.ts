@@ -3,8 +3,11 @@
 // own favicon/site): Claude + Codex(OpenAI) via Simple Icons (CC0); pi via Simple Icons / pi.dev
 // favicon (#09090b tile); opencode via opencode.ai's site mark (#080808 tile, theme_color); agy
 // (Antigravity) via its Google-blue #1A73E8 tile, keyed under both "agy" and "antigravity"; omp via
-// omp.sh/favicon.svg (#0f0a14 tile, and the one mark whose official paint is a gradient — `grad`).
-// To refresh: re-run the fetch in CHANGELOG and replace the `d` strings.
+// omp.sh/favicon.svg (#0f0a14 tile, and the one mark whose official paint is a gradient — `grad`);
+// grok via grok.com/images/favicon.svg (the slashed circle its app icon also wears; grok.com's page
+// header draws a different, animated bot face, which is not the brand mark); muse via Simple Icons'
+// Meta mark — Muse Code's own page (dev.meta.ai/products/muse-code) shows no mark of its own, only
+// Meta's, the same way Codex wears OpenAI's. To refresh: re-run the fetch in CHANGELOG and replace the `d` strings.
 
 export interface AgentBrand {
   /** Tile background — the agent's official brand color. */
@@ -60,4 +63,8 @@ export const AGENT_BRANDS = new Map<string, AgentBrand>([
       d: "M1.2 0h21.6v4.8h-6v19.2h-4.8V4.8H8.4v13.2H3.6V4.8H1.2z",
     },
   ],
+  // grok: the favicon's two mark paths, its 400×400 mark box (56..456 of 512) rescaled ×0.06 to
+  // fill 24×24 — the same paths, not a redrawing. Monochrome by design, so no accent.
+  ["grok", { bg: "#050505", fg: "#FCFCFC", mode: "fill", d: "M9.269 15.406L17.248 9.263C17.639 8.962 18.198 9.079 18.384 9.547C19.365 12.014 18.927 14.978 16.976 17.014C15.024 19.049 12.308 19.496 9.826 18.479L7.115 19.788C11.004 22.56 15.726 21.875 18.677 18.795C21.018 16.354 21.743 13.026 21.065 10.025L21.071 10.032C20.088 5.624 21.313 3.862 23.822 0.258C23.881 0.173 23.941 0.088 24 0L20.699 3.443V3.432L9.267 15.408ZM7.623 16.898C4.831 14.118 5.312 9.814 7.694 7.332C9.455 5.495 12.341 4.746 14.86 5.848L17.565 4.545C17.078 4.178 16.453 3.783 15.736 3.505C12.497 2.114 8.618 2.806 5.984 5.551C3.451 8.193 2.654 12.255 4.022 15.722C5.044 18.312 3.369 20.145 1.681 21.994C1.083 22.65 0.483 23.306 0 24L7.62 16.901Z" }],
+  ["muse", { bg: "#0467DF", fg: "#FFFFFF", accent: "#0467DF", mode: "fill", d: "M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z" }],
 ]);
