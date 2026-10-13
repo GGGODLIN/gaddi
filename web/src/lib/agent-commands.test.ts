@@ -40,6 +40,16 @@ describe("commandsFor", () => {
     expect(cmds.find((c) => c.command === "/always-approve")?.dangerous).toBe(true);
   });
 
+  it("returns the Muse catalog for 'muse'", () => {
+    const cmds = commandsFor("muse");
+    // Muse's model picker is /models, as in opencode, not Claude's /model.
+    expect(cmds.some((c) => c.command === "/models")).toBe(true);
+    expect(cmds.some((c) => c.command === "/model")).toBe(false);
+    // Both start a fresh session; Muse's docs differ only in whether the scrollback is wiped.
+    expect(cmds.find((c) => c.command === "/new")?.dangerous).toBe(true);
+    expect(cmds.find((c) => c.command === "/clear")?.dangerous).toBe(true);
+  });
+
   it("returns the omp catalog for 'omp'", () => {
     const cmds = commandsFor("omp");
     expect(cmds.length).toBeGreaterThan(0);
@@ -123,7 +133,7 @@ describe("commandsFor", () => {
     }
   });
 
-  it.each(["claude", "codex", "pi", "opencode", "omp", "grok"])(
+  it.each(["claude", "codex", "pi", "opencode", "omp", "grok", "muse"])(
     "exposes for '%s' a 'common' subset that is a proper, non-empty subset of all commands",
     (agent) => {
       const all = commandsFor(agent);
@@ -135,7 +145,7 @@ describe("commandsFor", () => {
     },
   );
 
-  it.each(["claude", "codex", "pi", "opencode", "omp", "grok"])(
+  it.each(["claude", "codex", "pi", "opencode", "omp", "grok", "muse"])(
     "'%s' entries are well-formed (slash-prefixed, unique, arg hints only when takesArg)",
     (agent) => {
       const all = commandsFor(agent);
