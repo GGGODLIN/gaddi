@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Fixed
 
 - **An Oh My Pi draft with blank lines keeps its send check.** The check that the screen has not moved before a key goes out counted a draft's blank lines toward its window, so a draft made tall by blank lines lost the check; only lines with text count now, as the check itself reads them.
+- **A box table with an emoji like ⚠️ in a cell pans in one piece.** An emoji written with the emoji variation selector counted one column, while Claude Code pads it two, so that row's walls missed and the table split around it, the row wrapping on its own.
 
 ## [2.3.1] - 2026-10-12
 
