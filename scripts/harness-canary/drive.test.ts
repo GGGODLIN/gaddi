@@ -33,12 +33,12 @@ describe("parseArgs", () => {
   });
 
   test("omp and muse run only when named, and --via is resolved against the host", () => {
-    const o = parseArgs(["--agent", "omp,muse", "--via", "/tmp/free"], "/repo");
+    const o = parseArgs(["--agent", "omp,muse", "--via", "/tmp/launchers"], "/repo");
     if (o === "help") throw new Error("help");
     expect(o.agents).toEqual(["omp", "muse"]);
     expect(DEFAULT_AGENTS).not.toContain("omp");
     expect(DEFAULT_AGENTS).not.toContain("muse");
-    expect(o.via).toBe(resolve("/tmp/free"));
+    expect(o.via).toBe(resolve("/tmp/launchers"));
   });
 
   test("grok, hermes and agy run only when named, and options only when asked for", () => {
@@ -116,7 +116,7 @@ describe("startup answers", () => {
 
   test("OpenCode starts without its update dialog, whose Confirm would update the install", () => {
     expect(opencode.launch(null)).toBe("clear; OPENCODE_DISABLE_AUTOUPDATE=1 opencode");
-    expect(launchedThrough(opencode, "/opt/free/opencode").launch(null)).toBe("clear; OPENCODE_DISABLE_AUTOUPDATE=1 /opt/free/opencode");
+    expect(launchedThrough(opencode, "/opt/launchers/opencode").launch(null)).toBe("clear; OPENCODE_DISABLE_AUTOUPDATE=1 /opt/launchers/opencode");
   });
 
   test("Codex is never cleared with Ctrl+C", () => {
@@ -133,8 +133,8 @@ describe("drafts and messages", () => {
   });
 
   test("a launcher replaces only the command word, quoted when the path needs it", () => {
-    expect(launchedThrough(claude, "/opt/free/claude").launch(null)).toBe("clear; /opt/free/claude --model haiku");
-    expect(launchedThrough(codex, "/opt/free/codex").launch(80)).toBe(`clear; stty cols 80; /opt/free/codex ${CODEX_ARGS}`);
+    expect(launchedThrough(claude, "/opt/launchers/claude").launch(null)).toBe("clear; /opt/launchers/claude --model haiku");
+    expect(launchedThrough(codex, "/opt/launchers/codex").launch(80)).toBe(`clear; stty cols 80; /opt/launchers/codex ${CODEX_ARGS}`);
     expect(launchedThrough(claude, "/my dir/it's").launch(null)).toBe("clear; '/my dir/it'\\''s' --model haiku");
     expect(claude.launch(null)).toBe("clear; claude --model haiku");
   });

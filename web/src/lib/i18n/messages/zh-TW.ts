@@ -502,6 +502,41 @@ export const zhTW: Dictionary = {
   "prompt.family.plan": "查看執行計畫",
   "prompt.sendingAria": "正在傳送",
   "prompt.reconnectNote": "請重新連線後再回答。",
+  "ask.caption": "Needs your answer",
+  "ask.notAnswerable": "This ask cannot be answered from the phone.",
+  "ask.late": "Already answered. This card goes away on the next update.",
+  "ask.notTaken": "未被接受。該問題可能稍後會再次出現。",
+  "ask.stale": "This ask changed. Read it again, then tap an answer.",
+  "ask.stale.older": "This machine runs an older Collie and cannot take answers here. Update it, or answer in the program.",
+  "ask.unknown": "Not sure the answer arrived. Try again sends it once more.",
+  "ask.retry": "Try again",
+  "ask.refused": "The answer was refused.",
+  "ask.effect.allow": "Allow",
+  "ask.effect.allowAlways": "Always allow",
+  "ask.effect.deny": "Deny",
+  "ask.effect.cancel": "Cancel",
+  "ask.alwaysArmed": "Tap again to always allow {tool}",
+  "ask.cleaned": "Text shortened",
+  "ask.maybe": "May already be applied. Check the chat.",
+  "ask.showMore": "Show {count} more",
+  "ask.showFewer": "Show fewer",
+  "durable.composer.placeholder": "Message this conversation",
+  "durable.composer.steer": "Steer",
+  "durable.composer.steerAria": "Steer the running turn instead of starting a new one",
+  "durable.composer.stop": "Stop",
+  "durable.composer.stopAria": "Stop the running turn",
+  "durable.composer.sent": "Sent",
+  "durable.composer.moved": "The conversation moved on. Your text is still here. Read the new turn, then send again.",
+  "durable.composer.older": "This machine runs an older Collie and cannot take messages here. Update it.",
+  "durable.composer.unknown": "Not sure the message arrived. Send again to retry it once.",
+  "durable.composer.refused": "The message was refused.",
+  "durable.composer.stopped": "Stop sent",
+  "durable.composer.stopMoved": "The conversation moved on, so nothing was stopped. Check it, then stop again if you still want to.",
+  "durable.composer.stopUnknown": "Not sure the stop arrived. Tap Stop again to retry it once.",
+  "durable.composer.maybe": "May already be sent. Check the chat before you send again.",
+  "durable.composer.stopMaybe": "The stop may already be applied. Check the chat.",
+  "durable.composer.stopRefused": "The stop was refused.",
+  "newPage.starters.none": "This machine's program offers no starters yet.",
   "prompt.feedback.cancel": "取消",
   "prompt.feedback.typedAria": "終端機中的回饋內容",
   "prompt.feedback.planChange.offer": "向 Claude 提供修改意見",
@@ -767,6 +802,8 @@ export const zhTW: Dictionary = {
   "newPage.typed.label": "要執行的命令",
   "newPage.typed.note": "Collie 會把這一行輸入新的 Shell 一次，並保留在這台機器的歷史記錄中。",
   "newPage.summary.run": "`{line}`",
+  "newPage.summary.starter": "{what}",
+  "newPage.summary.starterMachine": "{what} on {machine}",
   "newPage.recent.group": "最近",
   "newPage.recent.remove": "從歷史記錄中移除",
   "newPage.recent.clear": "清除歷史記錄",
@@ -960,6 +997,7 @@ export const zhTW: Dictionary = {
   "connection.connected": "已連線",
   "connection.reconnecting": "正在重新連線…",
   "connection.herdrDown": "主機上的 Herdr 服務已停止",
+  "connection.tokenRefused": "程式拒絕了權杖。請檢查此節點上的 COLLIE_DURABLE_TOKEN。",
   "connection.offlineCantReach": "離線：無法存取 Collie",
   "connection.cantReach": "無法連線至 Collie",
   "connection.withLastSeen": "{cause}，最後上線時間：{time}",
@@ -1178,17 +1216,11 @@ export const zhTW: Dictionary = {
 
   // --- dialog (menu / multi-select / wizard / preview-select block renderers) ---
   "dialog.sendingAria": "正在傳送",
-  // TODO wordsmith
   "dialog.terminalControl": "終端機",
-  // TODO wordsmith
   "dialog.terminalControlAria": "顯示終端機而非此卡片",
-  // TODO wordsmith
   "dialog.backToCard": "返回卡片",
-  // TODO wordsmith
   "dialog.putAwayControl": "收合",
-  // TODO wordsmith
-  "dialog.putAwayControlAria": "隱藏此資訊卡的按鈕，保留終端機",
-  // TODO wordsmith
+  "dialog.putAwayControlAria": "隱藏此卡片的按鈕，保留終端機",
   "dialog.showButtons": "顯示按鈕",
   "dialog.previousStepAria": "上一步",
   "dialog.nextStepAria": "下一步",
@@ -1210,9 +1242,7 @@ export const zhTW: Dictionary = {
   "dialog.menu.moveDown": "下移",
   "dialog.menu.leftAria": "向左：{verb}（{label}）",
   "dialog.menu.rightAria": "向右：{verb}（{label}）",
-  // TODO wordsmith
   "dialog.menu.levelAria": "{verb}至 {label}",
-  // TODO wordsmith
   "dialog.menu.levelCurrentAria": "{label}，目前",
   "unreadDialog.caption": "Collie 無法讀取此對話框", // wordsmith
   "unreadDialog.confirmKey": "再次點擊以傳送 {key}", // wordsmith
@@ -1949,6 +1979,8 @@ export const zhTW: Dictionary = {
   "pushTitle.machine.cpu": "{machine} 的 CPU 持續偏高",
   "pushTitle.machine.mem": "{machine} 的記憶體持續偏高",
   "pushTitle.machine.disk": "{machine} 的磁碟持續滿載",
+  "pushTitle.ask.permission": "Permission needed in {pane}",
+  "pushTitle.ask.flood": "A program on {host} is raising many asks",
 
   // --- settings.speech and stt.model (Whistle, ADR 0096) ---
   "settings.speech.credit": "Whistle 是 {link} 的語音模型。",

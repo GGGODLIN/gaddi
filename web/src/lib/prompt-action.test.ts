@@ -22,6 +22,7 @@ import { detectPromptSelect } from "./harness/claude/prompt-select";
 import { detectApproval } from "./harness/omp/approval";
 import { ompAdapter } from "./harness/omp";
 import { opencodeAdapter } from "./harness/opencode";
+import { piAdapter } from "./harness/pi";
 import { t } from "./i18n";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -790,5 +791,25 @@ describe("submitPromptOption: a walked tap on the real opencode permission chips
       status: "changed",
       why: "bridge",
     });
+  });
+});
+
+// The direct-send path (no walk: a printed digit) must carry the model's column range too, or the
+// bridge compares the whole row and OmO's ticking side panel refuses every tap (upstream #412).
+describe("submitPromptOption: a digit beside OmO's side panel is bound to the question's columns", () => {
+  const PANES = join(import.meta.dirname, "..", "fixtures", "panes");
+  const panelQuestion = readFileSync(join(PANES, "pi--omo-v5130-panel-question.txt"), "utf8");
+
+  it("sends the digit with the columns left of the panel", async () => {
+    const block = piAdapter.buildBlocks(splitLines(parseAnsi(panelQuestion))).find((b) => b.kind === "prompt-select");
+    if (block === undefined || block.kind !== "prompt-select") throw new Error("pi panel question did not lift");
+    const m = block.prompt;
+    const red = m.options.find((o) => o.label === "Red")!;
+    expect(red.keys).toEqual(["1"]);
+    mockFetchPane.mockResolvedValue(paneWith(panelQuestion));
+
+    expect(await submitPromptOption({ ...base, agent: "pi", prompt: m, option: red })).toEqual({ status: "sent" });
+    expect(mockSendKeys).toHaveBeenCalledTimes(1);
+    expect(mockSendKeys.mock.calls[0]?.[5]).toEqual({ start: 0, end: 91 });
   });
 });

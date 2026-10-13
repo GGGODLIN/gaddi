@@ -224,6 +224,11 @@ function record(
       log(`--record: ${agent} not recorded (a fail in the run, or a scenario not reached)`);
       continue;
     }
+    // The version was read from PATH, not from the launcher, so a --via run proves nothing about it.
+    if (launchers.has(agent)) {
+      log(`--record: ${agent} not recorded (started through a --via launcher, the version came from PATH)`);
+      continue;
+    }
     const passed = results.filter((r) => r.agent === agent && r.verdict === "pass").map((r) => r.scenario);
     // A launcher may have pointed the agent at another model, so the record says the run was not
     // the agent's own default; what was verified is still this version's screen and log.

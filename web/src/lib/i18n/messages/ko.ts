@@ -513,6 +513,41 @@ export const ko: Dictionary = {
   "prompt.family.plan": "계획 검토",
   "prompt.sendingAria": "전송 중",
   "prompt.reconnectNote": "다시 연결한 뒤 답하세요.",
+  "ask.caption": "Needs your answer",
+  "ask.notAnswerable": "This ask cannot be answered from the phone.",
+  "ask.late": "Already answered. This card goes away on the next update.",
+  "ask.notTaken": "접수되지 않았습니다. 잠시 후 질문이 다시 표시될 수 있습니다.",
+  "ask.stale": "This ask changed. Read it again, then tap an answer.",
+  "ask.stale.older": "This machine runs an older Collie and cannot take answers here. Update it, or answer in the program.",
+  "ask.unknown": "Not sure the answer arrived. Try again sends it once more.",
+  "ask.retry": "Try again",
+  "ask.refused": "The answer was refused.",
+  "ask.effect.allow": "Allow",
+  "ask.effect.allowAlways": "Always allow",
+  "ask.effect.deny": "Deny",
+  "ask.effect.cancel": "Cancel",
+  "ask.alwaysArmed": "Tap again to always allow {tool}",
+  "ask.cleaned": "Text shortened",
+  "ask.maybe": "May already be applied. Check the chat.",
+  "ask.showMore": "Show {count} more",
+  "ask.showFewer": "Show fewer",
+  "durable.composer.placeholder": "Message this conversation",
+  "durable.composer.steer": "Steer",
+  "durable.composer.steerAria": "Steer the running turn instead of starting a new one",
+  "durable.composer.stop": "Stop",
+  "durable.composer.stopAria": "Stop the running turn",
+  "durable.composer.sent": "Sent",
+  "durable.composer.moved": "The conversation moved on. Your text is still here. Read the new turn, then send again.",
+  "durable.composer.older": "This machine runs an older Collie and cannot take messages here. Update it.",
+  "durable.composer.unknown": "Not sure the message arrived. Send again to retry it once.",
+  "durable.composer.refused": "The message was refused.",
+  "durable.composer.stopped": "Stop sent",
+  "durable.composer.stopMoved": "The conversation moved on, so nothing was stopped. Check it, then stop again if you still want to.",
+  "durable.composer.stopUnknown": "Not sure the stop arrived. Tap Stop again to retry it once.",
+  "durable.composer.maybe": "May already be sent. Check the chat before you send again.",
+  "durable.composer.stopMaybe": "The stop may already be applied. Check the chat.",
+  "durable.composer.stopRefused": "The stop was refused.",
+  "newPage.starters.none": "This machine's program offers no starters yet.",
   "prompt.feedback.cancel": "취소",
   "prompt.feedback.typedAria": "터미널 내 피드백",
   "prompt.feedback.planChange.offer": "Claude 변경 요청",
@@ -781,6 +816,8 @@ export const ko: Dictionary = {
   "newPage.typed.label": "실행할 명령",
   "newPage.typed.note": "Collie는 이 줄을 새 셸에 한 번 입력하고 이 컴퓨터의 기록에 남깁니다.",
   "newPage.summary.run": "`{line}` 실행",
+  "newPage.summary.starter": "{what}",
+  "newPage.summary.starterMachine": "{what} on {machine}",
   "newPage.recent.group": "최근",
   "newPage.recent.remove": "기록에서 제거",
   "newPage.recent.clear": "기록 지우기",
@@ -974,6 +1011,7 @@ export const ko: Dictionary = {
   "connection.connected": "연결됨",
   "connection.reconnecting": "재연결 중…",
   "connection.herdrDown": "호스트의 Herdr 프로세스가 중단되었습니다.",
+  "connection.tokenRefused": "프로그램이 토큰을 거부했습니다. 이 피어의 COLLIE_DURABLE_TOKEN을 확인하세요.",
   "connection.offlineCantReach": "오프라인. Collie에 접근할 수 없습니다.",
   "connection.cantReach": "Collie에 접근할 수 없습니다.",
   "connection.withLastSeen": "{cause}. 마지막 확인 시각: {time}",
@@ -1192,17 +1230,11 @@ export const ko: Dictionary = {
 
   // --- dialog (menu / multi-select / wizard / preview-select block renderers) ---
   "dialog.sendingAria": "전송 중",
-  // TODO wordsmith
   "dialog.terminalControl": "터미널",
-  // TODO wordsmith
   "dialog.terminalControlAria": "이 카드 대신 터미널 표시",
-  // TODO wordsmith
   "dialog.backToCard": "카드로 돌아가기",
-  // TODO wordsmith
   "dialog.putAwayControl": "치우기",
-  // TODO wordsmith
   "dialog.putAwayControlAria": "이 카드의 버튼을 숨기고 터미널을 유지합니다",
-  // TODO wordsmith
   "dialog.showButtons": "버튼 표시",
   "dialog.previousStepAria": "이전 단계",
   "dialog.nextStepAria": "다음 단계",
@@ -1224,9 +1256,7 @@ export const ko: Dictionary = {
   "dialog.menu.moveDown": "아래로 이동",
   "dialog.menu.leftAria": "왼쪽: {verb} ({label})",
   "dialog.menu.rightAria": "오른쪽: {verb} ({label})",
-  // TODO wordsmith
   "dialog.menu.levelAria": "{label}에 {verb}",
-  // TODO wordsmith
   "dialog.menu.levelCurrentAria": "{label}, 현재",
   "unreadDialog.caption": "Collie가 이 대화상자를 읽을 수 없습니다", // wordsmith
   "unreadDialog.confirmKey": "{key}을(를) 보내려면 다시 누르세요", // wordsmith
@@ -1968,6 +1998,8 @@ export const ko: Dictionary = {
   "pushTitle.machine.cpu": "{machine}의 CPU가 계속 높음",
   "pushTitle.machine.mem": "{machine}의 메모리가 계속 높음",
   "pushTitle.machine.disk": "{machine}의 디스크가 계속 가득 참",
+  "pushTitle.ask.permission": "Permission needed in {pane}",
+  "pushTitle.ask.flood": "A program on {host} is raising many asks",
 
   // --- settings.speech and stt.model (Whistle, ADR 0096) ---
   "settings.speech.credit": "Whistle은 {link}의 음성 모델입니다.",

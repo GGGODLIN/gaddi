@@ -74,10 +74,10 @@ export class TranscriptStore {
   /**
    * The parsed window `page` already caches, without slicing it.
    *
-   * A deliverable list reads this instead of opening the log again: a repeat ask is a stat, and a
-   * cold ask is the same bounded tail `load` caps at `MAX_TRANSCRIPT_BYTES`. `complete: false` means
-   * that cap clipped the head. The caller reports the list as incomplete and does not read the rest
-   * of the file to fill the gap.
+   * A deliverable list and the live window's prompt lookup read this instead of opening the log
+   * again: a repeat ask is a stat, and a cold ask is the same bounded tail `load` caps at
+   * `MAX_TRANSCRIPT_BYTES`. `complete: false` means that cap clipped the head. The caller reports a
+   * deliverable list as incomplete, and no caller reads the rest of the file to fill the gap.
    */
   async cached(
     adapter: JournalAdapter,

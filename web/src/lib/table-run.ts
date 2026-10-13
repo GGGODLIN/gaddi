@@ -137,9 +137,19 @@ export function tableRuns(lines: StyledLine[]): readonly TableRun[] {
   return runs.length > 0 ? runs : NO_RUNS;
 }
 
+// A row of printable ASCII and box drawing only. Every character in it is one cluster and one
+// terminal column, so its column is its string index and `Intl.Segmenter` has nothing to decide.
+// Most tables are all of this, and the segmenter costs a pass per row (400 rows: 0.04 ms by index,
+// 1.3 ms through the segmenter, measured on a development machine).
+const ALL_NARROW = /^[\x20-\x7e\u2500-\u257f]*$/;
+
 /** Where the anchor's separators stand, in terminal columns. */
 function offsetsOf(row: string, separator: RegExp): number[] {
   const at: number[] = [];
+  if (ALL_NARROW.test(row)) {
+    for (let i = 0; i < row.length; i++) if (separator.test(row.charAt(i))) at.push(i);
+    return at;
+  }
   for (const [column, cell] of cellsByColumn(row)) if (separator.test(cell)) at.push(column);
   return at;
 }
@@ -171,11 +181,12 @@ function markdownMember(pipes: number): (text: string) => boolean {
  * Offsets are terminal columns, not string indices, so a CJK cell (one index, two columns) keeps
  * its row's walls where the anchor's junctions are. Where the width table and the TUI disagree on a
  * glyph (a ZWJ emoji sequence, text-width.ts), the walls after it miss, the row is not a member, and
- * the table wraps: the failure is the old one, never a wrong claim.
+ * the table wraps, as it did before this change.
  */
 function offsetMember(offsets: number[], separator: RegExp): (row: string) => boolean {
   return (row) => {
     if (isBlank(row)) return false;
+    if (ALL_NARROW.test(row)) return offsets.every((at) => separator.test(row.charAt(at)));
     const cells = cellsByColumn(row);
     return offsets.every((at) => separator.test(cells.get(at) ?? ""));
   };
