@@ -112,7 +112,7 @@ export function promptRowText(text: string): string | null {
 // scanned for — dialog rows share the indentation. Only the gutter is asserted:
 // the draft's own text may begin with spaces, and `/^  \S/` read an indented
 // line as a torn frame, which lost the composer and refused the send while the
-// draft sat there (free-pool canary 2026-10-12, Muse 1.4.6; codex/chrome.ts
+// draft sat there (harness canary 2026-10-12, Muse 1.4.6; codex/chrome.ts
 // CONTINUATION is the same lesson).
 const CONTINUATION_ROW = /^  \s*\S/;
 

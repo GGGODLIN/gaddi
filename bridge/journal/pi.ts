@@ -360,7 +360,7 @@ function bashExecutionParts(m: JsonObject): TranscriptPart[] {
  * (#292) — even though those 44 sessions carry none.
  *
  * `session_info` (pi 1.1.0, the session's `name`) and Oh My Pi 18.10's `title` and `title_change`
- * were met by the free-pool canary on 2026-10-12. All three name the session and draw nothing; the
+ * were met by the harness canary on 2026-10-12. All three name the session and draw nothing; the
  * pane's label comes from the multiplexer, not from here.
  *
  * Oh My Pi 18.10's `service_tier_change` (written at session start when a tier is set) and

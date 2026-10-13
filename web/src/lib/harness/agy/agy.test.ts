@@ -183,7 +183,7 @@ describe("agyAdapter unit & footer safety", () => {
     expect(agyAdapter.extractInputDraft!(lines)).toBeNull();
   });
 
-  // agy 1.3.3, free-pool canary 2026-10-12: a pasted rule sits behind the draft's gutter. Read as the
+  // agy 1.3.3, harness canary 2026-10-12: a pasted rule sits behind the draft's gutter. Read as the
   // box's top rule, it refused the composer while the draft was there.
   it("a rule inside the draft is draft text, not the box's top rule", () => {
     const short = "────────────────────";

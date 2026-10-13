@@ -62,7 +62,7 @@ export function HostClipboardButton() {
       className="relative grid size-11 shrink-0 place-items-center text-muted-foreground transition-colors hover:text-foreground"
     >
       <Clipboard className="size-5" />
-      <UnseenMark on={clip.unseen} size="sm" label={t("hostClipboard.unseen")} className="absolute right-2 top-2" />
+      <UnseenMark on={clip.unseen} label={t("hostClipboard.unseen")} className="absolute right-2 top-2 size-2.5" />
     </button>
   );
 }

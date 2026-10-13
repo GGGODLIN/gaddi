@@ -389,12 +389,12 @@ describe("locateComposer — Unicode anywhere in the box must never produce a nu
 });
 
 describe("locateComposer — OMP 18.1.2's open-ended prompt row", () => {
-  // OMP 18.10.1, free-pool canary 2026-10-12: a multi-line draft keeps its first line on the prompt
+  // OMP 18.10.1, harness canary 2026-10-12: a multi-line draft keeps its first line on the prompt
   // row and paints the rest UNDER it behind a three-space gutter. Read as autocomplete, those rows
   // were dropped from the draft, so the reply guard never saw the message's tail and every
   // multi-line send stalled; a blank line in the draft refused the composer outright.
   describe("OMP 18.10's later draft lines under the prompt row", () => {
-    const status = " π > ⬢ free pool > ⑂ master ▶───5%────128K─";
+    const status = " π > ⬢ sonnet > ⑂ master ▶───5%────128K─";
     const composerWith = (...below: string[]) => lines(["transcript", "", status, "╰─ Reply with only OK.", ...below].join("\n"));
 
     it("reads every later line, a blank line and a pasted rule included", () => {

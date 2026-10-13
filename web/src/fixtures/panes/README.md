@@ -42,6 +42,45 @@ This cohort is OmO's built-in question UI, not stock pi's optional question exte
 
 Keystroke probes, and what each pi screen reads as: [`pi/ASK_NOTES.md`](../../lib/harness/pi/ASK_NOTES.md).
 
+## OmO 5.1.30 default install, pickers and side panel (captured 2026-10-12, Herdr 0.9.3, issues 416 and 412)
+
+OmO 5.1.30 (Senpi 2026.10.11) as installed, with no extension of its own, and stock pi 1.1.0, in an
+isolated Herdr session with its own bridge, read through `GET /api/pane/:id?lines=60` as the phone
+reads it. Model `anthropic/claude-haiku-4.5` on OpenRouter, thinking off. Three pane shapes: 113
+columns; 125 columns in fullscreen mode (`--tui-mode fullscreen`) split down to 18 rows, so OmO's
+side panel runs beside the editor; and 125 by 40 rows. `panel-phantom` comes from the same 18-row
+pane with a lab extension that adds a coloured `│ Board 3` status segment, as the #416 reporter's
+setup does. The OmO files use LF line ends, the pi 1.1.0 files CRLF as read.
+
+The 113-column files are cut to the first rule of the frame (the banner's first row for
+`question-banner`); the 18-row files are whole screens; `panel-picker-tree` starts at the picker's
+header rule. Privacy: the lab's working directory was replaced with
+`/home/demo/sandbox/collie-pi-labs/omo-lab/work`, a path of the same length, and every `…`-shortened
+copy of it with the same characters, so rule widths and the panel's column are unchanged. No user,
+host, key or token remains; `/tmp/pi110-lab/work` is the stock pi sandbox.
+
+| Fixture | State | Reads as |
+| --- | --- | --- |
+| `pi--omo-v5130-plain-idle.txt` | Empty editor; the last status row, OmO's badge and memory, has no colour | composer |
+| `pi--omo-v5130-plain-draft.txt` | `hello collie draft` typed | composer, draft read back |
+| `pi--omo-v5130-plain-running.txt` | A turn running, `── • Working …` on the top rule | composer |
+| `pi--omo-v5130-slash-model.txt` | `/model` typed: three completion rows, `  → model` then four-space rows | composer, bound |
+| `pi--omo-v5130-slash-compact.txt` | `/compact` typed: one completion row | composer, bound |
+| `pi--omo-v5130-picker-model.txt` | `/model` picker, hint row `enter select ctrl+s select as default ctrl+f favorite` | Escape card |
+| `pi--omo-v5130-picker-tree.txt` | `/tree` picker, hints over an inner rule | Escape card |
+| `pi--omo-v5130-picker-resume.txt` | `/resume` picker, `tab scope · …` and `ctrl+s sort · …` | Escape card |
+| `pi--omo-v5130-plain-question.txt` | OmO's ask, one question, Red and Green | digit |
+| `pi--omo-v5130-question-banner.txt` | `? Question pending …` banner over a ready editor | composer (a send answers the question, see ASK_NOTES) |
+| `pi--omo-v5130-panel-idle.txt` | 18 rows, the panel still above the editor | composer, bound |
+| `pi--omo-v5130-panel-draft.txt` | The panel beside the editor, a rule running into `MEMORY` | composer, cropped, unbound |
+| `pi--omo-v5130-panel-running.txt` | The running turn's labelled rule running into the panel | composer, cropped, unbound |
+| `pi--omo-v5130-panel-slash-model.txt` | `/model` typed beside the panel | composer, cropped, unbound |
+| `pi--omo-v5130-panel-phantom.txt` | Clean rules, the panel's path beside an empty `❯` | composer, cropped, no draft |
+| `pi--omo-v5130-panel-question.txt` | OmO's ask beside the panel | Escape card, not lifted |
+| `pi--omo-v5130-panel-picker-tree.txt` | 40 rows, `/tree` with the panel beside its header | Escape card |
+| `pi--v110-stock-picker-resume.txt` | Stock pi 1.1.0 `/resume` picker | Escape card |
+| `pi--v110-stock-picker-tree.txt` | Stock pi 1.1.0 `/tree` picker | Escape card |
+
 ## pi 1.1.0 corpus, PR 397 (captured 2026-10-10 by @raffaelenatale, pi 1.1.0 with a pi question extension, Linux sandbox panes)
 
 Byte-faithful `format:ansi` captures of **pi 1.1.0** with a pi question extension loaded (the
@@ -972,6 +1011,73 @@ which fails the day agy stops claiming it.
 | Fixture | State / what's in it | Grammar state |
 |---|---|---|
 | `claude--v2291-permission-bash-subagent.txt` | A subagent's Bash permission, pointer on `1. Yes`. Lifts `prompt-select` (`permission`, `Do you want to proceed?`, Yes `1`, No `2`) from the `─` edge, with the header, the description, the three command rows and the warning as its subject, no `╌` row and no `│` gutter | `blocked` |
+
+## Claude Code 2.1.296 closing rule (captured 2026-10-12, herdr 0.9.3, throwaway Herdr session)
+
+A session renamed with `/rename` (or started with `--name`) makes Claude Code 2.1.296 draw ONE more
+row under some dialogs: a rule with the session name set into it, right-aligned, as the very last
+row. Every Claude grammar anchors on the last non-blank row being its footer, so each of those
+dialogs fell to the unread-dialog card with Esc only. `claude/closing-rule.ts` takes the row off
+once, at the adapter's entry points, so the render, the race guard and the bridge's binding check
+read the same rows an unnamed session shows ([`harness/claude/closing-rule.ts`](../../lib/harness/claude/closing-rule.ts)).
+
+```
+Enter to select · ↑/↓ to navigate · Esc to cancel
+──────────────────────────────────────────────────────────────────── capture lab ─
+```
+
+The lab was the usual one: a throwaway Herdr server in its own `XDG_CONFIG_HOME`, a `/tmp` git
+project, a copied `CLAUDE_CONFIG_DIR` holding only the credentials and a four-key `settings.json`
+(classic TUI, `defaultMode` default), deleted after the run, and `stty cols N rows 40` in the pane
+for the width. The session was renamed to `capture lab`. Each capture is a
+`herdr pane read --source recent --lines 300 --format ansi`, byte for byte. A scan for the user
+name, host, home path and e-mail address found none in the promoted files; the only path on them is
+`/tmp/nr-lab/project`, and nothing was altered.
+
+**Where the closing rule appears.** Named against unnamed, at 82 columns unless noted:
+
+| Screen | Named session | Unnamed session |
+|---|---|---|
+| AskUserQuestion, one question | rule under the footer | nothing under the footer |
+| AskUserQuestion, pick-many | rule under the footer | nothing |
+| AskUserQuestion wizard, question step | rule under the footer (also at 40) | nothing |
+| AskUserQuestion wizard, Submit review step | rule under `2. Cancel`, which prints no footer (also at 40) | nothing |
+| `/config` | rule under the footer (also at 40) | nothing |
+| `/resume` | rule under the footer (also at 40) | nothing |
+| Bash and Edit permission | nothing | nothing |
+| Plan approval | nothing | nothing |
+| `/effort`, `/model`, `/status`, `/tasks`, `/permissions`, `/plugin` | nothing | `/effort` nothing (the others not taken) |
+| Folder trust, auto-mode offer | not reachable in a named session | nothing |
+| Idle input box | the SESSION NAME sits in the box's TOP border, as before (`claude-lab--idle-labelled-top-border--w83.txt`); no row under the statusline | no label |
+
+So the rule belongs to the AskUserQuestion family and to the two full-screen panels, and the idle
+box did not change. The label is the name, right-aligned and followed by one `─`; at 40 columns the
+run before it shortens, the form does not change. An unnamed session never draws the row, so the
+helper is a no-op there and the existing captures read exactly as they did (the corpus was run
+before and after the change: 608 captures, no reading moved).
+
+| Fixture | State / what's in it |
+|---|---|
+| `claude-lab--ask-single-named-v2296--w82.txt`, `claude-lab--ask-single-v2296--w82.txt` | One question, Red / Blue; rows `Type something.` and `Chat about this`. Lifts `prompt-select` |
+| `claude-lab--ask-multi-named-v2296--w82.txt`, `claude-lab--ask-multi-v2296--w82.txt` | One pick-many question, three checkbox rows and a Submit row. Lifts `multi-select` |
+| `claude-lab--ask-wizard-named-v2296--w82.txt`, `claude-lab--ask-wizard-v2296--w82.txt` | Two questions, first step. Lifts `wizard` |
+| `claude-lab--ask-wizard-review-named-v2296--w{40,82}.txt`, `claude-lab--ask-wizard-review-v2296--w{40,82}.txt` | The review step with no answer given. Lifts `wizard` (phase `review`) |
+| `claude-lab--menu-config-panel-named-v2296--w{40,82}.txt`, `claude-lab--menu-config-panel-v2296--w{40,82}.txt` | `/config`, footer wrapped over two rows at 40 columns. Lifts `menu` |
+| `claude-lab--menu-resume-picker-named-v2296--w82.txt`, `claude-lab--menu-resume-picker-v2296--w82.txt`, `claude-lab--menu-resume-picker-named-v2296--w40.txt` | `/resume` with one saved session (82) and two (40, no unnamed twin). Lifts `prompt-select` |
+
+**Not captured, and gaps found on the way.**
+
+- No fixture of the named permission, plan and `/effort` screens: they were read live and carry no
+  rule, and the Bash/Edit/plan reading did not change on 2.1.296.
+- At 40 columns the select footer wraps (`Enter to select · ↑/↓ to navigate · Esc` over `to cancel`).
+  The single-question and pick-many dialogs read as the unread-dialog card in a session of either
+  kind, and the wizard's question step reads as a generic `menu`. That is older than 2.1.296 and the
+  closing rule did not cause it; the pairs are not in the corpus because their `prompt-select`,
+  `multi-select` and `wizard` readings are not what the screen shows.
+- The auto-mode offer that a fresh config shows once (`Make auto mode your default permission mode?`,
+  `Yes, set auto mode as my default permission mode` / `No, keep manual mode`) lifts nothing and gets
+  no unread-dialog card either: it names no key and carries no numbered `❯` row, so `modalOnScreen`
+  declines it. Taken at 82 and 40 columns, not promoted.
 
 ## Wizard corpus (captured 2026-07-05, sandbox pane; choreography in `../../lib/grammar/WIZARD_NOTES.md`)
 

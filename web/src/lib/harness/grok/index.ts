@@ -110,7 +110,7 @@ function isKeyHintRow(text: string): boolean {
  * Positive evidence of a grok dialog for the unread-dialog card (.adr/0053, addendum 2026-09-26): one
  * of the last rows is grok's key-hint footer. The shell after exit (`Resume this session with: grok
  * --resume <id>`) prints none, and the card no longer flashes over it, which would have offered to
- * send ctrl+c to the shell (free-pool canary 2026-10-12, Grok Build 1.0.50).
+ * send ctrl+c to the shell (harness canary 2026-10-12, Grok Build 1.0.50).
  */
 function grokModalOnScreen(lines: StyledLine[]): boolean {
   const rows: string[] = [];

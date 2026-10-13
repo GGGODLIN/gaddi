@@ -1159,7 +1159,7 @@ describe("Codex 0.157.1 fullscreen: one key-hint row under the status row", () =
     expect(stripChrome(lines).map(lineText).join("\n")).toContain("• Working (5m 47s • esc to interrupt)");
   });
 
-  // Codex 0.159.3, free-pool canary 2026-10-12: once the thread has a title, the separator's leading
+  // Codex 0.159.3, harness canary 2026-10-12: once the thread has a title, the separator's leading
   // space arrives in the path's paint (`<path> ` then `· `). The row was refused after every first
   // turn, so each later send was refused as `blocked`.
   it("a separator whose space carries the field's paint still leaves a status row", () => {

@@ -227,7 +227,7 @@ function splitPaintedGaps(segments: AnsiSegment[]): AnsiSegment[] {
 /**
  * A separator whose leading space arrives in the paint of the field before it, moved back onto the
  * separator. Once a thread has a title, Codex 0.159.3 paints the status row as `<path> ` in the
- * path's colour, then `· ` unpainted, then the title (codex--v0159-task-title.txt, free-pool canary
+ * path's colour, then `· ` unpainted, then the title (codex--v0159-task-title.txt, harness canary
  * 2026-10-12). Neither segment was a field or a separator, so the row was refused after the first
  * turn of every thread: no composer, the unread-dialog card, and every later send refused. As with
  * `splitPaintedGaps`, a space draws no ink, so its paint is not evidence; the separator keeps its own
