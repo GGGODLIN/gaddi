@@ -69,6 +69,29 @@ describe("ThreadSidebar", () => {
     ]);
   });
 
+  it("marks each attention bucket with its state's shape, not a colour-only dot (issue 420)", () => {
+    const unseen = { ...idleAgent, paneId: "w3:p2", lastActiveAt: 200, lastSeenAt: 100 };
+    const { container } = render(
+      <ThreadSidebar
+        agents={[...fixtureAgents, unseen, idleAgent]}
+        currentPaneKey=""
+        onSelect={vi.fn()}
+        order="attention"
+      />,
+    );
+    const marks = [...container.querySelectorAll("h3")].map((h) => ({
+      label: h.textContent ?? "",
+      tone: h.querySelector("[class*='text-status-']")?.className.match(/text-status-\w+/)?.[0],
+      dot: h.querySelector("span.rounded-full[class*='bg-status-']") !== null,
+    }));
+    expect(marks).toEqual([
+      { label: expect.stringContaining("Needs you"), tone: "text-status-blocked", dot: false },
+      { label: expect.stringContaining("Ready · unseen"), tone: "text-status-done", dot: false },
+      { label: expect.stringContaining("Recent"), tone: "text-status-idle", dot: false },
+      { label: expect.stringContaining("Working"), tone: "text-status-working", dot: false },
+    ]);
+  });
+
   it("moves no row and no heading when a pane changes state (ADR 0063)", () => {
     // Before, an unread completion jumped from Recent up into "Ready · unseen" and dropped back once
     // read, and a blocked pane sat in "Needs you" above everything. Now every flip repaints only.

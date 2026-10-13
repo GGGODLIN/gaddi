@@ -31,6 +31,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Changed
 
 - **The New sheet no longer offers Skip approvals for hermes.** Herdr 0.9.0 does not detect a pane started by hermes v0.21.7's launcher, so the option started an agent Collie could not see. A row added from it drops out when the launchers are read, as a row from a removed option does.
+- **The switcher's attention buckets wear their state's shape.** Needs you is a triangle, Ready a disc, Working a half-filled circle and Recent a ring, the marks a pane row's own status wears, where each heading had a colour-only dot.
 
 ### Fixed
 

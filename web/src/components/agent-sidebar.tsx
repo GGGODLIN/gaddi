@@ -116,6 +116,15 @@ const NO_PINS: readonly Pin[] = [];
 /** The buckets that mean "a human is required here" — the same two the dashboard's line counts. */
 const URGENT: ReadonlySet<TriageKey> = new Set<TriageKey>(["needs", "ready"]);
 
+/** Each attention bucket is a state, so its heading wears that state's mark, the shape a row's own
+ *  status wears (issue 420), not lib/triage's colour-only `dot`, which upstream keeps for its own use. */
+const BUCKET_MARK = {
+  needs: "blocked",
+  ready: "done",
+  working: "working",
+  recent: "idle",
+} as const satisfies Record<TriageKey, AgentStatus>;
+
 /** A DOM id for a pane row, so the summary line can scroll to it and focus it. */
 function rowDomId(pane: AgentView): string {
   return `switch-row-${paneRowKey(pane).replace(/[^A-Za-z0-9_-]/gu, "_")}`;
@@ -246,7 +255,7 @@ export function ThreadSidebar({
                   id={`switch-${g.key}`}
                   label={g.label}
                   count={members.length}
-                  dot={g.dot}
+                  mark={BUCKET_MARK[g.key]}
                   {...(g.accent !== undefined ? { accent: g.accent } : {})}
                 >
                   {members.map((a) => (
