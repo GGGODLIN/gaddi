@@ -10,10 +10,10 @@ import type { LaunchCheckResponse } from "./types.ts";
 //
 // ── EVERY FLAG HERE WAS READ OFF THE CLI'S OWN `--help` ─────────────────────────────────────────
 // On 2026-10-09, on the development host, through a login shell: Claude Code 2.1.295, Codex 0.162.0,
-// opencode 1.18.35, pi 0.87.1, omp. A harness that was not installed there (grok, hermes, muse, agy)
-// lists no option: a flag nobody saw is a flag that may not exist. When a CLI renames a flag, a row
-// built from the old one stops matching its rebuild and drops out at read time
-// (bridge/launchers-added.ts), so a stale chip can never type a stale line.
+// opencode 1.18.35, pi 0.87.1, omp; grok, hermes and agy on 2026-10-12 (their rows below). A
+// harness not installed there (muse) lists no option: a flag nobody saw is a flag that may not
+// exist. When a CLI renames a flag, a row built from the old one stops matching its rebuild and
+// drops out at read time (bridge/launchers-added.ts), so a stale chip can never type a stale line.
 //
 // ── GROUPS ARE ONE-OF ───────────────────────────────────────────────────────────────────────────
 // Options in one `group` exclude each other (two models, or plan mode beside skip-permissions). The
@@ -86,7 +86,7 @@ const RECIPE_TABLE = {
     { id: "continue", label: "Continue last", args: "--continue" },
   ],
   // No Continue last: `hermes --continue` re-execs through v0.21.7's launcher, `python3 -I -c …`,
-  // and Herdr 0.9.0 never detects that pane as hermes (canary run 20261012T084248Z).
+  // and Herdr 0.9.0 never detects that pane as hermes (harness canary, 2026-10-12).
   hermes: [{ id: "yolo", label: "Skip approvals", args: "--yolo", noPrompts: true }],
   agy: [
     {
