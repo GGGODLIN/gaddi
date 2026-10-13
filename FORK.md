@@ -34,6 +34,10 @@ Each entry says what it is, where it lives, and what it assumes.
 - **What.** The fork is published as Gaddi, with a pixel-art Gaddi dog as its mark, because
   upstream's [`TRADEMARKS.md`](/TRADEMARKS.md) keeps the ColliePWA name and dog mark out of a fork.
   It replaces the 2026-09-22 `COLLIE-GGGODLIN` title bar.
+- **Why this name (2026-10-07).** Gaddi is a Himalayan herding dog, so the name keeps the tie to
+  Herdr and herding. Kelpie was turned down because `dcadenas/kelpie` is already a Herdr agent
+  tool, and Griffon because it is not a herding dog. Trademark, domain and social-handle checks
+  for Gaddi have not been done.
 - **Where.** The UI strings keep upstream's dictionaries as they are: `t()` and `tn()` in
   [`web/src/lib/i18n/index.ts`](/web/src/lib/i18n/index.ts) swap the word Collie for Gaddi on the
   way out. The mark is [`web/src/components/collie-mark.tsx`](/web/src/components/collie-mark.tsx)

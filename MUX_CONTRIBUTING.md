@@ -157,8 +157,8 @@ cannot drift from it). Anything needing `Bun.serve`/`Bun.connect` is unit-untest
   type; it tears them down and deletes the temporary root, pass or fail. A multiplexer not on `PATH`
   is skipped, never passed. `--mux <name>` runs one.
 
-Run the pure and live layers, and the throwaway one when you change how an adapter writes. Then `bun run test` (the whole backend suite) and `SKIP_TESTS=1 bun run build` (lint +
-both typechecks).
+Run the pure and live layers, and the throwaway one when you change how an adapter writes. Then
+`bun run test` (the whole backend suite) and `SKIP_TESTS=1 bun run build` (lint + both typechecks).
 
 ## Things that will bite you
 

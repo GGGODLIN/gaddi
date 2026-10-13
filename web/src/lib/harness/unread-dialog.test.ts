@@ -443,7 +443,7 @@ describe("known live-box gaps the card inherits", () => {
   });
 });
 
-// Free-pool canary 2026-10-12 (Codex 0.159.3, Grok Build 1.0.50, Muse 1.4.6): with no positive gate,
+// Harness canary 2026-10-12 (Codex 0.159.3, Grok Build 1.0.50, Muse 1.4.6): with no positive gate,
 // the card flashed over the shell each agent leaves behind on exit and over the frames it paints
 // before its composer, and on grok it offered ctrl+c to that shell. The text below is what those
 // captures show, with the session ids and the shell prompt replaced.

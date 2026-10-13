@@ -248,7 +248,7 @@ export function composerContText(text: string): string | null {
 
 // OMP 18.10's open-ended prompt keeps the FIRST line of a multi-line draft on the `╰─ ` row and
 // paints every later line UNDER it, behind a three-space gutter that lines up with the draft
-// (free-pool canary 2026-10-12, omp 18.10.1: drafts 03, 04, 07, 14, 15). An empty line in the draft
+// (harness canary 2026-10-12, omp 18.10.1: drafts 03, 04, 07, 14, 15). An empty line in the draft
 // is a blank row in that run. No capture shows anything else drawn there with this gutter: the slash
 // palette uses `❯ ` or two spaces, and a modal opens a box at column 0.
 const OPEN_DRAFT_GUTTER = "   ";

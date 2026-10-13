@@ -501,7 +501,7 @@ function expectRoundTrip(composer: Composer, frame: StyledLine[], draft: string[
  * Drafts a reader does not survive yet. Each is left out of its composer's generated drafts (`omit`)
  * and pinned here instead as `it.fails`, so it shows in every run and turns red the day it is fixed.
  */
-// Muse's indented line left this list on 2026-10-12: the free-pool canary typed one into Muse 1.4.6,
+// Muse's indented line left this list on 2026-10-12: the harness canary typed one into Muse 1.4.6,
 // the composer was lost exactly as pinned here, and muse/markers.ts took Codex's gutter-only test.
 const KNOWN_DRAFT_GAPS: { composer: string; kind: LineKind; draft: string[]; why: string }[] = [];
 

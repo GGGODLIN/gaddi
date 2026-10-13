@@ -83,7 +83,7 @@ const NAMES_ESC = /\besc(?:ape)?\b/i;
  * `enter select · esc back`, `Press enter to confirm or esc to cancel`, codex/markers.ts; the notes
  * card's `tab or esc to clear notes`). The shell after `/quit` (`codex resume <id>`) and the first
  * frames before the status row paints (`? for shortcuts` alone) name no key, and the card no longer
- * flashes over them (free-pool canary 2026-10-12, Codex 0.159.3; the known gap of 1.13.2).
+ * flashes over them (harness canary 2026-10-12, Codex 0.159.3; the known gap of 1.13.2).
  */
 function codexModalOnScreen(lines: StyledLine[]): boolean {
   const rows: string[] = [];
