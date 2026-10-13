@@ -29,6 +29,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A box table with an emoji like ⚠️ in a cell pans in one piece.** An emoji written with the emoji variation selector counted one column, while Claude Code pads it two, so that row's walls missed and the table split around it, the row wrapping on its own.
 - **Oh My Pi's service tier and usage rows are known rows in the journal reader.** A session started with a service tier, or one where composer predictions are on, wrote rows the harness canary reported as unknown; they draw nothing and now count as known.
 - **A canary run of only the options scenario no longer marks a version verified.** `--record` wrote the reader ledger after an `options`-only run, which proves the agent started but reads no screen; it now needs one screen scenario too. A `--via` launcher is also credited only when the default scenarios ran through it.
+- **The throwaway mux e2e run fails when it could not clean up.** Every subprocess now has a deadline, teardown runs even after a startup that died halfway, a failed teardown turns a pass into a fail, and a malformed command line exits 2 instead of running every multiplexer. zellij is torn down with one `delete-session --force`; the extra `kill-session` before it made that command exit 2 unnoticed.
 
 ## [2.3.1] - 2026-10-12
 
