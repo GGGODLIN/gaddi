@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Muse palette offers /model, the command Muse has.** It listed /models, which Muse Code's configuration doc names but Muse 1.4.7 does not know; checked against Muse's own /help and slash completion. /fork and /copy now say they take an argument, as Muse's help shows.
+
 ## [2.3.2] - 2026-10-13
 
 ### Changed

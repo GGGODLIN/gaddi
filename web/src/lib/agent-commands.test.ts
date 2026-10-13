@@ -42,9 +42,9 @@ describe("commandsFor", () => {
 
   it("returns the Muse catalog for 'muse'", () => {
     const cmds = commandsFor("muse");
-    // Muse's model picker is /models, as in opencode, not Claude's /model.
-    expect(cmds.some((c) => c.command === "/models")).toBe(true);
-    expect(cmds.some((c) => c.command === "/model")).toBe(false);
+    // Muse 1.4.7 completes /mod to /model only; its configuration doc's /models does not exist.
+    expect(cmds.some((c) => c.command === "/model")).toBe(true);
+    expect(cmds.some((c) => c.command === "/models")).toBe(false);
     // Both start a fresh session; Muse's docs differ only in whether the scrollback is wiped.
     expect(cmds.find((c) => c.command === "/new")?.dangerous).toBe(true);
     expect(cmds.find((c) => c.command === "/clear")?.dangerous).toBe(true);
