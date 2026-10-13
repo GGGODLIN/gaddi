@@ -25,7 +25,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ### Added
 
-- **Grok and Muse panes wear their brand icon.** Grok's is the slashed circle from grok.com's own favicon; Muse Code's page shows no mark of its own, so its pane wears Meta's, the way Codex wears OpenAI's. Both had fallen back to an initials tile.
+- **Grok and Muse panes wear their brand icon.** Grok's is the slashed circle from grok.com's own favicon; Muse Code has no mark of its own, so its pane wears the Muse family's blue m from muse.ai, on the white tile of muse.ai's app icon. Both had fallen back to an initials tile.
 - **The Agent palette lists Muse Code's built-in commands.** Twenty-three rows from Muse Code's own docs, from `/compact` and `/models` to `/goal`, `/side` and `/tasks`; a Muse pane's palette showed only what `commands.toml` added.
 
 ### Changed
