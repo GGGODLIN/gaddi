@@ -23,9 +23,15 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.3.3] - 2026-10-13
+
+### Changed
+
+- **Built on upstream Collie 1.20.2.** AltanS/collie v1.20.2, commit 1b980800.
+
 ### Fixed
 
-- **The Muse palette offers /model, the command Muse has.** It listed /models, which Muse Code's configuration doc names but Muse 1.4.7 does not know; checked against Muse's own /help and slash completion. /fork and /copy now say they take an argument, as Muse's help shows.
+- **The Muse palette offers /model, the command Muse has.** It listed /models, which Muse Code's configuration doc names but Muse 1.4.7 does not know; checked against Muse's own /help and slash completion. /fork and /copy now say they take an argument, as Muse's help shows. ([155f3ffb](https://github.com/GGGODLIN/gaddi/commit/155f3ffb))
 
 ## [2.3.2] - 2026-10-13
 
