@@ -92,7 +92,7 @@ write_changelog_raw() {
   } > "${REPO}/CHANGELOG.md"
 }
 
-mkdir -p "${REPO}/scripts/git-hooks" "${REPO}/web/src/hooks" "${REPO}/cli" "${REPO}/bridge" "${REPO}/docs"
+mkdir -p "${REPO}/scripts/git-hooks" "${REPO}/web/src/hooks" "${REPO}/web/src/lib" "${REPO}/web/src/fixtures/panes" "${REPO}/cli" "${REPO}/bridge" "${REPO}/docs"
 cp "$HOOK" "${REPO}/scripts/git-hooks/pre-commit"
 cp "${ROOT}/scripts/check-version.sh" "${REPO}/scripts/check-version.sh"
 cp "${ROOT}/scripts/check-crew-wire.sh" "${REPO}/scripts/check-crew-wire.sh"
@@ -106,6 +106,8 @@ echo "// test" > "${REPO}/cli/pairing.test.ts"
 echo "// test" > "${REPO}/web/src/hooks/use-spaces.test.tsx"
 echo "# test" > "${REPO}/scripts/collie-cli.test.sh"
 echo "# doc" > "${REPO}/docs/deployment.md"
+echo "# note" > "${REPO}/web/src/lib/NOTES.md"
+echo "capture" > "${REPO}/web/src/fixtures/panes/claude--idle.txt"
 
 cd "$REPO"
 git init -q .
@@ -172,6 +174,22 @@ assert_allowed "the pre-commit hook itself"
 touch_file docs/deployment.md
 run_guard
 assert_allowed "a doc alone"
+
+# A note beside the code and a captured pane both live under `web/src/`, the source prefix, and
+# neither ships: the note is Markdown, the capture is read by tests alone.
+touch_file web/src/lib/NOTES.md
+run_guard
+assert_allowed "a Markdown note under web/src alone"
+
+touch_file web/src/fixtures/panes/claude--idle.txt
+run_guard
+assert_allowed "a captured pane alone"
+
+# The line between them: a note does not launder the source file beside it.
+touch_file web/src/lib/NOTES.md
+touch_file cli/pairing.ts
+run_guard
+assert_blocked "a Markdown note WITH a source file" "functional code changed but nothing was recorded"
 
 # Several non-functional files at once are still nothing to record — the filter is per file, and
 # what is left over is what the guard judges.

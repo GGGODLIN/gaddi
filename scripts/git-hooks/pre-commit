@@ -58,7 +58,11 @@ else
   # None is visible to an operator, so there is nothing for them to read a line about. A commit that
   # touches one of these AND the code under it still records: the source file survives this filter,
   # and the line is about the source.
-  functional="$(echo "$staged" | grep -vE '(\.test\.(ts|tsx|sh)$|^scripts/git-hooks/|^web/src/test/|^cli/fakes\.ts$)' || true)"
+  #
+  # Two more, which sat under `web/src/` and so read as source: a Markdown note (`*.md`, which this
+  # repo's rules already call doc-only wherever it lives) and the captured pane corpus under
+  # `web/src/fixtures/`, which only tests read, through `node:fs`, and no bundle imports.
+  functional="$(echo "$staged" | grep -vE '(\.test\.(ts|tsx|sh)$|\.md$|^scripts/git-hooks/|^web/src/test/|^web/src/fixtures/|^cli/fakes\.ts$)' || true)"
 
   # Bullets under `## [Unreleased]` in the CHANGELOG on stdin. The section runs from that heading
   # to the next `## ` heading. A `### Added` line starts with `#`, never `- `, so a group heading
