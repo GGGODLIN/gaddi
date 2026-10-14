@@ -39,6 +39,21 @@ esac
 
 [ -f "$file" ] || exit 0
 
+# A file outside this checkout is judged by where it lives, not by where the hook runs. oxlint
+# picks the nearest `.oxlintrc.json` above the file, so a file in a `git worktree` of this repo
+# found the worktree's config, whose plugin import cannot resolve without that worktree's own
+# `node_modules`, and every edit there was blocked with a module error instead of a finding. A
+# worktree of this repo is linted under this checkout's config; a file in no repo or in another
+# repo is not ours to lint.
+config_args=()
+root=$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null) || exit 0
+if [ "$root" != "$(pwd -P)" ] && [ "$root" != "$CLAUDE_PROJECT_DIR" ]; then
+  theirs=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  ours=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  [ -n "$theirs" ] && [ "$theirs" = "$ours" ] || exit 0
+  config_args=(-c "$CLAUDE_PROJECT_DIR/.oxlintrc.json")
+fi
+
 # Vendored plugin sources are excluded in .oxlintrc.json, but naming a file on the
 # command line overrides that ignore — so skip the spawn entirely.
 case "$file" in
@@ -46,7 +61,8 @@ case "$file" in
 esac
 
 # Same config, same flags as `bun run lint`; only the file set narrows.
-if ! output=$(bunx oxlint --max-warnings 0 "$file" 2>&1); then
+# The `+` form, because bash 3.2 (macOS) treats an empty array as unbound under `set -u`.
+if ! output=$(bunx oxlint --max-warnings 0 ${config_args[@]+"${config_args[@]}"} "$file" 2>&1); then
   {
     echo "oxlint found issues in ${file#"$CLAUDE_PROJECT_DIR"/}:"
     echo
