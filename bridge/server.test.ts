@@ -6,6 +6,8 @@ import { encodeStyledRegion, styledRegionLines } from "../web/src/lib/styled-reg
 import {
   afterPaneInput,
   isPaneInput,
+  isTopologyWrite,
+  freeSpaceName,
   paneGateLevel,
   blobRoute,
   BLOB_MAX_BYTES,
@@ -3313,6 +3315,12 @@ describe("launch — an allowlisted space create, then the command and Enter", (
     readonly texts: Array<[string, string]> = [];
     readonly keys: Array<[string, readonly string[]]> = [];
     readonly closes: string[] = [];
+    readonly tabRenames: Array<[string, string]> = [];
+    // A new space is followed by a tab rename, which `launch` asks the declaration about first.
+    readonly capabilities = declareCapabilities({
+      supports: ["createSpace", "createTab", "renameTab"],
+      topologyLatency: { kind: "push" },
+    });
     failOn: "create" | "text" | "keys" | null = null;
     closeThrows = false;
     /** Successive screens the new pane shows; the last one repeats for every further read. */
@@ -3335,6 +3343,10 @@ describe("launch — an allowlisted space create, then the command and Enter", (
       return Promise.resolve(
         muxOk({ paneId: "w2:p9", spaceId: request_.spaceId, spaceLabel: "MySpace", tabId: "w2:t9", cwd: request_.cwd ?? "/home/op" }),
       );
+    }
+    renameTab(tabId: string, label: string): Promise<MuxAck> {
+      this.tabRenames.push([tabId, label]);
+      return Promise.resolve(muxAck());
     }
     readGrid(paneId: string): Promise<MuxOutcome<MuxGrid>> {
       // SAFETY: `screens` is never empty in this suite and the index is clamped to its last entry.
@@ -3363,13 +3375,17 @@ describe("launch — an allowlisted space create, then the command and Enter", (
 
   // `Partial<T>` on both stubs keeps the compiler checking every member they DO supply against the
   // real contract, exactly as `asMux` above does for a HerdrClient fake.
-  const engineStub: Partial<StateEngine> = { pokeNow: () => {} };
-  // SAFETY: after a create, `launch` asks the engine for exactly one thing — `pokeNow()` — and the
-  // adapter for exactly the five calls FakeLaunchMux implements. No other member of either is
+  const engineStub: Partial<StateEngine> = {
+    pokeNow: () => {},
+    current: () => ({ agents: [], shellPanes: [], workspaces: [], tabs: [], bridge: "connected" }),
+  };
+  // SAFETY: `launch` asks the engine for two things — `current()` (the names already taken, before a
+  // new space is named after its folder) and `pokeNow()` after the create — and the
+  // adapter for exactly the calls FakeLaunchMux implements (and its `capabilities` declaration). No other member of either is
   // reachable from this code path, which is the only step these two casts assert.
   const engine = engineStub as StateEngine;
   function asLaunchMux(fake: Partial<MuxAdapter>): MuxAdapter {
-    // SAFETY: as above — only the five calls the fake implements are reachable from `launch`.
+    // SAFETY: as above — only the calls the fake implements are reachable from `launch`.
     return fake as MuxAdapter;
   }
   const rowsOf = (rows: Launcher[]) => () => Promise.resolve(rows);
@@ -3425,7 +3441,7 @@ describe("launch — an allowlisted space create, then the command and Enter", (
     expect(entries).toHaveLength(0);
   });
 
-  test("a listed row creates a space with that row's label AND cwd, then types the command + Enter", async () => {
+  test("a listed row creates a space named after its folder, the tab takes the row's label, then types the command + Enter", async () => {
     const clock = fakeClock();
     const mux = new FakeLaunchMux(clock.now);
     const { audit, entries } = launchAudit();
@@ -3441,8 +3457,10 @@ describe("launch — an allowlisted space create, then the command and Enter", (
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true });
-    // The row's own cwd and label, never the client's — the request carried neither.
-    expect(mux.createArgs).toEqual({ cwd: "/home/op/project", label: "Runs & quota" });
+    // The row's own cwd, never the client's — the request carried none. The space takes the folder's
+    // name (`basename` of that cwd) and the row's label goes on the tab.
+    expect(mux.createArgs).toEqual({ cwd: "/home/op/project", label: "project" });
+    expect(mux.tabRenames).toEqual([["w1:t1", "Runs & quota"]]);
     expect(mux.texts).toEqual([["w1:p1", "rumen-peek"]]);
     // A bare Enter, NOT cfg.submitKeys: this is a shell prompt, not an agent's composer.
     expect(mux.keys).toEqual([["w1:p1", ["Enter"]]]);
@@ -3586,6 +3604,7 @@ describe("launch — an allowlisted space create, then the command and Enter", (
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({ ok: true, pane: { workspaceId: "w3" } });
       expect(mux.createArgs).toBeNull(); // never createSpace
+      expect(mux.tabRenames).toEqual([]); // the tab already carries the row's label
       expect(mux.createTabArgs).toEqual({ spaceId: "w3", label: "Runs & quota", cwd: "/home/op/project" });
       expect(mux.texts).toEqual([["w2:p9", "rumen-peek"]]);
       expect(entries[0]?.action).toBe("tab.launch");
@@ -3675,7 +3694,8 @@ describe("launch — an allowlisted space create, then the command and Enter", (
         clock,
       );
       expect(res.status).toBe(200);
-      expect(mux.createArgs).toEqual({ cwd: "/home/op/project", label: "Runs & quota" });
+      expect(mux.createArgs).toEqual({ cwd: "/home/op/project", label: "project" });
+      expect(mux.tabRenames).toEqual([["w1:t1", "Runs & quota"]]);
       expect(mux.createTabArgs).toBeNull();
       expect(entries[0]?.action).toBe("workspace.launch");
     });
@@ -4443,6 +4463,20 @@ describe("an input written to a pane makes its engine hot", () => {
     expect(isPaneInput("/api/tab/w1%3At1/close", "POST")).toBe(false);
   });
 
+  // A pane launched on minibuch stayed a shell on the phone for up to 12 s (2026-10-14): the lead's
+  // sweep of the member rode a cold engine, and only inputs warmed it.
+  test("isTopologyWrite names the launch, create, close and rename routes, as POSTs, and nothing else", () => {
+    for (const path of ["/api/launch", "/api/workspace", "/api/tab", "/api/tab/w1%3At1/close", "/api/tab/w1%3At1/rename"]) {
+      expect(isTopologyWrite(path, "POST")).toBe(true);
+    }
+    expect(isTopologyWrite("/api/pane/w1%3Ap1/close", "POST")).toBe(true);
+    expect(isTopologyWrite("/api/pane/w1%3Ap1/rename", "POST")).toBe(true);
+    expect(isTopologyWrite("/api/launch", "GET")).toBe(false);
+    for (const path of ["/api/launch/recent/clear", "/api/launch/check", "/api/launchers", "/api/folders/star", "/api/pane/w1%3Ap1/reply", "/api/pane/w1%3Ap1/focus", "/api/pane/w1%3Ap1/upload"]) {
+      expect(isTopologyWrite(path, "POST")).toBe(false);
+    }
+  });
+
   test("afterPaneInput tells the engine only when the write landed, and hands the response back", () => {
     let noted = 0;
     const engine = { noteInput: () => void noted++ };
@@ -4459,7 +4493,7 @@ describe("an input written to a pane makes its engine hot", () => {
     expect(src).toContain("return afterPaneInput(rt.engine, await replyPane(");
     expect(src).toContain("return afterPaneInput(rt.engine, await keysPane(");
     // On the lead: the forward's answer, so the lead's sweep follows the member it typed into.
-    expect(src).toContain("const input = isPaneInput(pathname, req.method);");
+    expect(src).toContain("const input = isPaneInput(pathname, req.method) || isTopologyWrite(pathname, req.method);");
     expect(src).toContain("return input && own !== undefined ? afterPaneInput(own, forwarded) : forwarded;");
     expect([...src.matchAll(/afterPaneInput\(/g)]).toHaveLength(4); // the definition and three calls
   });
@@ -5093,5 +5127,17 @@ describe("paneHistory — two muse tabs in one workspace read their own transcri
     } finally {
       await rm(base, { recursive: true, force: true });
     }
+  });
+});
+
+// A launcher row in a new space takes its folder's name (2026-10-14). tmux refuses a second session
+// of one name, so a second launch from the same folder must not ask for a taken one.
+describe("freeSpaceName — a folder-named space never takes a name already in use", () => {
+  test("the folder's own name when it is free, then -2, -3 in order", () => {
+    expect(freeSpaceName("app", [])).toBe("app");
+    expect(freeSpaceName("app", [{ label: "other" }])).toBe("app");
+    expect(freeSpaceName("app", [{ label: "app" }])).toBe("app-2");
+    expect(freeSpaceName("app", [{ label: "app" }, { label: "app-2" }])).toBe("app-3");
+    expect(freeSpaceName("app", [{ label: "app-2" }])).toBe("app");
   });
 });
