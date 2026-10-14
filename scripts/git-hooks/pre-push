@@ -21,6 +21,14 @@ pushed_refs="$(cat)"
 # environment rather than a trap. ROOT is resolved above, while they still apply.
 unset "${!GIT_@}" 2>/dev/null || true
 
+# macOS hands out TMPDIR under /var/folders, and /var is a symlink to /private/var. The durable mux
+# refuses a socket under a symlinked folder (a privacy check), so on a Mac 31 of its tests failed
+# here while Linux CI stayed green, and every push became a question of whether to skip. Point the
+# suites at the same folder by its real path; on Linux this resolves to what it already was.
+if tmp_real="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)"; then
+  export TMPDIR="$tmp_real/"
+fi
+
 # ── Typecheck (the Vite build does NOT typecheck; catch it before it ships) ──
 if [ "${SKIP_TYPECHECK:-}" = "1" ]; then
   echo "pre-push: SKIP_TYPECHECK=1 — skipping typecheck" >&2
