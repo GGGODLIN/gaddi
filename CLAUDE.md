@@ -19,6 +19,29 @@ explicit need, verify it with the nearest targeted tests, lint and `bun run buil
 Do not enter a full spec / ticket / review workflow, add architecture, refactor adjacent code or run
 the full test / E2E suite unless the user asks or the requested change directly requires it.
 
+- **The result the user named is the finish line, not the defects this round found.** When the
+  user asks for an outcome ("make Grok Build work", "until the experience is normal"), the smallest
+  change is the one that reaches it. Fixing only what this round's evidence showed and closing early
+  is the failure this rule stops.
+- **Before changing a piece of data, list where it shows.** Name the screens and the consumers that
+  render or read it, and check each one, not only the one the request mentioned.
+- **An agent-layer change runs a real agent.** The agent layer is `web/src/lib/harness/`,
+  `bridge/journal/`, `bridge/harness-launch.ts`, `bridge/launcher-recipes.ts`, the agent command
+  catalogs and the harness bar. Verify in three tiers:
+  1. The daily path (Mac, Herdr, Claude, iPhone) gets a real end-to-end run; the phone part waits
+     for the release check.
+  2. Other agents and multiplexers installed on this machine run for real in a throwaway Herdr
+     session (or a mux on its own socket) with a temporary config directory, never in the
+     operator's live session or config.
+  3. Hosts this machine cannot run (Linux, Windows, Android) get unit tests and CI, reported as not
+     verified.
+
+  What the agent can verify itself is never closed as unverified; what it cannot, it names with the
+  reason.
+- **A big topic is interviewed first.** When a request needs several rounds of discussion before
+  its shape is clear, interview it into a decision list or a roadmap entry, and implement only after
+  every item is decided; nothing is built between questions. Small requests proceed as usual.
+
 A task is not finished at commit or push. The operator's Collie follows this fork's `main`: it runs
 the newest fork release and takes the next one through the in-app update, so a change reaches the
 phone only in a release. Building a `dev` checkout deploys nothing. After verification, say whether
@@ -344,6 +367,17 @@ page to be skimmed.
   `Bun.connect` (HTTP handlers, the socket client) stay out of the VITEST tier — Vitest-on-Node can't
   run them — so keep new backend logic pure/injectable enough for `bun test`, or exercise it through
   `web/`. Bun's own runner *can* run them, and the drill below is where that happens.
+- **`scripts/collie-cli.test.sh` passes only on Linux.** Its updater case expects the
+  `systemd-run` handoff, which `cli/update-run.ts` takes only on Linux, so the root `bun run test`
+  is red on macOS at that step. CI is Linux. The pre-push hook does not run this script.
+- **A red local gate is a bug to fix, not a question of whether to skip it.** When pre-commit or
+  pre-push fails on this machine for an environment reason, fix the hook or the test so it passes
+  here; an escape hatch is for a single push the operator chose, not the standing answer.
+- **Tests run on Windows CI too.** Build paths with `path.join`, never a hard-coded `/`. A test that
+  needs a child process spawns `process.execPath -e …`, never a binary such as `/usr/bin/yes` that
+  Windows lacks.
+- **A new or changed test is shown to fail first.** Take the fix out, see the test go red, put the
+  fix back. A test that never failed may check nothing.
 - **The integration lane, `integration/`.** One file today,
   `integration/crew-harness.test.ts`: two real bridges as child processes, over real pinned mutual
   TLS, through the real enrollment path. It is **not** in `bun run test` and **not** on the push
@@ -404,6 +438,9 @@ tests nothing Vitest already covers.
   `smoke.spec.ts` and `handles.spec.ts`, plus the named cases proving a hand check,
   `web/e2e/issue-180.spec.ts` and `web/e2e/m24-crew.spec.ts`, and `web/e2e/service-worker.spec.ts`,
   which builds two bundles under `web/e2e/.builds/` to prove an old shell picks up a new one.
+  **`bunx playwright test` run directly does not build:** it serves whatever `web/dist` holds, and
+  outside CI it reuses a server already on the port. After a code change, build first or run
+  `bun run e2e`, or the case passes against the old bundle.
 - **Tier 2** runs by hand, from the workspace root: `make e2e`. It drives the dev lane's lead,
   instance `next` on port 8788, reads only, and never restarts or rebuilds anything. Its cases live
   under `web/e2e/live/`, sharing the harness in `web/e2e/live/live.ts`. It never runs in CI:
@@ -838,6 +875,9 @@ This fork keeps two branches and its own version line; both override upstream's 
 
 - **`dev` takes every change.** Commit and push to `dev`, never to `main`. The operator's active
   Collie follows `main` through the in-app update, so a `dev` change reaches it only in a release.
+- **A second session works in a worktree.** When another session already has uncommitted work in
+  the main checkout, a new feature starts in its own `git worktree` off `dev` and merges back into
+  `dev` when done, so neither session commits or builds the other's half-finished files.
 - **`main` holds releases, plus docs-only commits between them, and only moves forward.** It is
   upstream's history followed by one commit per fork release, whose tree is exactly the tree of a
   commit on `dev`, and docs-only commits between them (below), which change documentation alone;
@@ -945,6 +985,19 @@ Upstream reuses numbers this fork has published (both have a `v1.14.0`), so its 
 
 - Push exactly the release tag you cut (`git push origin vX.Y.Z`). Never `git push --tags` or
   `--follow-tags`: both would send `upstream/*` tags to `origin`, where the updater would read them.
+
+**Merging an upstream release.** Tests stay green through a merge that silently drops one side's
+change, so the review is part of the merge, not an extra:
+
+1. Before: estimate the conflicts with `git merge-tree --write-tree dev upstream/vX.Y.Z`, read any
+   policy document upstream added or changed (`CLAUDE.md`, `.adr/`, contributing guides), and list
+   the API and contract changes with the fork code that consumes each.
+2. During: after resolving, review every conflicted file through its three diffs (base to fork,
+   base to upstream, base to result) for a side whose change disappeared; a file of mechanical
+   conflicts only (dictionaries, lockfile, `CHANGELOG.md`) is checked by a script instead.
+3. After: check the Gaddi brand swap survived in strings and tests, the `CHANGELOG.md` entries and
+   the i18n keys in all six dictionaries; run both typechecks, lint, build, both suites and the
+   fork's live e2e; compare any failure with pure upstream by test name, not by count.
 
 ### Cutting a release
 
