@@ -32,6 +32,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **The Agent palette lists the skills you installed for Codex, opencode, pi, Oh My Pi, Grok, Antigravity and Muse.** The bridge reads each agent's own skill folders the way that agent does, its trust gate and hiding rules included, and the rows join the same list and search as Claude's: `$name` on Codex, `/skill:name` on pi and Oh My Pi, `/name` elsewhere. Nothing is run to find them.
 - **Codex's and Muse's `/resume` session picker gets phone buttons.** Up, Down, Resume and Exit replace driving the list with the keys pad; archiving and quitting stay on the keyboard, since they take a session away or close the agent.
 - **Antigravity's `/resume` conversation list gets phone buttons too.** Up, Down, Select and Go back, the keys its own footer names; renaming and deleting a conversation stay on the keyboard. A search that matches nothing keeps the Escape card.
+- **Grok Build's folder trust prompt gets phone buttons.** Yes, proceed and No, quit, each sending the one key the prompt prints beside it, `y` or `n`. Grok asks only in a folder that holds something for it to load, such as a project skill.
 
 ### Fixed
 
