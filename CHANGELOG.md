@@ -35,6 +35,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **Grok Build's folder trust prompt gets phone buttons.** Yes, proceed and No, quit, each sending the one key the prompt prints beside it, `y` or `n`. Grok asks only in a folder that holds something for it to load, such as a project skill.
 - **pi's folder trust prompt gets phone buttons.** Trust, Trust parent folder, Trust for this session, Do not trust and Cancel, each reached with the arrows its footer names and confirmed only once the pointer reads back on the tapped row.
 
+### Changed
+
+- **Collie is tested on Bun 1.4.0 and newer.** The update preflight now warns on an older Bun when you build from source. Nothing is blocked. A test that took 20 GB on Bun 1.3.14 now fails there instead. Thanks @OowhitecatoO (#438, #439). ([09ba7b79](https://github.com/AltanS/collie/commit/09ba7b79)) ([866ae2cf](https://github.com/AltanS/collie/commit/866ae2cf))
+
 ### Fixed
 
 - **A slash command sent from the phone reaches Muse Code 1.4.8.** Muse now paints an argument hint after a complete command (`/model [<model-id>]`) and lists skills under the command they prefix, and Collie read both as typed text, so the send was refused. The hint is told apart by its colour, and a send still stops when the highlighted suggestion is another command, since Enter would run that one.
@@ -47,6 +51,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **Answering an Antigravity question from the phone no longer answers the next one too.** A tap sent the option's number and then Enter, but the number alone already answers, so on a two-question call the Enter answered the second question with whatever row was highlighted. A tap now sends the number alone, and the last question of such a call gets buttons as well.
 - **The same holds once an Antigravity conversation has a plan.** A plan document adds `ctrl+r Review` to every question's footer, and those questions still sent the number and then Enter, so the first answer of two also answered the second. Plan approval and every question under that footer now send the number alone.
 - **Grok's model button no longer offers its argument hint as your draft.** After the harness bar's Model button, Grok keeps `/model` in its box with a grey `<model> [window] [effort]` hint, and the phone showed all of it as a terminal draft, so Take over would have sent the hint. The grey hint is no longer read as typed text.
+- **A message to a pi editor with padding is sent again.** With pi's `editorPaddingX` setting above 0, Collie showed "the message didn't reach the input box" and never pressed Enter. The reader now knows a padded draft by pi's cursor cell and the padding on every row. Padding 0 is unchanged. This started in 1.20.1. Thanks @jrswab (#442). ([76811421](https://github.com/AltanS/collie/commit/76811421))
+- **A Claude question with the task list under it shows as its card.** Claude Code 2.1.299 draws the task list under a question's key hints in a session with tasks, so Collie could not read the question, and a long list hid it. The question now shows as its usual card, and tapping an answer works. While the question is open, the task list is not shown on the phone. It returns when Claude works again. Thanks @leftos (#436). ([397f816b](https://github.com/AltanS/collie/commit/397f816b))
+- **Doctor accepts a loopback bind on a peer behind a tunnel.** A peer that reaches its lead on loopback, through an ssh tunnel or on the same host, no longer reports `bind` as an error, and `crew update` no longer skips that member. Thanks @OowhitecatoO (#437). ([3798e6b1](https://github.com/AltanS/collie/commit/3798e6b1))
+- **A message is not typed into pi's settings pickers.** The /settings and /scoped-models screens of pi 1.2.0 read as a ready editor, so a message sent from the phone would have gone into their search row. Collie now holds the send while they are open. ([2b1e4c44](https://github.com/AltanS/collie/commit/2b1e4c44))
 
 ## [2.4.0] - 2026-10-15
 
