@@ -414,8 +414,24 @@ export function commandsFor(
 }
 
 /**
- * The reference catalog with the commands found on the pane's machine folded in (ADR 9009), Claude
- * only: one list, as Claude Code's own `/` menu is one list. A found command naming a reference row
+ * The agents the bridge reads skills off disk for: Claude (ADR 9009) and the seven fork ADR 9011
+ * adds. `antigravity` is agy's second name, filed the way the catalog files it.
+ */
+export const FOUND_AGENTS: ReadonlySet<string> = new Set([
+  "claude",
+  "codex",
+  "opencode",
+  "pi",
+  "omp",
+  "grok",
+  "agy",
+  "antigravity",
+  "muse",
+]);
+
+/**
+ * The reference catalog with the commands found on the pane's machine folded in (ADR 9009, fork ADR
+ * 9011 for the agents past Claude): one list, as each agent's own menu is one list. A found command naming a reference row
  * takes that row's place, since Claude Code runs the local skill over the built-in, and keeps its
  * `dangerous` classification. Found rows are searchable, not on the first screen, which stays the
  * operator's rows and the common reference ones.
@@ -425,7 +441,7 @@ function withFound(
   shipped: readonly AgentCommand[],
   found: readonly ClaudeCommand[],
 ): readonly AgentCommand[] {
-  if (found.length === 0 || canonicalAgent(agent?.toLowerCase().trim() ?? "") !== "claude") return shipped;
+  if (found.length === 0 || !FOUND_AGENTS.has(canonicalAgent(agent?.toLowerCase().trim() ?? ""))) return shipped;
   const local = new Map(found.map((row) => [row.command, row] as const));
   const merged = shipped.map((row) => {
     const hit = local.get(row.command);

@@ -181,6 +181,18 @@ describe("CommandPalette", () => {
     expect(await screen.findByText("/to-spec")).toBeInTheDocument();
   });
 
+  it("finds a Codex pane's own skills too, spelled the way Codex mentions them", async () => {
+    server.use(
+      http.get("/api/pane/w1%3Ap1/claude-commands", () =>
+        HttpResponse.json({ commands: [{ command: "$my-skill", description: "Mine", argHint: "" }] }),
+      ),
+    );
+    const user = userEvent.setup();
+    render(<CommandPalette open onClose={vi.fn()} agent="codex" paneId="w1:p1" onInsert={vi.fn()} />);
+    await user.type(screen.getByPlaceholderText(/Search \d+ commands/), "my-skill");
+    expect(await screen.findByText("$my-skill")).toBeInTheDocument();
+  });
+
   it("keeps the palette it had when the machine cannot answer", async () => {
     server.use(http.get("/api/pane/w1%3Ap1/claude-commands", () => new HttpResponse(null, { status: 501 })));
     render(<CommandPalette open onClose={vi.fn()} agent="claude" paneId="w1:p1" onInsert={vi.fn()} />);
