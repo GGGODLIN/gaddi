@@ -58,7 +58,11 @@ else
   # None is visible to an operator, so there is nothing for them to read a line about. A commit that
   # touches one of these AND the code under it still records: the source file survives this filter,
   # and the line is about the source.
-  functional="$(echo "$staged" | grep -vE '(\.test\.(ts|tsx|sh)$|^scripts/git-hooks/|^web/src/test/|^cli/fakes\.ts$)' || true)"
+  #
+  # Two more, which sat under `web/src/` and so read as source: a Markdown note (`*.md`, which this
+  # repo's rules already call doc-only wherever it lives) and the captured pane corpus under
+  # `web/src/fixtures/`, which only tests read, through `node:fs`, and no bundle imports.
+  functional="$(echo "$staged" | grep -vE '(\.test\.(ts|tsx|sh)$|\.md$|^scripts/git-hooks/|^web/src/test/|^web/src/fixtures/|^cli/fakes\.ts$)' || true)"
 
   # Bullets under `## [Unreleased]` in the CHANGELOG on stdin. The section runs from that heading
   # to the next `## ` heading. A `### Added` line starts with `#`, never `- `, so a group heading
@@ -192,10 +196,11 @@ if [ "${SKIP_LINT_CHECK:-}" = "1" ]; then
 fi
 
 # Lintable staged files, minus the vendored plugin sources (.oxlintrc.json ignores them too, but
-# naming one explicitly on the command line would override that ignore).
+# naming one explicitly on the command line would override that ignore). `examples/` is dropped for
+# the same reason: with every file ignored, oxlint exits non-zero with "No files found to lint".
 lintable="$(echo "$staged" \
   | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' \
-  | grep -vE '^(tools/oxlint/anti-slop/|contrib/)' || true)"
+  | grep -vE '^(tools/oxlint/anti-slop/|contrib/|examples/)' || true)"
 
 # Fast path: nothing lintable staged (doc-only commits, config-only commits) — don't spawn oxlint.
 [ -z "$lintable" ] || {

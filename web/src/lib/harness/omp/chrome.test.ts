@@ -264,7 +264,14 @@ describe("stripChrome", () => {
     },
   );
 
-  it.each(NON_BOX_COMPOSER_FIXTURES)(
+  // The nine omp 18.10 Ask captures end with a file newline, which reads as one trailing blank row, and
+  // dropping that row is chrome stripping, not a bug: the same-reference contract is for captures whose
+  // last row is already content.
+  const ENDS_IN_CONTENT = NON_BOX_COMPOSER_FIXTURES.filter(
+    (name) => lineText(fixtureLines(name).at(-1)!).trim() !== "",
+  );
+
+  it.each(ENDS_IN_CONTENT)(
     "%s: returns the SAME reference when there is no chrome to strip",
     (name) => {
       // The conservatism contract: callers may treat `result === lines` as "nothing was removed".

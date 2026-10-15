@@ -42,6 +42,7 @@ import {
   limitMb,
   markerFor,
   markerMissing,
+  nextMarkerNumber,
   offersFiles,
   PHOTO_ACCEPT,
   rejectAttachment,
@@ -1434,7 +1435,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
    * order, each after the one before.
    */
   function addAttachment(file: File, path: string) {
-    const n = nextAttachmentRef.current;
+    const n = nextMarkerNumber(inputValueRef.current, nextAttachmentRef.current);
     nextAttachmentRef.current = n + 1;
     const kind = attachmentKind(file, limits);
     const attachment: ComposerAttachment = { n, path, name: file.name, kind };

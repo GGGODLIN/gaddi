@@ -514,6 +514,41 @@ export const ja: Dictionary = {
   "prompt.family.plan": "プランの確認",
   "prompt.sendingAria": "送信中",
   "prompt.reconnectNote": "再接続してから回答してください。",
+  "ask.caption": "Needs your answer",
+  "ask.notAnswerable": "This ask cannot be answered from the phone.",
+  "ask.late": "Already answered. This card goes away on the next update.",
+  "ask.notTaken": "受け付けられませんでした。しばらくすると質問が再度表示される場合があります。",
+  "ask.stale": "This ask changed. Read it again, then tap an answer.",
+  "ask.stale.older": "This machine runs an older Collie and cannot take answers here. Update it, or answer in the program.",
+  "ask.unknown": "Not sure the answer arrived. Try again sends it once more.",
+  "ask.retry": "Try again",
+  "ask.refused": "The answer was refused.",
+  "ask.effect.allow": "Allow",
+  "ask.effect.allowAlways": "Always allow",
+  "ask.effect.deny": "Deny",
+  "ask.effect.cancel": "Cancel",
+  "ask.alwaysArmed": "Tap again to always allow {tool}",
+  "ask.cleaned": "Text shortened",
+  "ask.maybe": "May already be applied. Check the chat.",
+  "ask.showMore": "Show {count} more",
+  "ask.showFewer": "Show fewer",
+  "durable.composer.placeholder": "Message this conversation",
+  "durable.composer.steer": "Steer",
+  "durable.composer.steerAria": "Steer the running turn instead of starting a new one",
+  "durable.composer.stop": "Stop",
+  "durable.composer.stopAria": "Stop the running turn",
+  "durable.composer.sent": "Sent",
+  "durable.composer.moved": "The conversation moved on. Your text is still here. Read the new turn, then send again.",
+  "durable.composer.older": "This machine runs an older Collie and cannot take messages here. Update it.",
+  "durable.composer.unknown": "Not sure the message arrived. Send again to retry it once.",
+  "durable.composer.refused": "The message was refused.",
+  "durable.composer.stopped": "Stop sent",
+  "durable.composer.stopMoved": "The conversation moved on, so nothing was stopped. Check it, then stop again if you still want to.",
+  "durable.composer.stopUnknown": "Not sure the stop arrived. Tap Stop again to retry it once.",
+  "durable.composer.maybe": "May already be sent. Check the chat before you send again.",
+  "durable.composer.stopMaybe": "The stop may already be applied. Check the chat.",
+  "durable.composer.stopRefused": "The stop was refused.",
+  "newPage.starters.none": "This machine's program offers no starters yet.",
   "prompt.feedback.cancel": "キャンセル",
   "prompt.feedback.typedAria": "ターミナル内のフィードバック",
   "prompt.feedback.planChange.offer": "変更内容をClaudeに送信",
@@ -782,6 +817,8 @@ export const ja: Dictionary = {
   "newPage.typed.label": "実行するコマンド",
   "newPage.typed.note": "Collie はこの行を新しいシェルに一度だけ入力し、このマシンの履歴に残します。",
   "newPage.summary.run": "`{line}` を実行",
+  "newPage.summary.starter": "{what}",
+  "newPage.summary.starterMachine": "{what} on {machine}",
   "newPage.recent.group": "最近",
   "newPage.recent.remove": "履歴から削除",
   "newPage.recent.clear": "履歴を消去",
@@ -975,6 +1012,7 @@ export const ja: Dictionary = {
   "connection.connected": "接続済み",
   "connection.reconnecting": "再接続中…",
   "connection.herdrDown": "ホスト上のHerdrが停止しています",
+  "connection.tokenRefused": "プログラムがトークンを拒否しました。このピアの COLLIE_DURABLE_TOKEN を確認してください。",
   "connection.offlineCantReach": "オフライン: Collieに接続できません",
   "connection.cantReach": "Collieに接続できません",
   "connection.withLastSeen": "{cause} (最終確認 {time})",
@@ -1193,17 +1231,11 @@ export const ja: Dictionary = {
 
   // --- dialog (menu / multi-select / wizard / preview-select block renderers) ---
   "dialog.sendingAria": "送信中",
-  // TODO wordsmith
   "dialog.terminalControl": "ターミナル",
-  // TODO wordsmith
   "dialog.terminalControlAria": "このカードの代わりにターミナルを表示",
-  // TODO wordsmith
   "dialog.backToCard": "カードに戻る",
-  // TODO wordsmith
   "dialog.putAwayControl": "しまう",
-  // TODO wordsmith
   "dialog.putAwayControlAria": "ターミナルを残して、このカードのボタンを非表示",
-  // TODO wordsmith
   "dialog.showButtons": "ボタンを表示",
   "dialog.previousStepAria": "前のステップ",
   "dialog.nextStepAria": "次のステップ",
@@ -1225,9 +1257,7 @@ export const ja: Dictionary = {
   "dialog.menu.moveDown": "下へ移動",
   "dialog.menu.leftAria": "左: {verb}（{label}）",
   "dialog.menu.rightAria": "右: {verb}（{label}）",
-  // TODO wordsmith
   "dialog.menu.levelAria": "{label}に{verb}",
-  // TODO wordsmith
   "dialog.menu.levelCurrentAria": "{label}、現在",
   "unreadDialog.caption": "Collie はこの対話を読み取れません", // wordsmith
   "unreadDialog.confirmKey": "もう一度タップして{key}を送信", // wordsmith
@@ -1451,6 +1481,15 @@ export const ja: Dictionary = {
   "settings.updateCard.upToDate": "最新の状態です。必要な操作はありません。",
   "settings.updateCard.unknownLatest": "最新のリリースはまだ不明です。",
   "settings.updateCard.includes": "1 回の更新に {versions} が含まれます。",
+  // TODO(wordsmith): English placeholder (1.21.1). Translate with `wordsmith --translate`.
+  "settings.updateCard.notes.offered": "What's new in {version}",
+  "settings.updateCard.notes.current": "What changed in {version}",
+  "settings.updateCard.notes.group.Added": "Added",
+  "settings.updateCard.notes.group.Changed": "Changed",
+  "settings.updateCard.notes.group.Fixed": "Fixed",
+  "settings.updateCard.notes.group.Packaging": "Packaging",
+  "settings.updateCard.notes.group.Docs": "Docs",
+  "settings.updateCard.notes.page": "Release page",
   "settings.updateCard.action": "{version} に更新",
   "settings.updateCard.majorAction": "{version} にメジャー更新",
   "settings.updateCard.majorNote": "{version} は新しいメジャーバージョンです。",
@@ -1733,6 +1772,9 @@ export const ja: Dictionary = {
   "updateScreen.action.retryMany.other": "{count} 台のマシンを再試行",
   "updateScreen.action.tryAgain": "再試行",
   "updateScreen.action.showLog": "ログを表示",
+  // TODO(wordsmith): English placeholder (1.21.1). Translate with `wordsmith --translate`.
+  "updateScreen.action.whatChanged": "What changed in {version}",
+  "updateScreen.action.whatChangedShort": "What changed",
   "updateScreen.action.copy": "コピー",
   "updateScreen.action.copied": "コピー完了",
   "updateScreen.strip.mine": "アップデート実行中。{step}。",
@@ -1975,6 +2017,8 @@ export const ja: Dictionary = {
   "pushTitle.machine.cpu": "{machine} の CPU が高い状態です",
   "pushTitle.machine.mem": "{machine} のメモリが高い状態です",
   "pushTitle.machine.disk": "{machine} のディスクがいっぱいのままです",
+  "pushTitle.ask.permission": "Permission needed in {pane}",
+  "pushTitle.ask.flood": "A program on {host} is raising many asks",
 
   // --- settings.speech and stt.model (Whistle, ADR 0096) ---
   "settings.speech.credit": "Whistleは{link}の音声モデルです。",

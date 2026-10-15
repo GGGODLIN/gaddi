@@ -141,6 +141,8 @@ export function pushName(pane: NameableP): string {
 
 interface Alert {
   agent: string;
+  /** Raised by the ask guard for an ask that travels as data: the title says "Permission needed". */
+  ask?: true;
   /** What a push calls this pane — {@link pushName}, the operator's label and never the title. */
   label: string;
   /** Where it sits — `space › tab`, or the space alone. The one place rule, same module. */
@@ -182,8 +184,11 @@ export class NotificationCoordinator<H = unknown> {
     private readonly describe: (agent: AgentView) => string | undefined = (a) => a.description?.now,
   ) {}
 
-  /** Wire to `StateEngine.onTransition`. */
-  onTransition(agent: AgentView, from: AgentStatus, rawTo: AgentStatus): void {
+  /**
+   * Wire to `StateEngine.onTransition`. `cause` is `"ask"` when the ask guard raised the push
+   * (`durable/ask-push.ts`): the title then says a permission is needed, in generic words.
+   */
+  onTransition(agent: AgentView, from: AgentStatus, rawTo: AgentStatus, cause?: "ask"): void {
     const id = agent.paneId;
     // Herdr 0.9 can report a finished turn as `idle` instead of `done`, and tmux and zellij never
     // report `done` (issue #345), so a `working → idle` flip IS the completion and is read as `done` from here on: the Finished pref,
@@ -209,6 +214,7 @@ export class NotificationCoordinator<H = unknown> {
       // every other member of `AgentStatus`, so this branch cannot be entered with one.
       status: to as NotifiableStatus,
     };
+    if (cause === "ask" && to === "blocked") alert.ask = true;
     const handle = this.clock.schedule(() => {
       this.pending.delete(id);
       const now = this.describe(agent);
@@ -276,8 +282,11 @@ export class NotificationCoordinator<H = unknown> {
     if (entries.length === 1) {
       const [paneId, a] = entries[0]!;
       // One outstanding agent → deep-link straight to its pane on tap.
+      // An ask's push is GENERIC by rule: the pane's push name and nothing of the ask, because the
+      // ask's title and its tool line are the program's words and can carry a path or a command.
+      const title = a.ask === true ? pushTitle("ask.permission", { pane: a.label }) : pushTitle(a.status === "blocked" ? "agent.blocked" : "agent.done", { agent: a.agent });
       return {
-        ...pushTitle(a.status === "blocked" ? "agent.blocked" : "agent.done", { agent: a.agent }),
+        ...title,
         // The PLACE, and nothing else. A push says the same two things the screens say — what it is
         // called (the title, above) and where it sits — so the notification and the dashboard row it
         // deep-links to read alike. The cwd is deliberately gone: a full absolute path on a lock

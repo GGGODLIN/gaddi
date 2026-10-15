@@ -520,6 +520,41 @@ export const de: Dictionary = {
   "prompt.family.plan": "Plan prüfen",
   "prompt.sendingAria": "Wird gesendet",
   "prompt.reconnectNote": "Verbinde dich neu, um zu antworten.",
+  "ask.caption": "Needs your answer",
+  "ask.notAnswerable": "This ask cannot be answered from the phone.",
+  "ask.late": "Already answered. This card goes away on the next update.",
+  "ask.notTaken": "Nicht angenommen. Die Frage wird möglicherweise gleich wieder angezeigt.",
+  "ask.stale": "This ask changed. Read it again, then tap an answer.",
+  "ask.stale.older": "This machine runs an older Collie and cannot take answers here. Update it, or answer in the program.",
+  "ask.unknown": "Not sure the answer arrived. Try again sends it once more.",
+  "ask.retry": "Try again",
+  "ask.refused": "The answer was refused.",
+  "ask.effect.allow": "Allow",
+  "ask.effect.allowAlways": "Always allow",
+  "ask.effect.deny": "Deny",
+  "ask.effect.cancel": "Cancel",
+  "ask.alwaysArmed": "Tap again to always allow {tool}",
+  "ask.cleaned": "Text shortened",
+  "ask.maybe": "May already be applied. Check the chat.",
+  "ask.showMore": "Show {count} more",
+  "ask.showFewer": "Show fewer",
+  "durable.composer.placeholder": "Message this conversation",
+  "durable.composer.steer": "Steer",
+  "durable.composer.steerAria": "Steer the running turn instead of starting a new one",
+  "durable.composer.stop": "Stop",
+  "durable.composer.stopAria": "Stop the running turn",
+  "durable.composer.sent": "Sent",
+  "durable.composer.moved": "The conversation moved on. Your text is still here. Read the new turn, then send again.",
+  "durable.composer.older": "This machine runs an older Collie and cannot take messages here. Update it.",
+  "durable.composer.unknown": "Not sure the message arrived. Send again to retry it once.",
+  "durable.composer.refused": "The message was refused.",
+  "durable.composer.stopped": "Stop sent",
+  "durable.composer.stopMoved": "The conversation moved on, so nothing was stopped. Check it, then stop again if you still want to.",
+  "durable.composer.stopUnknown": "Not sure the stop arrived. Tap Stop again to retry it once.",
+  "durable.composer.maybe": "May already be sent. Check the chat before you send again.",
+  "durable.composer.stopMaybe": "The stop may already be applied. Check the chat.",
+  "durable.composer.stopRefused": "The stop was refused.",
+  "newPage.starters.none": "This machine's program offers no starters yet.",
   "prompt.feedback.cancel": "Abbrechen",
   "prompt.feedback.typedAria": "Feedback im Terminal",
   "prompt.feedback.planChange.offer": "Änderungen an Claude übermitteln",
@@ -788,6 +823,8 @@ export const de: Dictionary = {
   "newPage.typed.label": "Auszuführender Befehl",
   "newPage.typed.note": "Collie tippt diese Zeile einmal in eine neue Shell und behält sie im Verlauf dieses Rechners.",
   "newPage.summary.run": "Führt `{line}` aus",
+  "newPage.summary.starter": "{what}",
+  "newPage.summary.starterMachine": "{what} on {machine}",
   "newPage.recent.group": "Zuletzt",
   "newPage.recent.remove": "Aus dem Verlauf entfernen",
   "newPage.recent.clear": "Verlauf löschen",
@@ -981,6 +1018,7 @@ export const de: Dictionary = {
   "connection.connected": "Verbunden",
   "connection.reconnecting": "Verbindung wird wiederhergestellt…",
   "connection.herdrDown": "Herdr läuft auf dem Host nicht",
+  "connection.tokenRefused": "Das Programm hat das Token abgelehnt. Prüfe COLLIE_DURABLE_TOKEN auf diesem Peer.",
   "connection.offlineCantReach": "Offline: Collie ist nicht erreichbar",
   "connection.cantReach": "Collie ist nicht erreichbar",
   "connection.withLastSeen": "{cause}, zuletzt gesehen {time}",
@@ -1202,17 +1240,11 @@ export const de: Dictionary = {
 
   // --- dialog (menu / multi-select / wizard / preview-select block renderers) ---
   "dialog.sendingAria": "Wird gesendet",
-  // TODO wordsmith
   "dialog.terminalControl": "Terminal",
-  // TODO wordsmith
   "dialog.terminalControlAria": "Terminal anstelle dieser Karte anzeigen",
-  // TODO wordsmith
   "dialog.backToCard": "Zurück zur Karte",
-  // TODO wordsmith
   "dialog.putAwayControl": "Ablegen",
-  // TODO wordsmith
   "dialog.putAwayControlAria": "Schaltflächen dieser Karte ausblenden, Terminal behalten",
-  // TODO wordsmith
   "dialog.showButtons": "Schaltflächen anzeigen",
   "dialog.previousStepAria": "Vorheriger Schritt",
   "dialog.nextStepAria": "Nächster Schritt",
@@ -1234,9 +1266,7 @@ export const de: Dictionary = {
   "dialog.menu.moveDown": "Nach unten",
   "dialog.menu.leftAria": "Links: {verb} ({label})",
   "dialog.menu.rightAria": "Rechts: {verb} ({label})",
-  // TODO wordsmith
   "dialog.menu.levelAria": "{verb} zu {label}",
-  // TODO wordsmith
   "dialog.menu.levelCurrentAria": "{label}, aktuell",
   "unreadDialog.caption": "Collie kann diesen Dialog nicht lesen", // wordsmith
   "unreadDialog.confirmKey": "Erneut tippen, um {key} zu senden", // wordsmith
@@ -1465,6 +1495,15 @@ export const de: Dictionary = {
   "settings.updateCard.upToDate": "Auf dem neuesten Stand. Nichts zu tun.",
   "settings.updateCard.unknownLatest": "Die neueste Version ist noch nicht bekannt.",
   "settings.updateCard.includes": "Ein Update fasst {versions} zusammen.",
+  // TODO(wordsmith): English placeholder (1.21.1). Translate with `wordsmith --translate`.
+  "settings.updateCard.notes.offered": "What's new in {version}",
+  "settings.updateCard.notes.current": "What changed in {version}",
+  "settings.updateCard.notes.group.Added": "Added",
+  "settings.updateCard.notes.group.Changed": "Changed",
+  "settings.updateCard.notes.group.Fixed": "Fixed",
+  "settings.updateCard.notes.group.Packaging": "Packaging",
+  "settings.updateCard.notes.group.Docs": "Docs",
+  "settings.updateCard.notes.page": "Release page",
   "settings.updateCard.action": "Auf {version} aktualisieren",
   "settings.updateCard.majorAction": "Wechsel zu {version}",
   "settings.updateCard.majorNote": "{version} ist eine neue Major-Version.",
@@ -1747,6 +1786,9 @@ export const de: Dictionary = {
   "updateScreen.action.retryMany.other": "{count} Maschinen erneut versuchen",
   "updateScreen.action.tryAgain": "Erneut versuchen",
   "updateScreen.action.showLog": "Protokoll anzeigen",
+  // TODO(wordsmith): English placeholder (1.21.1). Translate with `wordsmith --translate`.
+  "updateScreen.action.whatChanged": "What changed in {version}",
+  "updateScreen.action.whatChangedShort": "What changed",
   "updateScreen.action.copy": "Kopieren",
   "updateScreen.action.copied": "Kopiert",
   "updateScreen.strip.mine": "Update läuft. {step}.",
@@ -1989,6 +2031,8 @@ export const de: Dictionary = {
   "pushTitle.machine.cpu": "CPU bleibt hoch auf {machine}",
   "pushTitle.machine.mem": "Speicher bleibt hoch auf {machine}",
   "pushTitle.machine.disk": "Festplatte bleibt voll auf {machine}",
+  "pushTitle.ask.permission": "Permission needed in {pane}",
+  "pushTitle.ask.flood": "A program on {host} is raising many asks",
 
   // --- settings.speech and stt.model (Whistle, ADR 0096) ---
   "settings.speech.credit": "Whistle ist ein Sprachmodell von {link}.",

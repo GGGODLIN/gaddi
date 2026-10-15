@@ -125,7 +125,7 @@ async function sendAfterCanSend(
   const guarded = await guardDialog(target(args));
   if (!guarded.ok) return guarded.result;
   if (args.canSend?.() === false) return { status: "changed" };
-  return sendBoundKeys(args, keys, guarded.region, guarded.styled);
+  return sendBoundKeys(args, keys, guarded.region, guarded.styled, guarded.columns);
 }
 
 /** The tapped option's index in the model the user tapped: by identity, else by label and plan. */
@@ -170,7 +170,7 @@ async function walkVerifyCommit(
   if (!guarded.ok) return withWhy(guarded.result, "entry");
   // The read can outlive the sheet or the idle lock; a matching screen is not permission to type.
   if (args.canSend?.() === false) return { status: "changed" };
-  const walked = await sendBoundKeys(args, plan.walk, guarded.region, guarded.styled);
+  const walked = await sendBoundKeys(args, plan.walk, guarded.region, guarded.styled, guarded.columns);
   if (walked.status !== "sent") return withWhy(walked, "bridge");
 
   const landed = (m: PromptModel) => {
@@ -199,6 +199,7 @@ async function walkVerifyCommit(
       commitKeysFor(args.prompt, index),
       model.signature,
       model.styledSignature,
+      model.bindColumns,
     );
     return withWhy(commit, "bridge");
   } catch (e) {
@@ -242,7 +243,7 @@ export async function submitPromptFeedback(
 
   // Bind this write to the guarded region. It moves focus, so the steps after it must re-derive
   // rather than reuse this binding.
-  const focus = await sendBoundKeys(args, [row.key], guarded.region, guarded.styled);
+  const focus = await sendBoundKeys(args, [row.key], guarded.region, guarded.styled, guarded.columns);
   if (focus.status !== "sent") return focus;
 
   // The field must be FOCUSED, and STILL EMPTY, before anything is typed. Focus alone is not enough:
@@ -281,7 +282,7 @@ export async function submitPromptFeedback(
     // screen that has moved. (The sibling flows send their last key unbound; this one carries more.)
     const fresh = await readDialog(target(args));
     if (!fresh.model || !landed(fresh.model)) return { status: "changed" };
-    return sendBoundKeys(args, ["Enter"], fresh.model.signature, fresh.model.styledSignature);
+    return sendBoundKeys(args, ["Enter"], fresh.model.signature, fresh.model.styledSignature, fresh.model.bindColumns);
   } catch (e) {
     return { status: "error", error: describeThrownError(e) };
   }

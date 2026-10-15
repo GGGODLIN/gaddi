@@ -357,8 +357,9 @@ label = "Top"                # optional; defaults to the first word of command
 ```
 
 Where the row opens depends on where you start it, not on the row. From the **New page** (Shell,
-then the row in the Command select), Start creates a new Space named after the row. From a **pane** — the switcher sheet you reach by
-swiping up — a tap opens a new **tab in that pane's own Space**, beside it.
+then the row in the Command select), Start creates a new Space named after its folder, and the
+row's label names the tab. From a **pane** — the switcher sheet you reach by
+swiping up — a tap opens a new **tab in that pane's own Space**, beside it, named after the row.
 
 Either way the bridge types the `command` into the fresh shell and sends Enter. The command owns
 its own lifetime: one that closes itself takes the Space or tab with it, and `htop` stays until you
@@ -470,6 +471,32 @@ every add, rename and removal.
 > **Caution.** A row that skips permission prompts carries a "No prompts" badge. Each device asks
 > once before it first starts that row, and shows the command, the folder and the machine. Set
 > `adds = false` to turn off every phone-added row on a machine.
+
+### Reaching a durable program (experimental)
+
+A peer that mirrors a durable agent program (`COLLIE_MUX=durable`) reaches it one of two ways. Set
+the socket, or the URL with its token, never both.
+
+| variable | example | what it means |
+| --- | --- | --- |
+| `COLLIE_DURABLE_SOCKET` | `/run/user/1000/durable/session.sock` | the program's private Unix socket on this machine. Absolute, at most 103 bytes, mode `0600` |
+| `COLLIE_DURABLE_URL` | `https://collie-durable-member.you.workers.dev` | the address of a program you deployed behind TLS. `https://` only, or `http://127.0.0.1:<port>` for `wrangler dev`. At most 2048 bytes, no query |
+| `COLLIE_DURABLE_TOKEN` | `your-32-byte-random-token-here` | the bearer token sent with every request to the URL. At least 32 bytes. A file holding it must be mode 600, and Collie never prints it |
+
+Both set, or a URL without a token, is a config error: the peer starts and shows the program as
+unreachable with that reason. Over https every poll is a billed request, so Collie polls every 2 s
+while a phone watches and every 10 s otherwise. [Multiplexers](multiplexers.md#two-ways-to-reach-a-program)
+says what each way keeps out, and what it does not.
+
+### Starters from a durable program (experimental)
+
+A peer that mirrors a durable agent program (`COLLIE_MUX=durable`) lists the program's starters as
+rows on the New page, in the **Agent** select, on that machine. A starter is a named way to begin a
+conversation, such as a code review. It takes no text: you tap it, and the program decides what to
+start. The new conversation opens as a pane. A tap repeated with the same request id opens
+the same conversation and starts nothing new, and if the program does not answer, **Try again** sends
+the same request id. A program that cannot be reached lists no starters. This is experimental and may
+change in any minor release.
 
 ### One-off commands and their history
 
@@ -907,6 +934,12 @@ cannot work this out.
 | Herdr | The matching Herdr integration for that agent, installed once with `herdr integration install <agent>` (for example `claude`, `codex`, `opencode`, `pi`, `omp`, `grok`, `hermes`), then restart the agent | Every agent that has an integration and a session log Collie reads |
 | tmux, zellij, Tern (experimental) | Collie's [beacon hooks](multiplexers.md#agent-beacons-optional-linux) | Claude Code only, after `collie hooks install claude` |
 | tuios | The tuios daemon | The agents the daemon reports |
+
+OpenClaw needs no Herdr integration for Chat. Herdr does not pass an OpenClaw session on, so Collie
+reads the session name off the footer of `openclaw tui` (`agent main (main) | session work | …`) and
+opens that agent's session database under `$OPENCLAW_STATE_DIR`, or `~/.openclaw`, read-only. Set
+`openclaw_root` when the state folder is somewhere else. The pane must report itself to Herdr as
+agent `openclaw`. Collie never reads OpenClaw's config file or its gateway token.
 
 `herdr integration status` shows which integrations are installed. A hook is read when the agent
 starts, so an agent that was already running when you installed it needs a restart. Oh My Pi is the
