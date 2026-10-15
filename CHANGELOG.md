@@ -44,6 +44,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A slash command sent from the phone reaches Grok Build reliably.** Grok paints its `/` completion popup right on top of the input box, which Collie read as something holding the keyboard, so a send went through only when the read beat the popup to the screen. The popup is now part of the input box, and a send stops when the highlighted suggestion is not the typed command, since Enter would run that one.
 - **A Muse Code built-in skill typed from the phone sends.** A command whose one suggestion is a skill row (`/plan · built-in · default skill`) was read as typed text, so the send was refused; the tags are now part of the suggestion.
 - **A phone reply no longer types into opencode's Update Available prompt.** opencode can open that prompt at launch with Confirm highlighted, and the phone read the composer under it as ready, so a send typed into the dialog. The prompt now refuses replies and shows the card with Escape, which dismisses it.
+- **Answering an Antigravity question from the phone no longer answers the next one too.** A tap sent the option's number and then Enter, but the number alone already answers, so on a two-question call the Enter answered the second question with whatever row was highlighted. A tap now sends the number alone, and the last question of such a call gets buttons as well.
 
 ## [2.4.0] - 2026-10-15
 
