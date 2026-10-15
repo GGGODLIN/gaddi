@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **The harness canary presses each harness-bar button on a live agent.** `bun run canary --scenario bar` sends every picker button of the agent's shipped bar through the phone's own send path, closes what it opened with Escape, and saves the screen each one left. Compact and two-tap rows are skipped, so the run makes no model turn.
+
 ## [2.4.0] - 2026-10-15
 
 ### Changed
