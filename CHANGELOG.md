@@ -27,6 +27,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 - **The harness canary presses each harness-bar button on a live agent.** `bun run canary --scenario bar` sends every picker button of the agent's shipped bar through the phone's own send path, closes what it opened with Escape, and saves the screen each one left. Compact and two-tap rows are skipped, so the run makes no model turn.
 - **A Muse Code, Grok Build, opencode or Oh My Pi pane now says what it is doing.** The herd row, the pane screen and the push body show your newest prompt there, as they already did for Claude, Codex and pi. Grok writes no time on its rows, so its log's own time stands in; opencode's session is read from its database; Muse panes, which Herdr gives no session, are found by their folder the way Chat finds them.
+- **opencode, Grok Build, Muse Code and Antigravity panes get the harness bar.** Model, Compact and Resume on all four, plus Effort on Muse, whose `/effort` opens a picker of its own; opencode's buttons send `/models` and `/sessions`, its own spellings. Each picker button was pressed through the phone's own send path on a live pane of that agent. Antigravity's palette also gains `/resume`.
 
 ### Fixed
 
