@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 
@@ -442,13 +443,18 @@ describe("a trust store keyed by the real path", () => {
   mkdirSync(real);
   const link = join(base, "link");
   symlinkSync(real, link);
-  const key = realpathSync(real);
   afterAll(() => rmSync(base, { recursive: true, force: true }));
+
+  // The key is spelled by the same `realpath` the lookup calls. On a Windows runner `tmpdir()` is an
+  // 8.3 short name (`RUNNER~1`), and a key from `realpathSync` kept that spelling, so both cases
+  // found no trusted folder there (Windows CI, 2026-10-15).
+  const trustKey = () => realpath(real);
 
   const rowsAt = (agent: SkillAgent, files: FakeTree) =>
     discoverAgentSkills(agent, { home: native("/h"), cwd: link, env: {} }, fakeIo(files));
 
   test("grok loads a trusted project reached through a link", async () => {
+    const key = await trustKey();
     const rows = await rowsAt("grok", {
       "/h/.grok/trusted_folders.toml": `[folders.${JSON.stringify(key)}]\ntrusted = true\n`,
       [join(link, ".git", "HEAD")]: "ref",
@@ -458,6 +464,7 @@ describe("a trust store keyed by the real path", () => {
   });
 
   test("pi loads a trusted project reached through a link", async () => {
+    const key = await trustKey();
     const rows = await rowsAt("pi", {
       "/h/.pi/agent/trust.json": JSON.stringify({ [key]: true }),
       [join(link, ".git", "HEAD")]: "ref",
