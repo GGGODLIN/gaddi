@@ -31,6 +31,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **The Agent palette lists each agent's own built-in skills.** Codex's five system skills appear as `$` mentions, the way Codex names a skill, beside opencode's `customize-opencode`, seventeen of Grok Build's bundled skills, the three Antigravity offers in its `/` menu and Muse Code's ten. Each was seen in that agent's own completion; skills an agent hides are left out.
 - **The Agent palette lists the skills you installed for Codex, opencode, pi, Oh My Pi, Grok, Antigravity and Muse.** The bridge reads each agent's own skill folders the way that agent does, its trust gate and hiding rules included, and the rows join the same list and search as Claude's: `$name` on Codex, `/skill:name` on pi and Oh My Pi, `/name` elsewhere. Nothing is run to find them.
 - **Codex's and Muse's `/resume` session picker gets phone buttons.** Up, Down, Resume and Exit replace driving the list with the keys pad; archiving and quitting stay on the keyboard, since they take a session away or close the agent.
+- **Antigravity's `/resume` conversation list gets phone buttons too.** Up, Down, Select and Go back, the keys its own footer names; renaming and deleting a conversation stay on the keyboard. A search that matches nothing keeps the Escape card.
 
 ### Fixed
 
