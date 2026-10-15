@@ -41,6 +41,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **The harness canary's bar scenario clears what an agent leaves in its box.** Grok 1.0.52 closes its `/model` picker on Escape and keeps `/model` typed, so the case failed although the picker had opened; the canary now clears it the way the drafts scenario does.
 - **A slash command sent from the phone reaches Grok Build reliably.** Grok paints its `/` completion popup right on top of the input box, which Collie read as something holding the keyboard, so a send went through only when the read beat the popup to the screen. The popup is now part of the input box, and a send stops when the highlighted suggestion is not the typed command, since Enter would run that one.
 - **A Muse Code built-in skill typed from the phone sends.** A command whose one suggestion is a skill row (`/plan · built-in · default skill`) was read as typed text, so the send was refused; the tags are now part of the suggestion.
+- **A phone reply no longer types into opencode's Update Available prompt.** opencode can open that prompt at launch with Confirm highlighted, and the phone read the composer under it as ready, so a send typed into the dialog. The prompt now refuses replies and shows the card with Escape, which dismisses it.
 
 ## [2.4.0] - 2026-10-15
 
