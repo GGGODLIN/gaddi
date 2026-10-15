@@ -31,6 +31,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Fixed
 
 - **A slash command sent from the phone reaches Muse Code 1.4.8.** Muse now paints an argument hint after a complete command (`/model [<model-id>]`) and lists skills under the command they prefix, and Collie read both as typed text, so the send was refused. The hint is told apart by its colour, and a send still stops when the highlighted suggestion is another command, since Enter would run that one.
+- **Antigravity's slash-command popup no longer reads as a dialog.** Typing a slash command in an agy pane drew an unread-dialog card and refused the send, because the popup's footer looked like a menu's. The popup is now part of the input box, and a send stops only when the highlighted suggestion is not the typed command.
 
 ## [2.4.0] - 2026-10-15
 
