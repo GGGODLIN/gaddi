@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Windows check counts the pre-push tests it skips by design.** The eight `collie.prepush` tests and their two setup hooks are POSIX-only, and `scripts/windows-suites.ps1` now names them in its skip budget, so a release commit's Windows run is green again.
+
 ## [2.5.0] - 2026-10-15
 
 ### Changed
