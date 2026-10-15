@@ -36,6 +36,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A fresh Grok Build pane takes the phone's first message.** Grok 1.0.52 puts its welcome card right on top of the input box and, when signed in with an API key, prints that under the box; Collie read each as something holding the keyboard and refused the send until the operator typed at the Mac.
 - **The harness canary's bar scenario clears what an agent leaves in its box.** Grok 1.0.52 closes its `/model` picker on Escape and keeps `/model` typed, so the case failed although the picker had opened; the canary now clears it the way the drafts scenario does.
 - **A slash command sent from the phone reaches Grok Build reliably.** Grok paints its `/` completion popup right on top of the input box, which Collie read as something holding the keyboard, so a send went through only when the read beat the popup to the screen. The popup is now part of the input box, and a send stops when the highlighted suggestion is not the typed command, since Enter would run that one.
+- **A Muse Code built-in skill typed from the phone sends.** A command whose one suggestion is a skill row (`/plan · built-in · default skill`) was read as typed text, so the send was refused; the tags are now part of the suggestion.
 
 ## [2.4.0] - 2026-10-15
 
