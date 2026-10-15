@@ -12,9 +12,11 @@
 // The status is NOT memoised. `describe` is handed the pane as it is now, so a pane that blocks shows
 // the blocked sentence on the very next snapshot, without waiting for the floor.
 //
-// Only file-backed journals are tailed (claude, codex, pi): `probeTail` reads a path, and the
-// database-backed adapters (opencode, hermes) resolve to something that is not one log file. Only a
-// Claude pane has a recap file. NOTHING IS PERSISTED.
+// File-backed journals are tailed (claude, codex, pi, omp, grok, muse): `probeTail` reads a path.
+// opencode resolves to a database key, not one log file, so its session is read whole through its
+// source's own `load`, which composes the rows and caps them. A pane whose multiplexer reports no
+// session (Muse under Herdr) is found by its folder, the way the chat route finds it. Only a Claude
+// pane has a recap file. NOTHING IS PERSISTED.
 
 import { probeTail, type ProbeTail } from "../journal/cache-probe.ts";
 import { DEFAULT_RECAP_DIR, readRecap, statRecap } from "../journal/recap.ts";
@@ -34,7 +36,10 @@ export const DEFAULT_DESCRIPTION_FLOOR_MS = 5000;
 export const WIDE_TAIL_BYTES = 4 * 1024 * 1024;
 
 /** The harnesses whose journal is one log file a tail read can open. */
-export const TAILED_AGENTS: ReadonlySet<string> = new Set(["claude", "codex", "pi"]);
+export const TAILED_AGENTS: ReadonlySet<string> = new Set(["claude", "codex", "pi", "omp", "grok", "muse"]);
+
+/** The database-backed harness whose session is read whole through `source.load`. */
+export const LOADED_AGENTS: ReadonlySet<string> = new Set(["opencode"]);
 
 export interface DescriptionTrackerOptions {
   floorMs?: number;
@@ -59,8 +64,17 @@ interface Entry {
   recap?: Recap;
 }
 
+interface Found {
+  session: string | undefined;
+  at: number;
+  ref: AgentSessionRef | undefined;
+}
+
 export class DescriptionTracker {
   private readonly bySession = new Map<string, Entry>();
+
+  /** The session a ref-less pane was found to run, per pane id, held for one floor. */
+  private readonly found = new Map<string, Found>();
 
   private readonly floorMs: number;
 
@@ -83,7 +97,7 @@ export class DescriptionTracker {
    * `blockedAt` stamps the blocked sentence; the activity ledger's transition time is the right one.
    */
   describe(pane: AgentView, blockedAt?: number): PaneDescription | undefined {
-    const key = pane.agentSession?.value;
+    const key = pane.agentSession?.value ?? this.found.get(pane.paneId)?.ref?.value;
     const entry = key === undefined ? undefined : this.bySession.get(key);
     return describePane({
       status: pane.status,
@@ -99,11 +113,12 @@ export class DescriptionTracker {
     const session = scope.session;
     const named = new Map<string, string | undefined>();
     for (const pane of panes) {
-      const ref = pane.agentSession;
+      const harness = journalAgentOf(pane);
+      const loaded = LOADED_AGENTS.has(harness);
+      const adapter = TAILED_AGENTS.has(harness) || loaded ? adapterFor(this.registry, harness) : undefined;
+      const ref = pane.agentSession ?? (await this.discover(adapter, pane, at, session));
       named.set(pane.paneId, ref?.value);
       if (ref === undefined) continue;
-      const harness = journalAgentOf(pane);
-      const adapter = TAILED_AGENTS.has(harness) ? adapterFor(this.registry, harness) : undefined;
       const wantsRecap = harness === "claude" && ref.kind === "id";
       if (adapter === undefined && !wantsRecap) continue;
       const previous = this.bySession.get(ref.value);
@@ -113,16 +128,43 @@ export class DescriptionTracker {
         continue;
       }
       const next: Entry = { ...previous, ...owner, lastProbedAt: at };
-      if (adapter !== undefined) await this.lookJournal(adapter, ref, next);
+      if (adapter !== undefined) await this.lookJournal(adapter, ref, next, loaded);
       if (wantsRecap) await this.lookRecap(ref.value, next);
       this.bySession.set(ref.value, next);
     }
     for (const [key, entry] of this.bySession) {
       if (entry.session === session && departed(named, key, entry.paneId)) this.bySession.delete(key);
     }
+    for (const [paneId, found] of this.found) {
+      if (found.session === session && !named.has(paneId)) this.found.delete(paneId);
+    }
   }
 
-  private async lookJournal(adapter: JournalAdapter, ref: AgentSessionRef, entry: Entry): Promise<void> {
+  /**
+   * The session of a pane whose multiplexer reports none, through the adapter's own `discover`, the
+   * call the chat route makes. Held per pane for one floor: a discovery walks the harness's session
+   * folders, and the poll runs every few seconds. A failed walk keeps the last answer.
+   */
+  private async discover(
+    adapter: JournalAdapter | undefined,
+    pane: AgentView,
+    at: number,
+    session: string | undefined,
+  ): Promise<AgentSessionRef | undefined> {
+    if (adapter?.discover === undefined) return undefined;
+    const seen = this.found.get(pane.paneId);
+    if (seen !== undefined && at - seen.at < this.floorMs) return seen.ref;
+    let ref = seen?.ref;
+    try {
+      ref = (await adapter.discover(pane.cwd)) ?? undefined;
+    } catch {
+      // A walk that threw: the last answer stands until the next floor.
+    }
+    this.found.set(pane.paneId, { session, at, ref });
+    return ref;
+  }
+
+  private async lookJournal(adapter: JournalAdapter, ref: AgentSessionRef, entry: Entry, loaded: boolean): Promise<void> {
     let seen: Seen | null;
     try {
       const path = await adapter.source.resolve(ref);
@@ -132,17 +174,19 @@ export class DescriptionTracker {
     }
     if (seen === null) return;
     if (entry.journalSeen?.size === seen.size && entry.journalSeen.mtimeMs === seen.mtimeMs) return;
-    const tail = await this.tail(adapter.source, ref);
+    const tail = loaded ? await loadWhole(adapter.source, ref) : await this.tail(adapter.source, ref);
     if (tail === null) return;
     try {
-      let facts = journalFacts(adapter.parse(tail.lines.join("\n")));
+      // A row with no time of its own (Grok writes none) is dated by the log's mtime.
+      let facts = journalFacts(adapter.parse(tail.lines.join("\n")), tail.mtimeMs);
       // A tail with no prompt means the newest prompt is older than the window, so it is the one an
       // earlier read already found. Only when none was ever found is the wider window worth paying.
       const kept = entry.facts?.prompt;
       if (facts.prompt === undefined && kept !== undefined) facts = { ...facts, prompt: kept };
-      if (facts.prompt === undefined) {
+      // A loaded session is already its whole capped window; there is nothing wider to read.
+      if (facts.prompt === undefined && !loaded) {
         const wide = await this.tail(adapter.source, ref, WIDE_TAIL_BYTES);
-        const prompt = wide === null ? undefined : journalFacts(adapter.parse(wide.lines.join("\n"))).prompt;
+        const prompt = wide === null ? undefined : journalFacts(adapter.parse(wide.lines.join("\n")), wide.mtimeMs).prompt;
         if (prompt !== undefined) facts = { ...facts, prompt };
       }
       entry.facts = facts;
@@ -173,6 +217,18 @@ export class DescriptionTracker {
     } catch {
       // An I/O failure mid-read: the last reading stands and the next floor retries.
     }
+  }
+}
+
+/** A database-backed session read whole through `source.load`, shaped like a tail read. */
+async function loadWhole(source: TranscriptSource, ref: AgentSessionRef): Promise<ProbeTail | null> {
+  try {
+    const path = await source.resolve(ref);
+    if (path === null) return null;
+    const read = await source.load(path);
+    return { path, lines: read.text.split("\n"), mtimeMs: read.mtimeMs };
+  } catch {
+    return null;
   }
 }
 

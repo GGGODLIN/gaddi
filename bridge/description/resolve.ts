@@ -137,7 +137,7 @@ export function describePane(input: DescribeInput): PaneDescription | undefined 
  * The facts off a parsed journal tail. The newest `user` entry with text is the prompt; the newest
  * `assistant` entry's last result-less tool call is the pending one.
  */
-export function journalFacts(entries: readonly TranscriptEntry[]): JournalFacts {
+export function journalFacts(entries: readonly TranscriptEntry[], undatedAt?: number): JournalFacts {
   const facts: JournalFacts = {};
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
@@ -146,8 +146,9 @@ export function journalFacts(entries: readonly TranscriptEntry[]): JournalFacts 
       .flatMap((p) => (p.kind === "text" ? [p.text] : []))
       .join(" ")
       .trim();
-    const at = Date.parse(e.ts);
-    if (text === "" || !Number.isFinite(at)) continue;
+    const parsed = Date.parse(e.ts);
+    const at = Number.isFinite(parsed) ? parsed : undatedAt;
+    if (text === "" || at === undefined) continue;
     facts.prompt = { text: clipLine(text, PROMPT_MAX * 2), at };
     break;
   }
