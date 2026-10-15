@@ -28,6 +28,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **The harness canary presses each harness-bar button on a live agent.** `bun run canary --scenario bar` sends every picker button of the agent's shipped bar through the phone's own send path, closes what it opened with Escape, and saves the screen each one left. Compact and two-tap rows are skipped, so the run makes no model turn.
 - **A Muse Code, Grok Build, opencode or Oh My Pi pane now says what it is doing.** The herd row, the pane screen and the push body show your newest prompt there, as they already did for Claude, Codex and pi. Grok writes no time on its rows, so its log's own time stands in; opencode's session is read from its database; Muse panes, which Herdr gives no session, are found by their folder the way Chat finds them.
 
+### Fixed
+
+- **A slash command sent from the phone reaches Muse Code 1.4.8.** Muse now paints an argument hint after a complete command (`/model [<model-id>]`) and lists skills under the command they prefix, and Collie read both as typed text, so the send was refused. The hint is told apart by its colour, and a send still stops when the highlighted suggestion is another command, since Enter would run that one.
+
 ## [2.4.0] - 2026-10-15
 
 ### Changed
