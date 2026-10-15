@@ -33,6 +33,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **Codex's and Muse's `/resume` session picker gets phone buttons.** Up, Down, Resume and Exit replace driving the list with the keys pad; archiving and quitting stay on the keyboard, since they take a session away or close the agent.
 - **Antigravity's `/resume` conversation list gets phone buttons too.** Up, Down, Select and Go back, the keys its own footer names; renaming and deleting a conversation stay on the keyboard. A search that matches nothing keeps the Escape card.
 - **Grok Build's folder trust prompt gets phone buttons.** Yes, proceed and No, quit, each sending the one key the prompt prints beside it, `y` or `n`. Grok asks only in a folder that holds something for it to load, such as a project skill.
+- **pi's folder trust prompt gets phone buttons.** Trust, Trust parent folder, Trust for this session, Do not trust and Cancel, each reached with the arrows its footer names and confirmed only once the pointer reads back on the tapped row.
 
 ### Fixed
 
