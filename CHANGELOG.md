@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Fixed
 
 - **The Windows check counts the pre-push tests it skips by design.** The eight `collie.prepush` tests and their two setup hooks are POSIX-only, and `scripts/windows-suites.ps1` now names them in its skip budget, so a release commit's Windows run is green again.
+- **Antigravity screens the phone does not know stay refused.** The slash popup is now named by its whole footer row and the rows it paints, a popup with no highlighted suggestion and no `No matches` no longer verifies the typed text, a checkbox question stays raw however its footer wraps, and the `/resume` picker no longer lifts when a row it does not know follows the model status. All four shapes were built from captures for a review, not seen live.
 
 ## [2.5.0] - 2026-10-15
 
