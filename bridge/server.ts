@@ -81,7 +81,8 @@ import {
   type WorktreeReceipt,
   type WorktreeReceiptSurface,
 } from "./worktree-receipts.ts";
-import { claudeConfigDir, discoverClaudeCommands } from "./claude-commands.ts";
+import { discoverAgentSkills, isSkillAgent } from "./agent-skills.ts";
+import { claudeConfigDir, discoverClaudeCommands, type ClaudeCommand } from "./claude-commands.ts";
 import { createOperatorCommands } from "./operator-commands.ts";
 import { createOperatorKeys } from "./operator-keys.ts";
 import { createOperatorQuickReplies } from "./operator-quick-replies.ts";
@@ -522,10 +523,12 @@ const PANE_DELIVERABLE_ROUTE = /^\/api\/pane\/([^/]+)\/deliverables(?:\/([^/]+))
 const PANE_PORT_ROUTE = /^\/api\/pane\/([^/]+)\/port\/([^/]+)$/;
 
 /**
- * `GET /api/pane/<id>/claude-commands`: the slash commands Claude Code would load in that pane's cwd,
- * read off this machine's disk (ADR 9009). The pane id is only looked up in the snapshot; the cwd the
- * read starts from is the one the multiplexer reported, never the request's. Not in `FORWARDABLE`: a
- * pane on a crew member answers the lead's 501, and the phone keeps the palette it already had.
+ * `GET /api/pane/<id>/claude-commands`: the commands the pane's agent would load in its cwd, read off
+ * this machine's disk: Claude Code's (ADR 9009) and seven other agents' (fork ADR 9011, which keeps
+ * the route's first name). Any other agent answers an empty list. The pane id is only looked up in
+ * the snapshot; the cwd the read starts from is the one the multiplexer reported, never the
+ * request's. Not in `FORWARDABLE`: a pane on a crew member answers the lead's 501, and the phone
+ * keeps the palette it already had.
  */
 const PANE_CLAUDE_COMMANDS_ROUTE = /^\/api\/pane\/([^/]+)\/claude-commands$/;
 
@@ -1839,11 +1842,16 @@ export function startServer(opts: {
       const pane = [...agents, ...shellPanes].find((p) => p.paneId === paneId);
       if (pane === undefined) return json({ commands: [] }, req.headers.get("accept-encoding"));
       const home = homedir();
-      const commands = await discoverClaudeCommands({
-        home,
-        cwd: pane.cwd === "" ? null : pane.cwd,
-        configDir: claudeConfigDir(cfg.journalRoots.claude, home),
-      });
+      const cwd = pane.cwd === "" ? null : pane.cwd;
+      const agent = (pane.agent ?? "").toLowerCase();
+      // Herdr reports agy under two names; the loader is filed under one.
+      const skillAgent = agent === "antigravity" ? "agy" : agent;
+      let commands: ClaudeCommand[] = [];
+      if (agent.startsWith("claude")) {
+        commands = await discoverClaudeCommands({ home, cwd, configDir: claudeConfigDir(cfg.journalRoots.claude, home) });
+      } else if (isSkillAgent(skillAgent)) {
+        commands = await discoverAgentSkills(skillAgent, { home, cwd, env: process.env });
+      }
       return json({ commands }, req.headers.get("accept-encoding"));
     }
 

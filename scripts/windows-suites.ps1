@@ -14,7 +14,7 @@
 #              cannot hide behind a removed one in another. A test must not be skipped just to get
 #              green, so a higher count is a failure. Raise a number only with a reason.
 #              Bridge went from 2 to 0 when M43 spec 04 checked the access list instead of the mode.
-#              Today, 99 in all, each one named, with its reason:
+#              Today, 109 in all, each one named, with its reason:
 #              bridge 62. 5 are the POSIX-only and engine cases below, 21 are the durable example apps, and
 #                36 are the durable socket tests (see "Durable, bridge" below).
 #                Of the first 5, four are in bridge/stt/local-cli.test.ts. Windows has no executable bit
@@ -52,13 +52,17 @@
 #                killed by a signal says which one" (Windows has no POSIX signals), and
 #                "collie _whistle-transcribe - the real engine, end to end > a child of this checkout's CLI turns 10.4 s of speech into text"
 #                (the same missing model as the bridge case).
-#              scripts 23: every test of scripts/install.test.ts ("scripts/install.sh > ..."):
+#              scripts 33. 23 are every test of scripts/install.test.ts ("scripts/install.sh > ..."):
 #                install.sh is POSIX sh, and Windows installs with install.ps1, tested beside it.
+#                10 are scripts/pre-push.test.ts ("pre-push collie.prepush=ci > ..."): its 8 tests and
+#                the describe's beforeAll and afterAll, which bun lists as two "(unnamed)" skips. They
+#                drive the hook with a stand-in bun that is a shebang script on a colon-joined PATH,
+#                and the switch they pin is this fork's, set in a clone on a Mac.
 param(
   [Parameter(Mandatory = $true)][string]$Out,
   [int]$MaxSkipsBridge = 62,
   [int]$MaxSkipsCli = 14,
-  [int]$MaxSkipsScripts = 23
+  [int]$MaxSkipsScripts = 33
 )
 $skipBudget = @{ bridge = $MaxSkipsBridge; cli = $MaxSkipsCli; scripts = $MaxSkipsScripts }
 $ErrorActionPreference = "Continue"

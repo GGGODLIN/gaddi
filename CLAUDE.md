@@ -32,7 +32,13 @@ the full test / E2E suite unless the user asks or the requested change directly 
      for the release check.
   2. Other agents and multiplexers installed on this machine run for real in a throwaway Herdr
      session (or a mux on its own socket) with a temporary config directory, never in the
-     operator's live session or config.
+     operator's live session or config. When the task changes what the phone shows or sends for
+     them (a card, a button, a palette row, a draft or input-box read), close it with one pass
+     through the dev lane's PWA at phone width, opened on that throwaway session with
+     `?s=<session>`: tap each changed item once, and after a fix re-tap only what the fix touched.
+     Once per task, not per commit; a commit keeps the unit tests and the real-agent run. The
+     canary checks that a picker opens, not what the phone then offers (a Grok hint read as a
+     draft, 2026-10-15).
   3. Hosts this machine cannot run (Linux, Windows, Android) get unit tests and CI, reported as not
      verified.
 
@@ -373,6 +379,13 @@ page to be skimmed.
 - **A red local gate is a bug to fix, not a question of whether to skip it.** When pre-commit or
   pre-push fails on this machine for an environment reason, fix the hook or the test so it passes
   here; an escape hatch is for a single push the operator chose, not the standing answer.
+- **This fork's ordinary pushes are checked by CI; a release is checked on the Mac as well.** The
+  operator's clone sets `git config collie.prepush ci` (2026-10-15), and the pre-push hook then
+  leaves its typechecks and suites to CI unless the push carries a `chore(release):` commit, which
+  runs them here; a range it cannot read runs them too. CI is Linux only, so the release skill's dev
+  push is where the Mac tests what ships, and `release.yml` still waits for that commit's green CI.
+  After every other push, watch its `ci.yml` run and fix a red one before the next push lands on it;
+  the rule above still holds whenever the hook runs. `scripts/pre-push.test.ts` pins the switch.
 - **Tests run on Windows CI too.** Build paths with `path.join`, never a hard-coded `/`. A test that
   needs a child process spawns `process.execPath -e …`, never a binary such as `/usr/bin/yes` that
   Windows lacks.
@@ -594,7 +607,12 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   the skills and command files from disk (`bridge/claude-commands.ts`, `GET
   /api/pane/<id>/claude-commands`) and they join the same list and search; `commands.toml` rows still
   come first and win a name. It mirrors Claude Code's loader, it is not a registry, and it is fork-only
-  ([ADR 9009](./.adr/9009-the-palette-lists-what-claude-code-would-load.md)).
+  ([ADR 9009](./.adr/9009-the-palette-lists-what-claude-code-would-load.md)). Codex, opencode, pi,
+  Oh My Pi, Grok, Antigravity and Muse get the same through `bridge/agent-skills.ts`, each in its own
+  spelling (`$name` for Codex, `/skill:name` for pi and Oh My Pi); the bridge never runs an agent's
+  own lister, and those agents keep ADR 0018's replacement rule
+  ([ADR 9011](./.adr/9011-the-palette-lists-what-seven-more-agents-would-load.md)). Their built-in
+  skills are shipped catalog rows instead.
 - **The composition rule runs PER SURFACE, and the harness bar still replaces** — a row with
   `bar = true` goes on the bar above the keys as well as into the palette, and the bar's
   replace-or-fall-back runs over the `bar = true` rows ALONE

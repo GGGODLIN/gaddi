@@ -41,7 +41,7 @@ function writeRaw(id: string, text: string): void {
 }
 
 function fakeJournal(agent = "claude") {
-  const calls = { stat: 0, tail: 0 };
+  const calls = { stat: 0, tail: 0, load: 0 };
   interface FakeState {
     stat: { size: number; mtimeMs: number } | null;
     entries: TranscriptEntry[];
@@ -56,7 +56,10 @@ function fakeJournal(agent = "claude") {
       calls.stat++;
       return state.stat;
     },
-    load: async () => ({ text: "", complete: true, size: 0, mtimeMs: 0 }),
+    load: async () => {
+      calls.load++;
+      return { text: "", complete: true, size: 0, mtimeMs: 300 };
+    },
     // The description tracker reads the tail probe, not the live window. These exist because the
     // journal seam now requires them of every source.
     readSince: async () => ({ lines: [], cursor: "", reset: true, fromStart: true }),
@@ -170,17 +173,17 @@ describe("reading cost", () => {
     j.state.entries = [prompt("hi", "2026-09-24T10:00:00.000Z")];
     const tracker = new DescriptionTracker({ codex: j.adapter }, c.now, { tail: j.tail });
     await tracker.refresh([pane("codex", "s1")]);
-    expect(j.calls).toEqual({ stat: 1, tail: 1 });
+    expect(j.calls).toEqual({ stat: 1, tail: 1, load: 0 });
     c.advance(1000);
     await tracker.refresh([pane("codex", "s1")]);
-    expect(j.calls).toEqual({ stat: 1, tail: 1 });
+    expect(j.calls).toEqual({ stat: 1, tail: 1, load: 0 });
     c.advance(5000);
     await tracker.refresh([pane("codex", "s1")]);
-    expect(j.calls).toEqual({ stat: 2, tail: 1 });
+    expect(j.calls).toEqual({ stat: 2, tail: 1, load: 0 });
     j.state.stat = { size: 20, mtimeMs: 200 };
     c.advance(5000);
     await tracker.refresh([pane("codex", "s1")]);
-    expect(j.calls).toEqual({ stat: 3, tail: 2 });
+    expect(j.calls).toEqual({ stat: 3, tail: 2, load: 0 });
   });
 
   test("a failed stat keeps the last reading", async () => {
@@ -245,10 +248,67 @@ describe("reading cost", () => {
     expect(reads).toEqual([0, WIDE_TAIL_BYTES, 0]);
   });
 
-  test("a database-backed harness is not tailed", async () => {
+  test("a database-backed harness is read whole through its source, never tailed", async () => {
     const j = fakeJournal("opencode");
+    j.state.entries = [prompt("hi", "2026-09-24T10:00:00.000Z")];
     const tracker = new DescriptionTracker({ opencode: j.adapter }, () => NOW, { tail: j.tail });
     await tracker.refresh([pane("opencode", "s1")]);
-    expect(j.calls).toEqual({ stat: 0, tail: 0 });
+    expect(j.calls).toEqual({ stat: 1, tail: 0, load: 1 });
+    expect(tracker.describe(pane("opencode", "s1"))?.now).toBe("你：hi");
+  });
+});
+
+describe("the other file-backed harnesses", () => {
+  test("omp, grok and muse panes are tailed the way a Claude pane is", async () => {
+    for (const agent of ["omp", "grok", "muse"]) {
+      const j = fakeJournal(agent);
+      j.state.entries = [prompt("hi", "2026-09-24T10:00:00.000Z")];
+      // The registry files omp's journal under pi, whose adapter reads both.
+      const tracker = new DescriptionTracker({ [agent === "omp" ? "pi" : agent]: j.adapter }, () => NOW, { tail: j.tail });
+      await tracker.refresh([pane(agent, "s1")]);
+      expect(tracker.describe(pane(agent, "s1"))?.now, agent).toBe("你：hi");
+    }
+  });
+
+  test("a prompt row with no time of its own takes the log's mtime", async () => {
+    // Grok's chat_history.jsonl carries no timestamp on any row.
+    const j = fakeJournal("grok");
+    j.state.entries = [prompt("hi", "")];
+    const tracker = new DescriptionTracker({ grok: j.adapter }, () => NOW, { tail: j.tail });
+    await tracker.refresh([pane("grok", "s1")]);
+    expect(tracker.describe(pane("grok", "s1"))).toMatchObject({ now: "你：hi", source: "prompt", at: 100 });
+  });
+
+  test("a pane that reports no session is found by its folder, once per floor", async () => {
+    const c = clock();
+    const j = fakeJournal("muse");
+    j.state.entries = [prompt("hi", "2026-09-24T10:00:00.000Z")];
+    const asked: string[] = [];
+    const adapter: JournalAdapter = {
+      ...j.adapter,
+      discover: async (cwd) => {
+        asked.push(cwd);
+        return { kind: "id", value: "m1" };
+      },
+    };
+    const tracker = new DescriptionTracker({ muse: adapter }, c.now, { tail: j.tail });
+    await tracker.refresh([pane("muse", undefined)]);
+    expect(tracker.describe(pane("muse", undefined))?.now).toBe("你：hi");
+    c.advance(1000);
+    await tracker.refresh([pane("muse", undefined)]);
+    expect(asked).toEqual(["/p"]);
+    c.advance(5000);
+    await tracker.refresh([pane("muse", undefined)]);
+    expect(asked).toEqual(["/p", "/p"]);
+  });
+
+  test("a discovered session is dropped with its pane", async () => {
+    const j = fakeJournal("muse");
+    j.state.entries = [prompt("hi", "2026-09-24T10:00:00.000Z")];
+    const adapter: JournalAdapter = { ...j.adapter, discover: async () => ({ kind: "id", value: "m1" }) };
+    const tracker = new DescriptionTracker({ muse: adapter }, () => NOW, { tail: j.tail });
+    await tracker.refresh([pane("muse", undefined)], { session: "a" });
+    await tracker.refresh([], { session: "a" });
+    expect(tracker.describe(pane("muse", undefined))).toBeUndefined();
   });
 });

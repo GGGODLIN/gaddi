@@ -1201,7 +1201,10 @@ export async function probePort(paneId: string, port: number, scope?: Scope, sig
   };
 }
 
-/** One slash command Claude Code would load in a pane's cwd, read off its machine's disk (ADR 9009). */
+/**
+ * One command an agent would load in a pane's cwd, read off its machine's disk: Claude's (ADR 9009)
+ * and, since fork ADR 9011, seven other agents'. A Codex skill is spelled `$name`, its mention sigil.
+ */
 export interface ClaudeCommand {
   command: string;
   description: string;
@@ -1224,7 +1227,7 @@ export async function fetchClaudeCommands(paneId: string, scope?: Scope, signal?
     const row = asJsonObject(raw);
     if (row === undefined) continue;
     const command = asJsonString(row.command);
-    if (command === undefined || !command.startsWith("/")) continue;
+    if (command === undefined || !/^[/$]/.test(command)) continue;
     out.push({ command, description: asJsonString(row.description) ?? "", argHint: asJsonString(row.argHint) ?? "" });
   }
   return out;

@@ -4,6 +4,8 @@
 # (sets core.hooksPath).
 # Override once: SKIP_TYPECHECK=1 git push (skip typecheck) · SKIP_TESTS=1 git push (skip tests) ·
 # SKIP_TAG_CHECK=1 git push (skip the release-tag warning).
+# Leave ordinary pushes to CI in this clone: git config collie.prepush ci (a push carrying a release
+# commit still runs everything here).
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
@@ -12,6 +14,35 @@ ROOT="$(git rev-parse --show-toplevel)"
 # <remote sha>` line per ref. Read it NOW, before any suite runs: a suite that reads stdin would eat
 # it, and the ranges are what the tag check works from.
 pushed_refs="$(cat)"
+
+# Fork-only: `collie.prepush=ci` leaves an ordinary push to CI, which runs everything below and more,
+# so this laptop stops paying for the suites twice on every push (the operator's call, 2026-10-15).
+# CI is Linux alone, though, so a push that carries a `chore(release):` commit still runs them here:
+# the release skill's dev push is that push, and it is the one time the Mac tests what ships. A
+# range this cannot read runs them too, rather than guessing that it holds no release.
+ci_only=0
+prepush_mode="$(git config --get collie.prepush 2>/dev/null || true)"
+if [ "$prepush_mode" = "ci" ]; then
+  ci_only=1
+  nl=$'\n'
+  while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ -n "${local_sha:-}" ] || continue
+    case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+    case "$remote_sha" in
+      *[!0]*) range=("${remote_sha}..${local_sha}") ;;
+      *) range=("$local_sha" --not --remotes) ;;
+    esac
+    # A pattern match, not `| grep -q`: grep quitting early can SIGPIPE the writer, and pipefail would
+    # then read a found release as none.
+    if ! subjects="$(git log --format=%s "${range[@]}" 2>/dev/null)"; then
+      ci_only=0
+      break
+    fi
+    case "${nl}${subjects}" in *"${nl}chore(release):"*) ci_only=0; break ;; esac
+  done <<<"$pushed_refs"
+elif [ -n "$prepush_mode" ]; then
+  echo "pre-push: collie.prepush=${prepush_mode} is not \`ci\` — running everything" >&2
+fi
 
 # Everything below this line runs test suites, and git has exported GIT_DIR (and, depending on the
 # hook, GIT_INDEX_FILE and friends) into this process. Those override repository discovery for every
@@ -32,6 +63,8 @@ fi
 # ── Typecheck (the Vite build does NOT typecheck; catch it before it ships) ──
 if [ "${SKIP_TYPECHECK:-}" = "1" ]; then
   echo "pre-push: SKIP_TYPECHECK=1 — skipping typecheck" >&2
+elif [ "$ci_only" = 1 ]; then
+  echo "pre-push: collie.prepush=ci and no release commit — typecheck left to CI" >&2
 else
   echo "pre-push: typechecking backend (bun run typecheck)…" >&2
   if ! (cd "$ROOT" && bun run typecheck); then
@@ -54,6 +87,8 @@ fi
 # ── Tests ───────────────────────────────────────────────────────────────────
 if [ "${SKIP_TESTS:-}" = "1" ]; then
   echo "pre-push: SKIP_TESTS=1 — skipping test suite" >&2
+elif [ "$ci_only" = 1 ]; then
+  echo "pre-push: collie.prepush=ci and no release commit — tests left to CI; watch this push's ci.yml run" >&2
 else
   # `./bridge` and NOT `./integration`: the two-instance crew drill lives there on purpose and CI
   # gives it a job of its own. It boots twenty child processes over real pinned TLS and measured
