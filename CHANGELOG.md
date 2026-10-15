@@ -46,6 +46,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A phone reply no longer types into opencode's Update Available prompt.** opencode can open that prompt at launch with Confirm highlighted, and the phone read the composer under it as ready, so a send typed into the dialog. The prompt now refuses replies and shows the card with Escape, which dismisses it.
 - **Answering an Antigravity question from the phone no longer answers the next one too.** A tap sent the option's number and then Enter, but the number alone already answers, so on a two-question call the Enter answered the second question with whatever row was highlighted. A tap now sends the number alone, and the last question of such a call gets buttons as well.
 - **The same holds once an Antigravity conversation has a plan.** A plan document adds `ctrl+r Review` to every question's footer, and those questions still sent the number and then Enter, so the first answer of two also answered the second. Plan approval and every question under that footer now send the number alone.
+- **Grok's model button no longer offers its argument hint as your draft.** After the harness bar's Model button, Grok keeps `/model` in its box with a grey `<model> [window] [effort]` hint, and the phone showed all of it as a terminal draft, so Take over would have sent the hint. The grey hint is no longer read as typed text.
 
 ## [2.4.0] - 2026-10-15
 
