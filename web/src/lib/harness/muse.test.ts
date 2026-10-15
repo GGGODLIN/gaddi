@@ -68,6 +68,8 @@ const PINNED = [
   "muse--palette-skill.txt",
   "muse--palette-typed-arg.txt",
   "muse--quoted-dialogs-bare.txt",
+  "muse--resume-picker-moved.txt",
+  "muse--resume-picker.txt",
   "muse--tasks-popup-approval.txt",
   "muse--tasks-popup-draft.txt",
   "muse--tasks-popup.txt",
@@ -100,6 +102,8 @@ const LIFTED = [
   "muse--ask-toppings-checked.txt",
   "muse--ask-toppings-review.txt",
   "muse--ask-toppings.txt",
+  "muse--resume-picker-moved.txt",
+  "muse--resume-picker.txt",
   "muse--tasks-popup-approval.txt",
   "muse--trust-prompt-147.txt",
   "muse--trust-prompt.txt",
@@ -599,3 +603,24 @@ describe("muse: a focused tasks popup that names x to stop refuses the composer"
   );
 });
 
+describe("muse: the /resume session picker lifts as a menu (1.4.8)", () => {
+  const lines = (name: string) => splitLines(parseAnsi(readFileSync(join(PANES_DIR, name), "utf8")));
+  const menuOf = (name: string) => {
+    const block = museAdapter.buildBlocks(lines(name)).find((b) => b.kind === "menu");
+    return block?.kind === "menu" ? block.menu : null;
+  };
+
+  it("offers Up/Down, Resume and Exit, and nothing that quits", () => {
+    const menu = menuOf("muse--resume-picker.txt");
+    expect(menu?.title).toBe("Resume a previous session");
+    expect(menu?.actions.map((a) => [a.label, a.keys.join("+")])).toEqual([
+      ["Resume", "Enter"],
+      ["Exit", "Escape"],
+    ]);
+    expect(menu?.nav.upDown).toBe(true);
+  });
+
+  it("changes its signature when the highlight moves", () => {
+    expect(menuOf("muse--resume-picker-moved.txt")?.signature).not.toBe(menuOf("muse--resume-picker.txt")?.signature);
+  });
+});
