@@ -453,7 +453,11 @@ export class Driver {
     return { result: passCase(id, `${item.command} sent, closed with Escape (${file})`), closed };
   }
 
-  /** Escape until the agent is idle at an empty input box again, at most three times. */
+  /**
+   * Escape until the agent is idle at its input box again, at most three times, then clear whatever
+   * the agent itself left in the box: Grok closes its /model picker on Escape and keeps `/model`
+   * typed (live, 1.0.52).
+   */
   private async escapeToComposer(): Promise<boolean> {
     for (let attempt = 0; attempt < 3; attempt++) {
       this.keys(["Escape"]);
@@ -461,8 +465,9 @@ export class Driver {
       while (Date.now() < deadline) {
         await Bun.sleep(POLL_MS * 2);
         const s = await this.screen();
-        const empty = s.draft === null || s.draft.trim() === "";
-        if (s.composer !== false && empty && this.herdrIdle()) return true;
+        if (s.composer === false || !this.herdrIdle()) continue;
+        if (s.draft === null || s.draft.trim() === "") return true;
+        return this.clearDraft(s.draft);
       }
     }
     return false;

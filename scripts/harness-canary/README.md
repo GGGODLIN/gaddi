@@ -125,7 +125,8 @@ nothing to compact; a two-tap row is left out because the phone asks before it s
 turn is made.
 
 A case passes when the command is sent, it is gone from the input box, and Escape brings the empty
-input box back. That does not prove a picker opened, since each agent paints its own: the screen
+input box back, after clearing what the agent itself left there (Grok keeps `/model` typed when
+Escape closes its picker). That does not prove a picker opened, since each agent paints its own: the screen
 each press left is saved as `bar-<id>.ansi` for a person to read.
 
 ## Verdicts
