@@ -32,7 +32,13 @@ the full test / E2E suite unless the user asks or the requested change directly 
      for the release check.
   2. Other agents and multiplexers installed on this machine run for real in a throwaway Herdr
      session (or a mux on its own socket) with a temporary config directory, never in the
-     operator's live session or config.
+     operator's live session or config. When the task changes what the phone shows or sends for
+     them (a card, a button, a palette row, a draft or input-box read), close it with one pass
+     through the dev lane's PWA at phone width, opened on that throwaway session with
+     `?s=<session>`: tap each changed item once, and after a fix re-tap only what the fix touched.
+     Once per task, not per commit; a commit keeps the unit tests and the real-agent run. The
+     canary checks that a picker opens, not what the phone then offers (a Grok hint read as a
+     draft, 2026-10-15).
   3. Hosts this machine cannot run (Linux, Windows, Android) get unit tests and CI, reported as not
      verified.
 
