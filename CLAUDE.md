@@ -379,6 +379,13 @@ page to be skimmed.
 - **A red local gate is a bug to fix, not a question of whether to skip it.** When pre-commit or
   pre-push fails on this machine for an environment reason, fix the hook or the test so it passes
   here; an escape hatch is for a single push the operator chose, not the standing answer.
+- **This fork's ordinary pushes are checked by CI; a release is checked on the Mac as well.** The
+  operator's clone sets `git config collie.prepush ci` (2026-10-15), and the pre-push hook then
+  leaves its typechecks and suites to CI unless the push carries a `chore(release):` commit, which
+  runs them here; a range it cannot read runs them too. CI is Linux only, so the release skill's dev
+  push is where the Mac tests what ships, and `release.yml` still waits for that commit's green CI.
+  After every other push, watch its `ci.yml` run and fix a red one before the next push lands on it;
+  the rule above still holds whenever the hook runs. `scripts/pre-push.test.ts` pins the switch.
 - **Tests run on Windows CI too.** Build paths with `path.join`, never a hard-coded `/`. A test that
   needs a child process spawns `process.execPath -e …`, never a binary such as `/usr/bin/yes` that
   Windows lacks.
