@@ -57,7 +57,7 @@ runtime effect, say so. This applies to the operator's own runtime changes, not 
 upstream PR or to someone else's clone.
 
 The fork is also published for other people to install and use, and its general changes are
-candidates for upstream. Two rules follow from that:
+candidates for upstream. Three rules follow from that:
 
 - **Someone without this operator's setup still gets a working Collie.** A change may lean on the
   operator's own tools, paths or labels, but without them Collie still installs, starts and runs
@@ -70,6 +70,11 @@ candidates for upstream. Two rules follow from that:
   approves that PR. This overrides the default that a personal repo's PRs need no confirmation;
   commits and pushes to this fork keep their existing authorisation. What a fork PR leaves out of
   the version files is under *Versioning*.
+- **The fork is the candidate pool, and a fork release is the gate.** Features and fixes are built
+  here first. A change becomes an upstream candidate only once it has shipped in a fork release,
+  because a release is the stable version. A problem found while an upstream PR is prepared or
+  reviewed (a red/green run, a review, the maintainer) is fixed in that PR without waiting for a
+  release, and the same fix lands on `dev` as usual and ships with the next fork release.
 
 ## Decision records — read before reopening a settled question
 
