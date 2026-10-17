@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The task tracker keeps the newest task batch clean across overlapping journal reads.** Re-reading a journal tail that spans a completed batch no longer brings the finished batch back, a `TaskCreate` read before its result line no longer leaves a duplicate id, an empty `TaskList` or all-deleted task folder clears stale items, and Claude task files are checked behind a `stat` gate.
+
 ## [2.6.0] - 2026-10-17
 
 ### Changed

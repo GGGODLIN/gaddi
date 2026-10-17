@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { JsonObject, JsonValue } from "../json.ts";
 import { asRecord, asText, tokenCount } from "../journal/cache-probe.ts";
 import { isSessionId } from "../journal/claude.ts";
-import { containedRealpath } from "../journal/files.ts";
+import { containedRealpath, statFile } from "../journal/files.ts";
 import { clipLine } from "./resolve.ts";
 
 export type PaneTodoStatus = "pending" | "in_progress" | "completed";
@@ -19,6 +19,7 @@ export interface PaneTodo {
 
 export const DEFAULT_TASKS_DIR = join(homedir(), ".claude", "tasks");
 export const MAX_TODOS = 50;
+export const MAX_TASK_FILES = 200;
 export const TODO_TEXT_MAX = 200;
 
 const TASK_FILE_RE = /^\d+\.json$/;
@@ -71,50 +72,92 @@ function buildTodo(
 
 function parseClaudeTaskRecord(r: JsonObject, fallbackId: string): PaneTodo | "deleted" | undefined {
   const status = parseStatus(r.status) ?? "pending";
-  if (status === "deleted") return "deleted";
+  if (status === "deleted") {
+    const isTaskEntry =
+      asId(r.id) !== undefined ||
+      asText(r.subject) !== undefined ||
+      asText(r.content) !== undefined ||
+      asText(r.description) !== undefined;
+    return isTaskEntry ? "deleted" : undefined;
+  }
   const id = asId(r.id) ?? fallbackId;
   const subject = asText(r.subject) ?? asText(r.content) ?? asText(r.description);
   if (subject === undefined) return undefined;
   return buildTodo(id, subject, status, asText(r.activeForm));
 }
 
-/**
- * Read Claude Code's on-disk `<tasksDir>/<sessionId>/<n>.json` files, when any exist.
- *
- * Every path goes through `containedRealpath` after validating `sessionId` as a canonical UUID.
- * Missing, empty, malformed or escaping directories return `undefined`.
- */
-export async function readClaudeTasks(dir: string, sessionId: string): Promise<PaneTodo[] | undefined> {
-  if (!isSessionId(sessionId)) return undefined;
+export interface StatTaskFile {
+  readonly name: string;
+  readonly path: string;
+  readonly size: number;
+  readonly mtimeMs: number;
+}
+
+export async function statClaudeTaskFiles(
+  dir: string,
+  sessionId: string,
+): Promise<{ readonly sig: string; readonly files: readonly StatTaskFile[] } | null> {
+  if (!isSessionId(sessionId)) return null;
   const sessionDir = await containedRealpath(join(dir, sessionId), dir);
-  if (sessionDir === null) return undefined;
+  if (sessionDir === null) return null;
   let names: string[];
   try {
     names = await readdir(sessionDir);
   } catch {
-    return undefined;
+    return null;
   }
-  const taskFiles = names
+  const candidates = names
     .filter((name) => TASK_FILE_RE.test(name))
     .toSorted((a, b) => Number(a.slice(0, -5)) - Number(b.slice(0, -5)))
-    .slice(0, MAX_TODOS);
-  if (taskFiles.length === 0) return undefined;
+    .slice(0, MAX_TASK_FILES);
+  if (candidates.length === 0) return null;
 
-  const todos: PaneTodo[] = [];
-  for (const name of taskFiles) {
+  const files: StatTaskFile[] = [];
+  const parts: string[] = [];
+  for (const name of candidates) {
     const filePath = await containedRealpath(join(sessionDir, name), sessionDir);
     if (filePath === null) continue;
+    const st = await statFile(filePath);
+    if (st === null || st.size > TASK_FILE_MAX_BYTES) continue;
+    files.push({ name, path: filePath, size: st.size, mtimeMs: st.mtimeMs });
+    parts.push(`${name}:${String(st.size)}:${String(st.mtimeMs)}`);
+  }
+  if (files.length === 0) return null;
+  return { sig: parts.join("|"), files };
+}
+
+export async function readClaudeTaskFiles(files: readonly StatTaskFile[]): Promise<PaneTodo[] | undefined> {
+  const todos: PaneTodo[] = [];
+  let sawRecord = false;
+  for (const file of files) {
+    if (todos.length >= MAX_TODOS) break;
     try {
-      const text = await Bun.file(filePath).slice(0, TASK_FILE_MAX_BYTES).text();
+      const text = await Bun.file(file.path).slice(0, TASK_FILE_MAX_BYTES).text();
       const record = parseJsonObject(text);
       if (record === null) continue;
-      const parsed = parseClaudeTaskRecord(record, name.slice(0, -5));
-      if (parsed !== undefined && parsed !== "deleted") todos.push(parsed);
+      const parsed = parseClaudeTaskRecord(record, file.name.slice(0, -5));
+      if (parsed === undefined) continue;
+      sawRecord = true;
+      if (parsed !== "deleted") todos.push(parsed);
     } catch {
       continue;
     }
   }
-  return todos.length > 0 ? todos : undefined;
+  if (!sawRecord) return undefined;
+  return todos;
+}
+
+/**
+ * Read Claude Code's on-disk `<tasksDir>/<sessionId>/<n>.json` files, when any exist.
+ *
+ * Every path goes through `containedRealpath` after validating `sessionId` as a canonical UUID.
+ * Missing, empty, malformed or escaping directories return `undefined`; a directory whose valid task
+ * files are all marked `deleted` returns `[]` so the caller can clear stale journal tasks.
+ */
+export async function readClaudeTasks(dir: string, sessionId: string): Promise<PaneTodo[] | undefined> {
+  const st = await statClaudeTaskFiles(dir, sessionId);
+  if (st === null) return undefined;
+  return readClaudeTaskFiles(st.files);
 }
 
 function parseTodoItems(items: readonly JsonValue[]): PaneTodo[] {
@@ -189,20 +232,6 @@ export function parseJournalTodos(
   lines: readonly string[],
   previous?: readonly PaneTodo[],
 ): PaneTodo[] | undefined {
-  const taskMap = new Map<string, PaneTodo>();
-  if (previous !== undefined) {
-    for (const item of previous) taskMap.set(item.id, { ...item });
-  }
-  let nextId = maxNumericId(taskMap.values()) + 1;
-  let touched = false;
-
-  const replaceAll = (items: readonly PaneTodo[]): void => {
-    touched = true;
-    taskMap.clear();
-    for (const item of items) taskMap.set(item.id, item);
-    nextId = maxNumericId(taskMap.values()) + 1;
-  };
-
   const parsedRows: JsonObject[] = [];
   const assignedIds = new Map<string, string>();
   for (const rawLine of lines) {
@@ -224,6 +253,46 @@ export function parseJournalTodos(
       }
     }
   }
+
+  // Collect task ids whose TaskCreate is inside `lines` so `taskMap` only pre-seeds tasks that were
+  // created BEFORE this window (scrolled off the tail), never tasks created later inside `lines`.
+  const createdInLines = new Set<string>();
+  for (const row of parsedRows) {
+    if (row.isSidechain === true || asText(row.type) !== "assistant") continue;
+    const msg = asRecord(row.message);
+    if (msg === null || !Array.isArray(msg.content)) continue;
+    for (const block of msg.content) {
+      const b = asRecord(block);
+      if (b === null || b.type !== "tool_use" || asText(b.name) !== "TaskCreate") continue;
+      const input = asRecord(b.input);
+      if (input === null || (asText(input.subject) ?? asText(input.description)) === undefined) continue;
+      const callId = asText(b.id);
+      if (callId !== undefined) {
+        createdInLines.add(assignedIds.get(callId) ?? `pending:${callId}`);
+      }
+    }
+  }
+
+  const previousIds = new Set<string>();
+  const taskMap = new Map<string, PaneTodo>();
+  if (previous !== undefined) {
+    for (const item of previous) {
+      if (item.id.startsWith("pending:")) continue;
+      previousIds.add(item.id);
+      if (!createdInLines.has(item.id)) {
+        taskMap.set(item.id, { ...item });
+      }
+    }
+  }
+  let nextId = maxNumericId(taskMap.values()) + 1;
+  let touched = false;
+
+  const replaceAll = (items: readonly PaneTodo[]): void => {
+    touched = true;
+    taskMap.clear();
+    for (const item of items) taskMap.set(item.id, item);
+    nextId = maxNumericId(taskMap.values()) + 1;
+  };
 
   for (const row of parsedRows) {
     // 1. OpenCode composed line: `{ parts: [{ data: { type: "tool", tool|name: "todowrite", state: { input } } }] }`
@@ -300,12 +369,18 @@ export function parseJournalTodos(
           const subject = asText(input.subject) ?? asText(input.description);
           if (subject === undefined) continue;
           const callId = asText(b.id);
-          const taskId = (callId === undefined ? undefined : assignedIds.get(callId)) ?? String(nextId++);
+          const assigned = callId === undefined ? undefined : assignedIds.get(callId);
+          const taskId = assigned ?? (callId !== undefined ? `pending:${callId}` : String(nextId++));
           const numId = Number(taskId);
           if (Number.isInteger(numId) && numId >= nextId) nextId = numId + 1;
-          // Only a genuinely new task id after an all-completed batch starts a new batch; re-reading an
-          // existing id in an overlapping tail keeps the batch intact.
-          if (!taskMap.has(taskId) && taskMap.size > 0 && [...taskMap.values()].every((t) => t.status === "completed")) {
+          const coexistedInPrevious =
+            previousIds.has(taskId) && [...taskMap.keys()].every((id) => previousIds.has(id));
+          if (
+            !taskMap.has(taskId) &&
+            !coexistedInPrevious &&
+            taskMap.size > 0 &&
+            [...taskMap.values()].every((t) => t.status === "completed")
+          ) {
             taskMap.clear();
           }
           const todo = buildTodo(taskId, subject, "pending", asText(input.activeForm));
@@ -322,9 +397,10 @@ export function parseJournalTodos(
           }
           const existing = taskMap.get(taskId);
           if (existing === undefined) continue;
-          const nextText = asText(input.subject) === undefined ? existing.text : clipLine(asText(input.subject)!, TODO_TEXT_MAX);
-          const nextActive =
-            asText(input.activeForm) === undefined ? existing.activeForm : clipLine(asText(input.activeForm)!, TODO_TEXT_MAX);
+          const rawSubject = asText(input.subject);
+          const rawActive = asText(input.activeForm);
+          const nextText = rawSubject === undefined ? existing.text : clipLine(rawSubject, TODO_TEXT_MAX);
+          const nextActive = rawActive === undefined ? existing.activeForm : clipLine(rawActive, TODO_TEXT_MAX);
           const updated = buildTodo(taskId, nextText, status ?? existing.status, nextActive);
           if (updated !== undefined) {
             touched = true;
@@ -338,13 +414,20 @@ export function parseJournalTodos(
     // 5. Claude `user` row with `toolUseResult.tasks` (from `TaskList`)
     if (type === "user") {
       const result = asRecord(row.toolUseResult);
-      if (result === null || !Array.isArray(result.tasks) || result.tasks.length === 0) continue;
+      if (result === null || !Array.isArray(result.tasks)) continue;
+      if (result.tasks.length === 0) {
+        replaceAll([]);
+        continue;
+      }
       const listed: PaneTodo[] = [];
+      let sawTaskRecord = false;
       for (const item of result.tasks) {
         const r = asRecord(item);
         if (r === null) continue;
         const parsed = parseClaudeTaskRecord(r, String(listed.length + 1));
-        if (parsed !== undefined && parsed !== "deleted") {
+        if (parsed === undefined) continue;
+        sawTaskRecord = true;
+        if (parsed !== "deleted") {
           const prev = taskMap.get(parsed.id);
           if (parsed.activeForm === undefined && prev?.activeForm !== undefined) {
             parsed.activeForm = prev.activeForm;
@@ -352,7 +435,7 @@ export function parseJournalTodos(
           listed.push(parsed);
         }
       }
-      if (listed.length > 0) replaceAll(listed);
+      if (sawTaskRecord) replaceAll(listed);
     }
   }
 
