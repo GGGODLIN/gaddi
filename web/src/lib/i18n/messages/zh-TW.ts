@@ -248,6 +248,7 @@ export const zhTW: Dictionary = {
   "composer.controls.type": "輸入",
   "composer.controls.quick": "快速",
   "composer.controls.agent": "Agent",
+  "composer.controls.tasks": "待辦 {done}/{total}",
   "composer.controls.displayAria": "顯示設定",
   "composer.controls.display": "顯示",
   "composer.controls.clear": "清除訊息",

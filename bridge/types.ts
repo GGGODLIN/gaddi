@@ -4,6 +4,7 @@
 import type { Confidence } from "./cache/claims.ts";
 import type { PaneCache } from "./cache/engine.ts";
 import type { PaneDescription } from "./description/resolve.ts";
+import type { PaneTodo } from "./description/todos.ts";
 import type { ApiErrorDetail, ErrorCode } from "./error-codes.ts";
 import type { GitHead } from "./git-head.ts";
 import type { ChatBody } from "./journal/live.ts";
@@ -19,6 +20,7 @@ export type { TranscriptEntry, TranscriptPart } from "./journal/types.ts";
 export type { ChatBody, ChatEntry, ChatOlderBody, ChatWindowBody } from "./journal/live.ts";
 export type { CacheStateName, PaneCache } from "./cache/engine.ts";
 export type { PaneDescription } from "./description/resolve.ts";
+export type { PaneTodo, PaneTodoStatus } from "./description/todos.ts";
 export type { Confidence } from "./cache/claims.ts";
 export type { GitHead } from "./git-head.ts";
 
@@ -155,6 +157,12 @@ export interface AgentView {
    * there is nothing to say.
    */
   description?: PaneDescription;
+  /**
+   * The pane's active todo list, read from the session's task files or journal by the description
+   * tracker (bridge/description/todos.ts). Attached at serialise time and ABSENT, NEVER A
+   * PLACEHOLDER, when the pane has no todos.
+   */
+  todos?: PaneTodo[];
   /**
    * The model this pane's agent is on, as its harness names it: a `/model` chosen since the last turn
    * first (Claude), else the model that turn ran on (`claude-opus-5-5`, `provider:model` for opencode

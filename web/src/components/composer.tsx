@@ -2,8 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import type { ChangeEvent, ClipboardEvent, CSSProperties, ReactNode } from "react";
 import { useRevalidator } from "react-router";
-import { Check, FileText, Image, Keyboard, Loader2, Mic, Paperclip, Pencil, Send, Settings2, Slash, Square, Terminal, X, Zap } from "lucide-react";
+import { Check, FileText, Image, Keyboard, ListTodo, Loader2, Mic, Paperclip, Pencil, Send, Settings2, Slash, Square, Terminal, X, Zap } from "lucide-react";
 
+import { StatusDot } from "@/components/status-badge";
 import { applyDraftFontSize, fontStack, inputFocusZoomsPage } from "@/hooks/use-display-prefs";
 import type { DisplayPrefs, Hand } from "@/hooks/use-display-prefs";
 import { usePendingConfirm } from "@/hooks/use-pending-confirm";
@@ -71,6 +72,7 @@ import { sendGuardedReply } from "@/lib/reply-action";
 import { useLive } from "@/lib/liveness";
 import { OfflineDraftNote, TerminalDraftPreview } from "@/components/terminal-draft-preview";
 import { scopeKey, type Scope } from "@/lib/scope";
+import type { PaneTodo } from "@/lib/types";
 import { DirectTypingStrip } from "@/components/direct-typing-strip";
 import { VoiceTakeover } from "@/components/voice-takeover";
 import { usePhoneEngineUse } from "@/hooks/use-phone-engine";
@@ -200,14 +202,15 @@ interface ComposerProps {
    */
   stale?: boolean;
 
-  /**
-   * Which thumb the pane is laid out for (the Settings "Hand" choice). `"right"` (default) is the
-   * shipped layout, unchanged. `"left"` mirrors the two ends a thumb has to reach: the belt turns
-   * round, with its pinned block at the left end above Send and the pills running right to left
-   * from Keys ({@link Hand} in actions-row.tsx), and in the reply box Send and Attach move to the
-   * left of the field, Send on the outer edge, Attach beside the field.
+  /** Which thumb the pane is laid out for (the Settings "Hand" choice). `"right"` (default) is the
+   *  shipped layout, unchanged. `"left"` mirrors the two ends a thumb has to reach: the belt turns
+   *  round, with its pinned block at the left end above Send and the pills running right to left
+   *  from Keys ({@link Hand} in actions-row.tsx), and in the reply box Send and Attach move to the
+   *  left of the field, Send on the outer edge, Attach beside the field.
    */
   hand?: Hand;
+  /** The pane's active todo list, drawn as a belt pill and an in-flow dock when non-empty. */
+  todos?: readonly PaneTodo[];
 }
 
 // The composer cluster at the bottom of the pane view — everything a phone keyboard can't do on its
@@ -223,7 +226,7 @@ interface ComposerProps {
 // decode. They now live behind the ⚙ on the actions row, as labelled rows in the same
 // in-flow dock (they change how the mirror LOOKS, so the mirror has to stay visible while you flip
 // them). Find moved the other way — to the header, where its find bar already takes over the row.
-type ComposerDrawer = "quick" | "cmd" | "keys" | null;
+type ComposerDrawer = "quick" | "cmd" | "keys" | "todos" | null;
 
 
 // Pause after clearing a stranded terminal draft so the TUI settles before pane.send_text. Exported
@@ -333,7 +336,7 @@ interface ClearedDraft {
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
-  { paneId, scope, agent, isShell, gone, readOnly, hostBlock, composing, dialogPresent, dialogUnread, text, terminalDraft, rawTerminalDraft, prefs, display, onSent, pullHandle, draftNoticeSlot, changesPill, stale, hand = "right" },
+  { paneId, scope, agent, isShell, gone, readOnly, hostBlock, composing, dialogPresent, dialogUnread, text, terminalDraft, rawTerminalDraft, prefs, display, onSent, pullHandle, draftNoticeSlot, changesPill, stale, hand = "right", todos },
   ref,
 ) {
   const revalidator = useRevalidator();
@@ -979,6 +982,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // visibility test here and the palette's own list below (same call, same arguments).
   const operatorCommands = useOperatorCommands();
   const commands = commandsFor(agent, operatorCommands);
+  const todoList = todos ?? [];
+  const todoDone = todoList.filter((item) => item.status === "completed").length;
+  const todoLabel =
+    todoList.length > 0
+      ? translate("composer.controls.tasks", { done: todoDone, total: todoList.length })
+      : "";
   // What this collie takes as an attachment, off the same one-shot /api/config read. On a bridge
   // that publishes nothing (older than the field, or the read has not landed) `uploadLimits` answers
   // with the contract that shipped before attachments — images, 10 MB — so the button is never
@@ -1732,6 +1741,33 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             />
           </ComposerDock>
         )}
+        {drawer === "todos" && todoList.length > 0 && (
+          <ComposerDock title={todoLabel} onClose={closeDrawer}>
+            <ul className="mt-2 divide-y divide-border border-t border-border">
+              {todoList.map((item) => {
+                const dotStatus =
+                  item.status === "completed" ? "done" : item.status === "in_progress" ? "working" : "idle";
+                return (
+                  <li
+                    key={item.id}
+                    className={cn(
+                      "flex items-start gap-2.5 px-3 py-2 text-sm leading-snug",
+                      item.status === "in_progress" && "bg-status-working/8",
+                      item.status === "completed" && "text-muted-foreground",
+                    )}
+                  >
+                    <StatusDot
+                      status={dotStatus}
+                      surface={item.status === "in_progress" ? "bg-status-working/8" : "bg-background"}
+                      className="mt-1"
+                    />
+                    <span className="min-w-0 flex-1 break-words">{item.text}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </ComposerDock>
+        )}
         {/* The one action row: Keys · Quick · Agent · ⚙ (Agent only when the pane's agent has
             commands). Display prefs used to sit on a second, permanent icon-only "View" row above
             this one; folding them behind the ⚙ gives the mirror that row back. The gear is icon-only
@@ -1847,6 +1883,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                       label: translate("composer.controls.agent"),
                       disabled: locked,
                       onSelect: () => requestDrawer("cmd"),
+                    },
+                  ]
+                : []),
+              ...(todoList.length > 0
+                ? [
+                    {
+                      id: "todos",
+                      icon: ListTodo,
+                      label: todoLabel,
+                      on: drawer === "todos",
+                      expanded: drawer === "todos",
+                      onSelect: () => requestDrawer(drawer === "todos" ? null : "todos"),
                     },
                   ]
                 : []),

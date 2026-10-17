@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **A pane's active task list opens from the actions belt.** When a Claude Code, Codex, OpenCode or Grok Build session has tasks, the belt shows a `Tasks` pill with the completed count (`Tasks 2/5`) in both Chat and Terminal views, and tapping it opens an in-flow list of the items and their status.
+
 ### Fixed
 
 - **The Windows check counts the pre-push tests it skips by design.** The eight `collie.prepush` tests and their two setup hooks are POSIX-only, and `scripts/windows-suites.ps1` now names them in its skip budget, so a release commit's Windows run is green again.

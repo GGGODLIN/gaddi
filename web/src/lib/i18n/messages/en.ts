@@ -287,6 +287,7 @@ export const en = {
   "composer.controls.type": "Type",
   "composer.controls.quick": "Quick",
   "composer.controls.agent": "Agent",
+  "composer.controls.tasks": "Tasks {done}/{total}",
   "composer.controls.displayAria": "Display settings",
   "composer.controls.display": "Display",
   "composer.controls.clear": "Clear message",

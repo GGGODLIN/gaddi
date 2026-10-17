@@ -122,6 +122,9 @@ const AGENT_VIEW_KEYS = {
   // Not a crew dimension: the pane's description (bridge/description/resolve.ts), computed on the
   // machine the pane lives on and absent when there is nothing to say. An older peer omits it.
   description: true,
+  // Not a crew dimension: the pane's active todo list (bridge/description/todos.ts), absent when
+  // there are no todos or on an older bridge.
+  todos: true,
   // Not a crew dimension: what the checkout holding the pane's folder is on, read off the disk of
   // the machine the pane lives on. An older bridge or peer omits it.
   gitHead: true,
@@ -247,6 +250,7 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "tabPosition",
       "terminalTitle",
       "terminalTitleStale",
+      "todos",
       "turnId",
       "workspaceId",
       "workspaceLabel",

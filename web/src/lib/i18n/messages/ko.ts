@@ -257,6 +257,7 @@ export const ko: Dictionary = {
   "composer.controls.type": "입력",
   "composer.controls.quick": "빠른 실행",
   "composer.controls.agent": "에이전트",
+  "composer.controls.tasks": "할 일 {done}/{total}",
   "composer.controls.displayAria": "표시 설정",
   "composer.controls.display": "표시",
   "composer.controls.clear": "메시지 지우기",

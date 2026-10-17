@@ -327,6 +327,9 @@ const PANE_WIRE_KEYS = {
   // The pane's description (bridge/description/resolve.ts). Not a crew dimension, and absent here:
   // the baseline builds no description tracker, so no golden byte moved.
   description: true,
+  // The pane's active todo list (bridge/description/todos.ts). Not a crew dimension, and absent here:
+  // the baseline builds no description tracker, so no golden byte moved.
+  todos: true,
   // Not a crew dimension: what the checkout holding the pane's folder is on, read off that machine's
   // own disk. Attached at serialise time like `cache`, and absent here: this baseline builds its body
   // with no reader, so no golden byte moved.
@@ -478,6 +481,7 @@ describe("solo zero-tax — wire shapes carry no crew dimension", () => {
       "tabPosition",
       "terminalTitle",
       "terminalTitleStale",
+      "todos",
       "turnId",
       "workspaceId",
       "workspaceLabel",
