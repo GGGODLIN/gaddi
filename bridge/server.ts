@@ -143,6 +143,7 @@ import {
 } from "./update-action.ts";
 import type { StateEngine } from "./state-engine.ts";
 import { adapterFor, buildJournalRegistry } from "./journal/registry.ts";
+import { readClaudeSubagent } from "./journal/claude.ts";
 import { chatParams, LiveWindows } from "./journal/live.ts";
 import { parseDurableLog } from "./journal/durable.ts";
 import { redactText } from "./redact.ts";
@@ -537,6 +538,14 @@ const WORKSPACE_FILES_IMAGE_ROUTE = /^\/api\/workspace\/([^/]+)\/files\/image$/;
  * the crew wire. The lead answers 501 and the phone keeps the short title.
  */
 const PANE_DELIVERABLE_ROUTE = /^\/api\/pane\/([^/]+)\/deliverables(?:\/([^/]+))?$/;
+
+/**
+ * `GET /api/pane/<id>/subagent/<agentId>`: one Claude subagent's own JSONL transcript
+ * (`<session-uuid>/subagents/agent-<agentId>.jsonl`), read on demand when the operator opens a
+ * subagent card's sheet. Both `paneId` and `agentId` are opaque identifiers; `agentId` is checked
+ * against `isAgentId` and resolved through `containedRealpath` inside the parent session's directory.
+ */
+const PANE_SUBAGENT_ROUTE = /^\/api\/pane\/([^/]+)\/subagent\/([^/]+)$/;
 
 /**
  * `GET /api/pane/<id>/port/<port>`: what answers on a dev-server port of the machine this collie runs
@@ -1903,6 +1912,24 @@ export function startServer(opts: {
         url,
         req,
       );
+    }
+
+    const subagentMatch = pathname.match(PANE_SUBAGENT_ROUTE);
+    if (subagentMatch) {
+      const denied = caller.gate("device-read");
+      if (denied) return denied;
+      if (req.method !== "GET") return text("method not allowed", 405);
+      const rt = await caller.resolve();
+      if (rt instanceof Response) return rt;
+      let paneId: string;
+      let agentId: string;
+      try {
+        paneId = decodeURIComponent(subagentMatch[1]!);
+        agentId = decodeURIComponent(subagentMatch[2]!);
+      } catch {
+        return text("malformed URL", 400);
+      }
+      return paneSubagent(cfg, journals, rt.engine, rt.herdr, paneId, agentId, req);
     }
 
     const portMatch = pathname.match(PANE_PORT_ROUTE);
@@ -4161,6 +4188,52 @@ export async function paneChat(
     return secure(gzipJsonResponse(data, accept, { etag }));
   } catch (err) {
     return text(`transcript read failed: ${errorText(err)}`, 502);
+  }
+}
+
+/**
+ * GET /api/pane/:id/subagent/:agentId — one Claude subagent's own transcript log, read on demand.
+ */
+async function paneSubagent(
+  cfg: Config,
+  journals: Record<string, JournalAdapter> | null,
+  engine: StateEngine,
+  mux: Pick<MuxAdapter, "readGrid" | "foregroundProcesses">,
+  paneId: string,
+  agentId: string,
+  req: Request,
+): Promise<Response> {
+  const accept = req.headers.get("accept-encoding");
+  const unavailable = () => json({ paneId, agentId, available: false }, accept);
+  if (!cfg.transcript || journals === null) return unavailable();
+  const { agents, shellPanes } = engine.current();
+  const panes = [...agents, ...shellPanes];
+  const pane = panes.find((a) => a.paneId === paneId);
+  if (pane === undefined) return unavailable();
+  const adapter = adapterFor(journals, journalAgentOf(pane));
+  if (adapter === undefined) return unavailable();
+  const ref = await journalRefOf(adapter, pane, panes, await discoveryHints(adapter, pane, mux, paneId));
+  if (ref === null) return unavailable();
+  try {
+    const read = await readClaudeSubagent(adapter, ref, agentId);
+    if (read === null) return unavailable();
+    const masked = cfg.redact ? maskHistoryPage(read) : read;
+    const data = {
+      paneId,
+      agentId,
+      available: true,
+      entries: masked.entries,
+      fileTruncated: masked.fileTruncated,
+    };
+    const etag = computeEtag(JSON.stringify(data));
+    if (notModified(req.headers.get("if-none-match"), etag)) {
+      return secure(
+        new Response(null, { status: 304, headers: { etag, "cache-control": "no-store" } }),
+      );
+    }
+    return secure(gzipJsonResponse(data, accept, { etag }));
+  } catch (err) {
+    return text(`subagent read failed: ${errorText(err)}`, 502);
   }
 }
 

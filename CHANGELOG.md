@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **Tapping a Claude subagent card opens its own transcript in a bottom sheet.** An `async_launched` Agent call stays running until its `<task-notification>` folds the final report onto the card, without showing Claude Code's internal launch metadata, and tapping the card opens a bottom sheet with the delegated prompt, the subagent's tool steps and its report.
+
 ### Fixed
 
 - **The task tracker keeps the newest task batch clean across overlapping journal reads.** Re-reading a journal tail that spans a completed batch no longer brings the finished batch back, a `TaskCreate` read before its result line no longer leaves a duplicate id, an empty `TaskList` or all-deleted task folder clears stale items, and Claude task files are checked behind a `stat` gate.

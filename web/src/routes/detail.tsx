@@ -4,6 +4,7 @@ import { useLoaderData, useLocation, useParams } from "react-router";
 import { AgentChat } from "@/components/agent-chat";
 import { DeliverableLinks } from "@/components/deliverable-links";
 import { FileLinksProvider, usePaneFileLinks } from "@/components/file-links";
+import { SubagentSheet } from "@/components/subagent-sheet";
 import { useDashPrefs } from "@/hooks/use-dash-prefs";
 import { useLoadingStalled } from "@/hooks/use-loading-stalled";
 import { useNav } from "@/hooks/use-nav";
@@ -97,7 +98,9 @@ export function DetailRoute() {
   // list there (M53 spec 12): a NAMED parent, so a pane reached from a space page or a link lands on the list.
   const gridless = !useMuxCapability("paneGrid", scope).capable;
   const dismissDeliverable = useRef<(() => boolean) | null>(null);
+  const dismissSubagent = useRef<(() => boolean) | null>(null);
   const up = () => {
+    if (dismissSubagent.current?.() === true) return;
     if (dismissDeliverable.current?.() === true) return;
     if (gridless) nav.upTo(homePath(scope));
     else nav.up(homePath(scope));
@@ -108,6 +111,7 @@ export function DetailRoute() {
   // workspaces, so the arrow slides there as it always did. Where the row is gone or off screen, the
   // engine crossfades. The landing is the same resolution `nav.up` runs (`upTarget`).
   const backArrow = () => {
+    if (dismissSubagent.current?.() === true) return;
     if (dismissDeliverable.current?.() === true) return;
     const lands = gridless ? "/" : upTarget(location.pathname, readFrom(location.state), homePath(scope), canStepBack());
     const rowsThere = GLIDE_PAIRS.pane.origin(lands) && (lands !== "/" || dashView !== "changes");
@@ -123,6 +127,7 @@ export function DetailRoute() {
   return (
     <DeliverableLinks paneId={paneId} scope={scope} dismissRef={dismissDeliverable}>
     <FileLinksProvider value={fileLinks}>
+    <SubagentSheet paneId={paneId} scope={scope} dismissRef={dismissSubagent}>
       <AgentChat
         // Keyed by the pane's FULL address, not its id. The key exists to remount the composer on a
         // pane switch so a draft never follows you into another terminal — and `w1:p1` is a different
@@ -167,6 +172,7 @@ export function DetailRoute() {
           )
         }
       />
+    </SubagentSheet>
     </FileLinksProvider>
     </DeliverableLinks>
   );

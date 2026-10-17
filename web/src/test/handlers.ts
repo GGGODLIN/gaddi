@@ -870,6 +870,9 @@ export const handlers = [
   ),
   // On-disk skills for a pane (ADR 9009, ADR 9011): none by default; tests that check them override it.
   http.get(/\/api\/pane\/[^/]+\/claude-commands$/, () => HttpResponse.json({ commands: [] })),
+  http.get(/\/api\/pane\/[^/]+\/subagent\/[^/]+$/, () =>
+    HttpResponse.json({ paneId: "w1:p1", agentId: "a000000", available: false }),
+  ),
   // The Changes view: the list, or with ?repo=&path= one file's diff. Asked by pane or by
   // workspace, the answer is the same list (ADR 0065).
   http.get(/\/api\/(?:pane|workspace)\/[^/]+\/changes/, ({ request }) => {

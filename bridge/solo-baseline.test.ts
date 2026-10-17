@@ -727,6 +727,8 @@ describe("solo zero-tax — routes", () => {
       "/^\\/api\\/pane\\/([^/]+)\\/files\\/image$/",
       // A dev-server port of this machine, probed by connect only (ADR 9007); not forwarded.
       "/^\\/api\\/pane\\/([^/]+)\\/port\\/([^/]+)$/",
+      // One Claude subagent's own JSONL transcript, read on demand when the subagent sheet opens.
+      "/^\\/api\\/pane\\/([^/]+)\\/subagent\\/([^/]+)$/",
       // A space's rename (M53 spec 05): a write, forwarded to the owning member, and only an adapter that
       // declares `renameSpace` takes it; every other bridge answers it the refusal.
       "/^\\/api\\/space\\/([^/]+)\\/rename$/",
