@@ -538,6 +538,7 @@ function UpdateRibbonSwapsCard() {
 
 const STATUS_TONES = [
   { value: "info", label: "Info" },
+  { value: "note", label: "Note" },
   { value: "success", label: "Success" },
   { value: "warn", label: "Warn" },
   { value: "error", label: "Error" },
@@ -545,6 +546,7 @@ const STATUS_TONES = [
 
 const STATUS_TEXT = {
   info: "Tab ready",
+  note: "The desk answered first.",
   success: "Sent",
   warn: "Reconnecting…",
   error: "Send failed, check the connection",

@@ -22,6 +22,8 @@ const allAgyFixtures = allFixtures.filter((f) => f.startsWith("agy--"));
 
 const NEUTRAL = new Set([
   "agy--fresh-idle.txt",
+  // The 60-row capture that stood as agy--working.txt: the turn is over and the box is free.
+  "agy--after-plan-idle.txt",
   "agy--working.txt",
   "agy--done.txt",
   // The slash-command completion popup under a live box: not a dialog, nothing to lift.
@@ -265,8 +267,10 @@ describe("agyAdapter unit & footer safety", () => {
     expect(statusText).toContain("? for shortcuts");
   });
 
-  it("extracts working statusline on agy--working.txt", () => {
-    const raw = readFileSync(join(PANES_DIR, "agy--working.txt"), "utf8");
+  // The mid-turn capture (agy--working.txt) carries its status after `esc to cancel` on one row, which
+  // extractStatusLines does not read (0 rows); this screen, once filed as `working`, is a finished turn.
+  it("extracts the statusline on agy--after-plan-idle.txt", () => {
+    const raw = readFileSync(join(PANES_DIR, "agy--after-plan-idle.txt"), "utf8");
     const lines = splitLines(parseAnsi(raw));
 
     expect(agyAdapter.extractInputDraft!(lines)).toBeNull();
@@ -492,6 +496,18 @@ describe("agy: the /resume Conversations picker lifts as a menu (1.3.5)", () => 
     const rows = read("agy--resume-picker.txt").map((l) => lineText(l).trimEnd());
     const lines = splitLines(parseAnsi([...rows, "Delete this conversation? Press Enter to confirm."].join("\n")));
     expect(buildBlocks(lines, { agent: "agy" }).some((b) => b.kind === "menu")).toBe(false);
+  });
+
+  // A third review (2026-10-16): a delete confirmation painted in place of the pager row, footer intact.
+  it("does not lift the picker when a row inside the list asks for a key", () => {
+    const rows = read("agy--resume-picker.txt").map((l) => lineText(l).trimEnd());
+    const pager = rows.findIndex((t) => /\[\d+-\d+ of \d+ items\]/.test(t));
+    expect(pager).toBeGreaterThan(0);
+    for (const prompt of ["Delete 'X'? Press Y to confirm", "Delete 'X'? [y/N]"]) {
+      const edited = rows.map((t, i) => (i === pager ? prompt : t));
+      const lines = splitLines(parseAnsi(edited.join("\n")));
+      expect(buildBlocks(lines, { agent: "agy" }).some((b) => b.kind === "menu"), prompt).toBe(false);
+    }
   });
 
   // A second review built these two the same way (2026-10-16).

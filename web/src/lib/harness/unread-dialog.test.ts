@@ -238,7 +238,13 @@ const CARD_FIXTURES = {
   },
   codex: {
     // README: notes composer focused inside the ask card — a real dialog
-    modals: ["codex--ask-notes-focused.txt"],
+    modals: [
+      "codex--ask-notes-focused.txt",
+      // Codex 0.162.1 pickers: no grammar reads them yet, so the unread card covers them. The
+      // /resume list is read (session-picker.ts) and lifts as a menu, so it is not here.
+      "codex--v0162-picker-model.txt",
+      "codex--v0162-picker-permissions.txt",
+    ],
     notModals: [],
   },
   grok: {
@@ -258,11 +264,14 @@ const CARD_FIXTURES = {
     ],
     notModals: [],
   },
-  // README: the `/resume` Conversations picker after a search that matched nothing — a real dialog
-  // with no row to select, so the menu grammar declines it and Escape is the way out — and a checkbox
+  // README: the `/resume` Conversations picker after a search that matched nothing, a real dialog
+  // with no row to select, so the menu grammar declines it and Escape is the way out, and a checkbox
   // question, which no recipe here ticks. Every other AGY dialog fixture is one its grammars read.
-  agy: { modals: ["agy--ask-multi.txt", "agy--resume-picker-nomatch.txt"], notModals: [] },
-  antigravity: { modals: ["agy--ask-multi.txt", "agy--resume-picker-nomatch.txt"], notModals: [] },
+  // agy--working.txt is a mid-turn screen (M56 spec 14 review restored the first capture): its footer
+  // `esc to cancel` is also the key hint of an agy dialog, so the card shows on a busy pane and offers
+  // Escape over it. A known false positive of the agy grammar, left for its own fix.
+  agy: { modals: ["agy--ask-multi.txt", "agy--resume-picker-nomatch.txt"], notModals: ["agy--working.txt"] },
+  antigravity: { modals: ["agy--ask-multi.txt", "agy--resume-picker-nomatch.txt"], notModals: ["agy--working.txt"] },
   // Every opencode picker: composerReady refuses it (the picker shape) and no grammar reads it, so
   // Escape, which closes a picker (probed on 1.18.32), is its way out. The permission steps and every
   // question dialog the grammars lift (single select, multi select, a many-question call, the Confirm

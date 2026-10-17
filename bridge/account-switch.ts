@@ -1,4 +1,5 @@
 import type { MuxAdapter } from "./mux/types.ts";
+import { gateFor } from "./surface/key-gate.ts";
 
 // Restart one Claude pane on another account, in the SAME pane, continuing the same session.
 //
@@ -46,7 +47,7 @@ export interface SwitchClock {
   readonly now: () => number;
 }
 
-type SwitchMux = Pick<MuxAdapter, "sendKeys" | "typeText" | "readGrid" | "snapshot">;
+type SwitchMux = Pick<MuxAdapter, "writeKeys" | "typeText" | "readGrid" | "snapshot">;
 
 /** Long enough for an interrupted turn to hand the input box back (measured under 2s). */
 const INTERRUPT_SETTLE_MS = 1500;
@@ -221,7 +222,7 @@ async function exited(mux: SwitchMux, plan: SwitchPlan, clock: SwitchClock): Pro
 
 export async function switchAccount(mux: SwitchMux, plan: SwitchPlan, clock: SwitchClock): Promise<SwitchOutcome> {
   const keys = async (k: readonly string[]) => {
-    const sent = await mux.sendKeys(plan.paneId, k);
+    const sent = await gateFor(mux).press(plan.paneId, k, "person_tap");
     return sent.ok ? null : sent.detail;
   };
   if (plan.interrupt !== null) {

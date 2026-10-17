@@ -13,6 +13,7 @@ import { canStepBack, homePath, panePath, readFrom, upTarget } from "@/lib/nav";
 import { paneScopeKey } from "@/lib/scope";
 import { findPane, paneScope } from "@/lib/hosts";
 import { setStatus } from "@/lib/status";
+import { useMuxCapability } from "@/lib/mux-capability";
 import type { AgentView } from "@/lib/types";
 import { useRootData } from "@/lib/route-data";
 
@@ -91,13 +92,15 @@ export function DetailRoute() {
     }
   }, [gone, root.bridge, root.error, nav, scope, paneId]);
 
-  // A deliverable sheet sits on this screen, so Back closes it before leaving the pane. The composer
-  // stays mounted either way (ADR 9006).
+  // Up one level: to the space or the dashboard the pane was opened from (ADR 0067). A pane with no screen
+  // is a durable program's conversation, and its way up is the machine's home, which is the conversation
+  // list there (M53 spec 12): a NAMED parent, so a pane reached from a space page or a link lands on the list.
+  const gridless = !useMuxCapability("paneGrid", scope).capable;
   const dismissDeliverable = useRef<(() => boolean) | null>(null);
-  // Up one level: to the space or the dashboard the pane was opened from (ADR 0067).
   const up = () => {
     if (dismissDeliverable.current?.() === true) return;
-    nav.up(homePath(scope));
+    if (gridless) nav.upTo(homePath(scope));
+    else nav.up(homePath(scope));
   };
   // The back arrow glides the header's dot, tile and name back down into the row this pane was
   // opened from (lib/glide.ts, the `pane` pair, rule 1), when the arrow lands where such a row can
@@ -106,7 +109,7 @@ export function DetailRoute() {
   // engine crossfades. The landing is the same resolution `nav.up` runs (`upTarget`).
   const backArrow = () => {
     if (dismissDeliverable.current?.() === true) return;
-    const lands = upTarget(location.pathname, readFrom(location.state), homePath(scope), canStepBack());
+    const lands = gridless ? "/" : upTarget(location.pathname, readFrom(location.state), homePath(scope), canStepBack());
     const rowsThere = GLIDE_PAIRS.pane.origin(lands) && (lands !== "/" || dashView !== "changes");
     if (rowsThere) glideBack("pane", panePath(paneId, scope), up);
     else up();
