@@ -2676,6 +2676,16 @@
    "version": "unversioned",
    "state": "idle"
   },
+  "omp--fresh-idle-widget-above.txt": {
+   "harness": "omp",
+   "version": "unversioned",
+   "state": "idle"
+  },
+  "omp--fresh-idle-widget-below.txt": {
+   "harness": "omp",
+   "version": "unversioned",
+   "state": "idle"
+  },
   "omp--fresh-idle.txt": {
    "harness": "omp",
    "version": "unversioned",

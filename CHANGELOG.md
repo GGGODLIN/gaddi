@@ -82,6 +82,11 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **Harbour's dark lines show on a button.** In the dark half, the border of the permission card's option buttons was the same colour as the button. `border`, `input` and `rule` moved up one step each, and `border` on the button now measures 1.48, where the default look has 1.46.
 - **German speaks du throughout.** Ninety lines that said Sie now use the same du the rest of the app uses, so one screen no longer mixes both.
 - **No em dash is left in the app's sentences.** Status lines, hints and button names that carried a dash now read with a comma or a full stop, in English. The other languages had none.
+- **An OMP widget under the input box no longer blocks every send.** OMP extensions can draw rows under the box with `placement: "belowEditor"`. Collie read that idle box as cut off and refused each message with "The screen changed while Collie read it". Up to three rows under the box now count as content under it, and a read that ends inside the box is still refused. Thanks @christensenjames (#468)
+- **The shell composer no longer capitalizes the first letter on Android.** A shell pane's input field now also turns auto-correction and spell check off, next to `autoCapitalize="none"`, so Gboard, SwiftKey and the Samsung keyboard leave a typed command as it is. Thanks to @viniciosrab for the report and the fix idea. (#465)
+- **An Antigravity pane with a tall status line takes a send again.** A custom `statusLine` of four to eight rows under the input box hid the box from the send check, so each message needed a second tap, Type here. The check looks up to eight rows under the box again, as 1.21.3 did.
+- **A pi pane on Windows takes a send in a folder outside your home folder.** pi prints the folder in the first row under its box. A folder that starts with a drive letter, such as `C:\work`, did not count as that row, so Collie found no box and each message needed Type here.
+- **An OMP pane whose last line asks "(y/n)" no longer refuses every send.** A `(y/n)` or a key hint in the row right over OMP's input box reads as a possible dialog. Collie called the whole box cut off there and refused each send with "The screen changed while Collie read it". Now the send takes the second tap, Type here, as on pi and Muse.
 
 ### Packaging
 
