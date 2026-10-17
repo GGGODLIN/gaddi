@@ -312,3 +312,54 @@ describe("the other file-backed harnesses", () => {
     expect(tracker.describe(pane("muse", undefined))).toBeUndefined();
   });
 });
+
+describe("pane todos", () => {
+  test("reads Claude task files while active and folds the final completion from the journal when task files are cleared", async () => {
+    const c = clock();
+    const sessionDir = join(dir, SID);
+    rmSync(sessionDir, { recursive: true, force: true });
+    writeFileSync(join(dir, "placeholder"), "");
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(join(sessionDir, "1.json"), JSON.stringify({ id: "1", subject: "First", status: "completed" }));
+    writeFileSync(
+      join(sessionDir, "2.json"),
+      JSON.stringify({ id: "2", subject: "Second", activeForm: "Doing second", status: "in_progress" }),
+    );
+
+    let tailLines: string[] = [];
+    const j = fakeJournal("claude");
+    const tail = async (): Promise<ProbeTail | null> => ({
+      path: "/logs/one.jsonl",
+      lines: tailLines,
+      mtimeMs: j.state.stat?.mtimeMs ?? 100,
+    });
+    const tracker = new DescriptionTracker({ claude: j.adapter }, c.now, { recapDir: dir, tasksDir: dir, tail });
+    await tracker.refresh([pane("claude", SID)]);
+    expect(tracker.todos(pane("claude", SID))).toEqual([
+      { id: "1", text: "First", status: "completed" },
+      { id: "2", text: "Second", status: "in_progress", activeForm: "Doing second" },
+    ]);
+
+    // Claude Code removes <id>.json once the last task completes and records TaskUpdate in the journal.
+    rmSync(join(sessionDir, "1.json"));
+    rmSync(join(sessionDir, "2.json"));
+    tailLines = [
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "u2", name: "TaskUpdate", input: { taskId: "2", status: "completed" } }],
+        },
+      }),
+    ];
+    j.state.stat = { size: 50, mtimeMs: 200 };
+    c.advance(6000);
+    await tracker.refresh([pane("claude", SID)]);
+    expect(tracker.todos(pane("claude", SID))).toEqual([
+      { id: "1", text: "First", status: "completed" },
+      { id: "2", text: "Second", status: "completed", activeForm: "Doing second" },
+    ]);
+  });
+});
+

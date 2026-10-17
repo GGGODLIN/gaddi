@@ -13,6 +13,8 @@ import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
 import { pinMatcher, type Pin } from "@/lib/pins";
 import { descriptionNow } from "@/lib/description-now";
 import { paneName, panePlaceParts } from "@/lib/pane-name";
+import { paneSubtitle } from "@/lib/pane-marks";
+import { PaneBadge } from "@/components/pane-badge";
 import { shortenHome } from "@/lib/shorten-home";
 import { bucketOf, isAttention, triage, worstTriage, type TriageKey } from "@/lib/triage";
 import type { AgentStatus, AgentView, Launcher, ServerSummary, TabView } from "@/lib/types";
@@ -500,6 +502,7 @@ function PaneRow({
   // what it is doing on line 2 in place of where it sits. The switcher is where you pick a pane to
   // jump to, so it must not be the one list that still says only the name.
   const described = pane.description === undefined ? undefined : descriptionNow(pane.description);
+  const subtitle = paneSubtitle(pane);
   return (
     <button
       id={id}
@@ -534,6 +537,7 @@ function PaneRow({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-1">
           <span className="min-w-0 truncate text-sm font-medium">{name}</span>
+          <PaneBadge pane={pane} className="shrink-0 self-center" />
           <PaneMeta
             host={pane.host}
             cache={pane.cache}
@@ -566,6 +570,12 @@ function PaneRow({
             </>
           )}
         </div>
+        {/* A durable program's own line, when it set one (WIRE.md 7.11). A third line only for such a pane. */}
+        {subtitle !== null && (
+          <div data-slot="pane-row-subtitle" className="min-w-0 truncate text-[11px] text-muted-foreground">
+            {subtitle}
+          </div>
+        )}
       </div>
     </button>
   );

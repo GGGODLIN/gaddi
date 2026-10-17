@@ -42,7 +42,7 @@ function fakeMux(opts: {
   let polls = 0;
   const gone = () => submittedExit && opts.exitAfterPolls !== null && polls > opts.exitAfterPolls;
   const mux = {
-    async sendKeys(_pane: string, keys: readonly string[]): Promise<MuxAck> {
+    async writeKeys(_pane: string, keys: readonly string[]): Promise<MuxAck> {
       calls.push(`keys:${keys.join(",")}`);
       if (keys[0] === "ctrl+c" && !dialog) clears += 1;
       if (keys[0] === "Escape") dialog = false;

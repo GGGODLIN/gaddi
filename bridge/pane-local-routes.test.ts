@@ -58,7 +58,7 @@ function exitingMux() {
   let exited = false;
   const typed: string[] = [];
   const fake: Partial<MuxAdapter> = {
-    sendKeys: async (_pane: string, keys: readonly string[]): Promise<MuxAck> => {
+    writeKeys: async (_pane: string, keys: readonly string[]): Promise<MuxAck> => {
       if (keys[0] === "Enter" && typed.at(-1) === "/exit") exited = true;
       return muxAck();
     },

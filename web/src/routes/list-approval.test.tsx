@@ -239,7 +239,7 @@ it.each(["close", "idle", "hidden", "pairing"])("rechecks %s after the send guar
   });
   if (gate === "pairing") act(() => markNotPaired());
   await act(async () => { release(); await pending; });
-  await screen.findByText("Menu changed — refreshing");
+  await screen.findByText("Menu changed, refreshing");
   expect(app.writes).toEqual([]);
 });
 

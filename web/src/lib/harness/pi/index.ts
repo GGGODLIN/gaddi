@@ -10,7 +10,7 @@
 // was read from (`bindColumns`); the editor beside the panel binds nothing.
 import { trimTrailingBlank, type Block, type StyledLine } from "../../blocks";
 import type { HarnessAdapter } from "../types";
-import { detectPiQuestion, piModalOnScreen, type PiQuestion } from "./ask";
+import { detectPiQuestion, piModalOnScreen, piQuestionBanner, type PiQuestion } from "./ask";
 import { composerDraft, composerPrompt, composerStatusLines, locateComposer } from "./composer";
 import { piView, type PiView } from "./panel";
 import { detectPiTrust } from "./trust";
@@ -93,6 +93,8 @@ export const piAdapter: HarnessAdapter = {
   // (pi--v110-core-selector.txt). Offered by name: on an answer editor it steps back, it does not end
   // the question.
   cancelKey: "Escape",
+  // OmO's `? Question pending` banner over a ready editor: a cue in Chat, never a card (ask.ts).
+  questionPending: (lines) => piQuestionBanner(piView(lines).lines),
   // The trust prompt ends at its bottom rule with no status rows under it, so it is not a pi frame.
   modalOnScreen: (lines) => piModalOnScreen(piView(lines).lines) || detectPiTrust(lines) !== null,
 };

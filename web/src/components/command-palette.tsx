@@ -21,8 +21,94 @@ interface CommandPaletteProps {
   scope?: Scope;
   /** The operator's own rows (`commands.toml`); Claude merges them, other harnesses replace. */
   mine?: readonly OperatorCommand[];
+  /** On-disk skills already read for this pane by the composer, when shared with inline suggestions. */
+  found?: readonly ClaudeCommand[];
   /** Put the command in the composer for review; arg-taking commands include a trailing space. */
   onInsert: (text: string) => void;
+}
+
+/**
+ * Reads the skills and commands the pane's agent would load off disk (ADR 9009, ADR 9011) whenever
+ * `active` turns on (the Agent sheet opens, or the composer starts a `/` or `$` token).
+ */
+export function useFoundCommands(
+  active: boolean,
+  agent: string | undefined | null,
+  paneId: string | undefined,
+  scope?: Scope,
+): readonly ClaudeCommand[] {
+  const [state, setState] = useState<{ key: string; rows: readonly ClaudeCommand[] }>({
+    key: "",
+    rows: [],
+  });
+  const readsFound = FOUND_AGENTS.has(canonicalAgent(agent?.toLowerCase().trim() ?? ""));
+  const host = scope?.host ?? "";
+  const session = scope?.session ?? "";
+  const targetKey = `${host}\0${session}\0${paneId ?? ""}`;
+
+  // Asked on every open/trigger, because a skill installed a minute ago should be there; a failed
+  // read (an older bridge, a crew member) leaves the palette as it was before ADR 9009.
+  useEffect(() => {
+    if (!active || !readsFound || paneId === undefined) return;
+    const ac = new AbortController();
+    const run = async () => {
+      try {
+        const rows = await fetchClaudeCommands(paneId, scope, ac.signal);
+        if (!ac.signal.aborted) setState({ key: targetKey, rows });
+      } catch {
+        // The palette keeps the reference catalog and the operator's rows; nothing to say.
+      }
+    };
+    void run();
+    return () => ac.abort();
+  }, [active, readsFound, paneId, host, session, scope, targetKey]);
+
+  return state.key === targetKey ? state.rows : [];
+}
+
+interface CommandSuggestionsProps {
+  commands: readonly AgentCommand[];
+  onSelect: (command: AgentCommand) => void;
+}
+
+export function CommandSuggestions({ commands, onSelect }: CommandSuggestionsProps) {
+  useLocale();
+  return (
+    <ul
+      data-slot="command-suggestions"
+      aria-label={t("commands.title")}
+      className="mb-2 max-h-44 divide-y divide-border overflow-y-auto rounded-lg border border-border bg-card"
+    >
+      {commands.map((c) => (
+        <li key={c.command}>
+          <button
+            type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => onSelect(c)}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-accent"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    "font-mono text-xs font-semibold",
+                    c.dangerous ? "text-destructive" : "text-foreground",
+                  )}
+                >
+                  {c.command}
+                </span>
+                {c.takesArg && (
+                  <span className="font-mono text-[11px] text-muted-foreground">{c.argHint}</span>
+                )}
+              </div>
+              <p className="truncate text-xs text-muted-foreground">{c.description}</p>
+            </div>
+            <Pencil aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export function CommandPalette({
@@ -32,32 +118,13 @@ export function CommandPalette({
   paneId,
   scope,
   mine,
+  found: foundProp,
   onInsert,
 }: CommandPaletteProps) {
   useLocale();
-  const [found, setFound] = useState<readonly ClaudeCommand[]>([]);
-  const all = commandsFor(agent, mine, found);
+  const fetched = useFoundCommands(open && foundProp === undefined, agent, paneId, scope);
+  const all = commandsFor(agent, mine, foundProp ?? fetched);
   const [query, setQuery] = useState("");
-  const readsFound = FOUND_AGENTS.has(canonicalAgent(agent?.toLowerCase().trim() ?? ""));
-  const host = scope?.host;
-  const session = scope?.session;
-
-  // Asked on every open, because a skill installed a minute ago should be there; a failed read
-  // (an older bridge, a crew member) leaves the palette as it was before ADR 9009.
-  useEffect(() => {
-    if (!open || !readsFound || paneId === undefined) return;
-    const ac = new AbortController();
-    const run = async () => {
-      try {
-        const rows = await fetchClaudeCommands(paneId, scope, ac.signal);
-        if (!ac.signal.aborted) setFound(rows);
-      } catch {
-        // The palette keeps the reference catalog and the operator's rows; nothing to say.
-      }
-    };
-    void run();
-    return () => ac.abort();
-  }, [open, readsFound, paneId, host, session, scope]);
 
   useEffect(() => {
     if (open) setQuery("");
@@ -101,7 +168,7 @@ export function CommandPalette({
       </div>
 
       {!q && (
-        <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <p className="mb-2 text-[11px] label-caps text-muted-foreground">
           {t("commands.common.hint", { count: all.length })}
         </p>
       )}

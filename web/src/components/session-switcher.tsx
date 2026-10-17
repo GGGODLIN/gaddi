@@ -163,7 +163,7 @@ export function SessionSwitcher({ sessions, scope, viewAll }: SessionSwitcherPro
                 className={cn(
                   "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors",
                   viewAll
-                    ? "shadow-[inset_2px_0_0_0_var(--primary)]"
+                    ? "shadow-[var(--edge-accent)_var(--primary),var(--edge-shadow)]"
                     : "hover:bg-accent active:bg-accent",
                 )}
               >
@@ -193,7 +193,7 @@ export function SessionSwitcher({ sessions, scope, viewAll }: SessionSwitcherPro
                     className={cn(
                       "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors",
                       active
-                        ? "shadow-[inset_2px_0_0_0_var(--primary)]"
+                        ? "shadow-[var(--edge-accent)_var(--primary),var(--edge-shadow)]"
                         : "hover:bg-accent active:bg-accent",
                       !s.reachable && "cursor-not-allowed opacity-50 hover:bg-transparent",
                     )}
@@ -205,7 +205,7 @@ export function SessionSwitcher({ sessions, scope, viewAll }: SessionSwitcherPro
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="truncate text-sm font-medium">{s.name}</span>
                         {s.isPrimary && (
-                          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium label-caps text-muted-foreground">
                             {t("connection.session.primary")}
                           </span>
                         )}

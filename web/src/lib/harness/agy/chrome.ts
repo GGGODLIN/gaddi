@@ -3,7 +3,7 @@ import { classifyFooter, isBlank, isBoxBorder, lineText } from "./markers";
 import { detectPromptSelectRegionIn, parseOptionRow, trailingMenuRows } from "./prompt-select";
 
 // Rows under the bottom border. A custom `statusLine` command prints as many rows as the user wrote,
-// so this matches the Claude reader's ceiling (claude/chrome.ts MAX_STATUS_LINES).
+// so this matches the Claude reader's ceiling (the Claude profile's `idle.volatile.below.maxRows`).
 const MAX_STATUS_LINES = 8;
 const MAX_DRAFT_LINES = 100;
 const PROMPT_REGEX = /^[❯›>]\s*/;
@@ -12,19 +12,32 @@ const ESC_TO_CANCEL = /\besc(?:ape)?\s+to\s+cancel\b/i;
 // The slash-command completion popup (agy 1.3.5, live 2026-10-15) paints UNDER the box's bottom rule:
 // suggestion rows, the highlighted one led by `>` (`> /model  Set a model…`) and the rest by two
 // spaces, then `↓ 1 more` or `No matches`, then its own footer `↑/↓ Navigate · enter Select · tab
-// Complete` and an `esc to cancel` row. The box above stays live: typing still lands in it. Only that
-// footer says `tab Complete`; every dialog footer in the corpus says `esc Skip`, `tab Amend` or
-// `enter Confirm`, so the phrase is what tells the popup from a modal.
-const COMPLETION_FOOTER = /\btab\s+complete\b/i;
+// Complete` and an `esc to cancel` row. The box above stays live: typing still lands in it. The popup
+// is named by that whole footer row and by every row between the rule and it being one the popup
+// paints. The phrase `tab Complete` alone is not enough: a modal's hint row may say `tab Complete
+// search` (review, 2026-10-15), and taking it for the popup would skip the modal check.
+const COMPLETION_FOOTER = /^\s*↑\/↓ Navigate · enter Select · tab Complete\s*$/;
 const COMPLETION_POINTED = /^>\s+(\/\S+)/;
+const COMPLETION_ROW = /^(?:> | {2})\/\S+(?:\s{2,}\S.*)?$/;
+const COMPLETION_MORE = /^\s*[↑↓] \d+ more$/;
+const COMPLETION_NONE = /^\s*No matches$/;
 // The popup's own rows on top of the status rows: five suggestions, a `↓ n more`, an `↑ n more` once
 // scrolled, the footer, with margin.
 const MAX_POPUP_LINES = 10;
 
 /** The completion footer's row between the bottom rule and `end`, or -1 when no popup is open. */
 function completionFooter(texts: string[], bottomBorder: number, end: number): number {
-  for (let j = bottomBorder + 1; j < end; j++) if (COMPLETION_FOOTER.test(texts[j]!)) return j;
+  for (let j = bottomBorder + 1; j < end; j++) {
+    if (!COMPLETION_FOOTER.test(texts[j]!)) continue;
+    for (let k = bottomBorder + 1; k < j; k++) if (!isPopupRow(texts[k]!)) return -1;
+    return j;
+  }
   return -1;
+}
+
+function isPopupRow(text: string): boolean {
+  const t = text.trimEnd();
+  return t === "" || COMPLETION_ROW.test(t) || COMPLETION_MORE.test(t) || COMPLETION_NONE.test(t);
 }
 
 // What a dialog paints under its rule and a status line never does: a footer hint, `esc to cancel`,
@@ -32,12 +45,14 @@ function completionFooter(texts: string[], bottomBorder: number, end: number): n
 // print `? for shortcuts` under the box (every capture in the corpus), so any of these under a rule
 // means that rule belongs to a modal. One numbered item alone is not enough: a custom `statusLine`
 // may print `1. build ok  2. tests ok` (claude-lab--statusline-numbered-rows--w82.txt), and that is
-// still a live box.
-function dialogUnder(texts: string[], bottomBorder: number, end: number): boolean {
+// still a live box. Under an open completion popup the rows below its footer get the same check, so
+// a modal painted there is still a modal (second review, 2026-10-16); `ownEsc` is the popup's own
+// `esc to cancel` row, the one row there that may say it.
+function dialogUnder(texts: string[], bottomBorder: number, end: number, ownEsc = -1): boolean {
   const options: { n: number }[] = [];
   for (let j = bottomBorder + 1; j < end; j++) {
     const text = texts[j]!;
-    if (classifyFooter(text) !== null || ESC_TO_CANCEL.test(text)) return true;
+    if (classifyFooter(text) !== null || (j !== ownEsc && ESC_TO_CANCEL.test(text))) return true;
     const option = parseOptionRow(text);
     if (option !== null) options.push(option);
   }
@@ -80,11 +95,10 @@ export function locateInputBox(texts: string[], end: number): LocatedBox | null 
   // user message `> …` above it then reads as an idle prompt. A modal under the rule, or a prompt
   // grammar claiming the screen, means no composer: fail closed, like step 2.
   const footer = bottomBorder === -1 ? -1 : completionFooter(texts, bottomBorder, end);
-  if (
-    bottomBorder !== -1 &&
-    ((footer === -1 && dialogUnder(texts, bottomBorder, end)) || detectPromptSelectRegionIn(texts) !== null)
-  ) {
-    return null;
+  if (bottomBorder !== -1) {
+    const modal =
+      footer === -1 ? dialogUnder(texts, bottomBorder, end) : dialogUnder(texts, footer, end, footer + 1);
+    if (modal || detectPromptSelectRegionIn(texts) !== null) return null;
   }
 
   if (bottomBorder !== -1) {
@@ -130,18 +144,29 @@ export function locateInputBox(texts: string[], end: number): LocatedBox | null 
 
 /**
  * The draft under an open completion popup. Enter runs the HIGHLIGHTED suggestion, so the typed text
- * verifies only when that suggestion is the typed command itself, or when none is highlighted (`No
- * matches`, an argument typed). On partial input (`/mo` over `> /model`) the highlighted row is folded
- * in, so the reply guard cannot match and refuses, rather than bless a command nobody typed.
+ * verifies only when that suggestion is the typed command itself, or when the popup says `No matches`
+ * (an argument typed). On partial input (`/mo` over `> /model`) the highlighted row is folded in, so
+ * the reply guard cannot match and refuses, rather than bless a command nobody typed. A popup listing
+ * suggestions with none highlighted is not measured, so its rows are folded in the same way: not
+ * finding the highlight is not the same as the popup saying there is none. The whole popup is read
+ * before any answer: `No matches` beside a suggestion, or two highlighted rows, is a screen nobody
+ * measured, and the first row that looked right must not decide it (second review, 2026-10-16).
  */
 function completedDraft(texts: string[], bottomBorder: number, footer: number, typed: string | null): string | null {
   if (typed === null) return null;
-  for (let j = bottomBorder + 1; j < footer; j++) {
-    const pointed = COMPLETION_POINTED.exec(texts[j]!.trim());
-    if (pointed === null) continue;
-    return pointed[1] === typed ? typed : `${typed} ${texts[j]!.trim()}`;
-  }
-  return typed;
+  const rows = texts
+    .slice(bottomBorder + 1, footer)
+    .map((row) => row.trim())
+    .filter((row) => row !== "");
+  if (rows.some((row) => COMPLETION_NONE.test(row))) return rows.length === 1 ? typed : null;
+  const pointed = rows.flatMap((row) => {
+    const match = COMPLETION_POINTED.exec(row);
+    return match === null ? [] : [{ row, command: match[1] }];
+  });
+  if (pointed.length > 1) return null;
+  const [only] = pointed;
+  if (only !== undefined) return only.command === typed ? typed : `${typed} ${only.row}`;
+  return rows.length === 0 ? null : `${typed} ${rows.join(" ")}`;
 }
 
 export function stripChrome(lines: StyledLine[]): StyledLine[] {

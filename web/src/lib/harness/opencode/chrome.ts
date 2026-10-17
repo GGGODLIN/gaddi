@@ -377,9 +377,9 @@ export function pickerOverlayUp(lines: StyledLine[]): boolean {
   return false;
 }
 
-/** How far below a confirm dialog's title row its buttons may sit: three on the update prompt (two
- *  body rows and a blank), with room for a longer body. */
-const MAX_TITLE_TO_BUTTONS = 6;
+/** How far below a confirm dialog's title row its buttons may sit: six on the update prompt (a blank,
+ *  two body rows and two blanks), with room for a body that wraps onto more rows on a narrow pane. */
+const MAX_TITLE_TO_BUTTONS = 12;
 /** How far left of the `esc` hint's end the `Confirm` label may end: the highlighted button pads its
  *  label with one space inside its own background. */
 const BUTTON_PAD = 2;
@@ -424,8 +424,8 @@ const MODAL_FOOTER_WINDOW = 3;
  * unread-dialog card (.adr/0053, addendum 2026-09-26). `composerReady` answering false says only
  * that no composer is there, which is also what the shell looks like while opencode starts and
  * after it exits; the card must not offer Escape there. Four shapes count: a picker
- * (`pickerOverlayUp`), a confirm dialog (`confirmDialogUp`), a permission dialog painted in the bar run, whose footer — a bar row
- * carrying `⇆ select` and `enter confirm` — sits at the tail (1.18.32), and a question dialog,
+ * (`pickerOverlayUp`), a confirm dialog (`confirmDialogUp`), a permission dialog painted in the bar run, whose footer, a bar row
+ * carrying `⇆ select` and `enter confirm`, sits at the tail (1.18.32), and a question dialog,
  * whose footer is a bar row carrying `esc dismiss` after `enter submit|toggle|confirm` (1.18.33).
  * The question footer counts on EVERY question screen, the ones the grammar refuses included (a tab
  * bar, a long list): the card and the composer lock must work on exactly those.

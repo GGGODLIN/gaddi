@@ -32,6 +32,20 @@ const SELECT = hint("enter Select");
 const GO_BACK = hint("esc Go back(?: / Clear search)?");
 // Non-blank rows under the `esc` row: the model and effort status agy prints at the bottom right.
 const STATUS_ROWS = 2;
+// The screen ends on that status, the model and its effort aligned right (`Gemini 3.8 Flash · high`,
+// every capture), or on the footer itself. A last row of any other shape, an indented line of text
+// included, was painted after the picker and is content this reader does not know, so the picker
+// stays raw rather than offer Enter over it (reviews, 2026-10-15 and 10-16).
+const STATUS = /^\s{8,}\S+(?: \S+)* · \S+\s*$/;
+// A row between the footer and the status is not checked for its shape: the shared conformance test
+// splices one in there (`footerTop` falls back to the last row, agy's footer not being one it reads)
+// and expects the picker to keep lifting. A row there that names a key the way a prompt does is
+// refused, so a confirmation painted there is not offered Enter (second review, 2026-10-16).
+const NAMES_A_KEY = /\b(?:enter|esc(?:ape)?|space|tab|ctrl\+\S+|y\/n)\b/i;
+// A row inside the list that asks for a key (`Press Y to confirm`, `[y/N]`) is a prompt painted over the
+// conversations, such as a delete confirmation, and Enter on it would answer the prompt. A conversation
+// titled with the word "enter" or "tab" is not caught by this shape, which is why the check is narrow.
+const PROMPTS_FOR_A_KEY = /\b(?:press|hit)\s+\S+\s+to\b|\[y\/n\]|\(y\/n\)/i;
 // Rows the `Keyboard:` hints may wrap onto above the `esc` row on a narrow pane (not measured).
 const FOOTER_ROWS = 3;
 // The title sits above the search row, ten conversations and the pager.
@@ -55,6 +69,8 @@ export function detectConversationsRegion(texts: string[]): ConversationsRegion 
       escRow = i;
       break;
     }
+    if (i === last && !STATUS.test(texts[i]!)) return null;
+    if (NAMES_A_KEY.test(texts[i]!)) return null;
     seen++;
   }
   if (escRow < 0) return null;
@@ -78,7 +94,9 @@ export function detectConversationsRegion(texts: string[]): ConversationsRegion 
     }
   }
   if (top < 0) return null;
-  if (!texts.slice(top + 1, keyboard).some((row) => POINTER.test(row))) return null;
+  const listed = texts.slice(top + 1, keyboard);
+  if (!listed.some((row) => POINTER.test(row))) return null;
+  if (listed.some((row) => PROMPTS_FOR_A_KEY.test(row))) return null;
 
   // Through the last row, status included: a row that appears anywhere under the title, even below
   // the footer, makes a tap read on the old screen stale.

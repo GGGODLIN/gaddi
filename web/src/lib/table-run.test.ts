@@ -347,6 +347,8 @@ describe("tableRuns — the whole pane corpus", () => {
       "omp--draft-ghost-suggestion.txt 2..20",
       "omp--draft-single.txt 2..20",
       "omp--draft-wrapped.txt 2..20",
+      "omp--fresh-idle-widget-above.txt 2..20",
+      "omp--fresh-idle-widget-below.txt 2..20",
       "omp--fresh-idle.txt 2..20",
       "omp--menu-dismissed.txt 2..20",
       "omp--select-menu-moved.txt 2..20",
