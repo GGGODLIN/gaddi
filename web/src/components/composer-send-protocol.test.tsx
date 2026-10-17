@@ -69,7 +69,9 @@ function bridge(answers: Answer[]) {
       return "status" in next ? new HttpResponse("down", { status: next.status }) : HttpResponse.json(next.body);
     }),
     http.all(/\/api\/pane\//, ({ request }) => {
-      paneCalls.push(`${request.method} ${new URL(request.url).pathname}`);
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/claude-commands")) return HttpResponse.json({ commands: [] });
+      paneCalls.push(`${request.method} ${path}`);
       return HttpResponse.json({ ok: true });
     }),
   );
