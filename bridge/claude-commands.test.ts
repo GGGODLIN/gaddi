@@ -89,12 +89,13 @@ describe("discoverClaudeCommands", () => {
     ]);
   });
 
-  test("user-invocable: false and a skillOverrides off are left out", async () => {
+  test("user-invocable: false and a skillOverrides off (including __proto__) are left out", async () => {
     const { names } = await run({
       "/h/.claude/skills/hidden/SKILL.md": skill("x", "user-invocable: false\n"),
       "/h/.claude/skills/muted/SKILL.md": skill("x"),
+      "/h/.claude/skills/__proto__/SKILL.md": skill("x"),
       "/h/.claude/skills/kept/SKILL.md": skill("x"),
-      "/h/.claude/settings.json": JSON.stringify({ skillOverrides: { muted: "off", kept: "name-only" } }),
+      "/h/.claude/settings.json": '{"skillOverrides":{"muted":"off","__proto__":"off","kept":"name-only"}}',
     });
     expect(names).toEqual(["/kept"]);
   });
@@ -173,11 +174,13 @@ describe("discoverClaudeCommands", () => {
     expect(warns.join("\n")).toContain(native("/h/.claude/settings.json"));
   });
 
-  test("descriptions are flattened and cut, and odd names are dropped", async () => {
+  test("descriptions are flattened and cut, and invalid folder, namespace or file names are dropped", async () => {
     const long = "word ".repeat(80);
     const { rows } = await run({
       "/h/.claude/skills/long/SKILL.md": `---\ndescription: >\n  ${long}\n---\n`,
       "/h/.claude/skills/has space/SKILL.md": skill("x"),
+      "/h/.claude/commands/bad\nns/x.md": "---\ndescription: newline namespace\n---\n",
+      "/h/.claude/commands/space ns/x.md": "---\ndescription: space namespace\n---\n",
     });
     expect(rows.map((r) => r.command)).toEqual(["/long"]);
     expect(rows[0]!.description.length).toBe(200);
