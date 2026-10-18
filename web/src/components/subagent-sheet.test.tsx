@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -117,5 +117,40 @@ describe("SubagentSheet", () => {
     await waitFor(() => {
       expect(screen.getByText(/VERDICT: CLEAR/)).toBeTruthy();
     });
+  });
+
+  it("clears the sheet's running indicator once the subagent transcript carries a final report", async () => {
+    server.use(
+      http.get("/api/pane/w1%3Ap1/subagent/af52a45b4a25847ac", () =>
+        HttpResponse.json({
+          paneId: "w1:p1",
+          agentId: "af52a45b4a25847ac",
+          available: true,
+          entries: SUBAGENT_ENTRIES,
+          fileTruncated: false,
+        }),
+      ),
+    );
+
+    render(
+      <SubagentSheet paneId="w1:p1">
+        <ToolCard
+          tool={{
+            kind: "task",
+            agent: "routed-mech",
+            summary: "Demo subagent phone test",
+            agentId: "af52a45b4a25847ac",
+          }}
+          status="running"
+        />
+      </SubagentSheet>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /routed-mech/i }));
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => {
+      expect(within(dialog).getByText("SOLO_ROUTES")).toBeTruthy();
+    });
+    expect(within(dialog).queryByRole("img", { name: /Running|執行中/i })).toBeNull();
   });
 });

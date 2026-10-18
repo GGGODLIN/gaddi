@@ -709,10 +709,35 @@ export function createClaudeReducer(opts: { includeSidechains?: boolean } = {}):
     // At the READ, not in the branch that declined: `CLAUDE_KNOWN.rows` holds every name below and
     // the counter drops those, so a type nobody has listed is the one thing that lands in the tally.
     unknown.row(type);
+    const foldTaskNotification = (raw: string): Reduction | null => {
+      const clean = stripAnsi(raw);
+      if (!isEnvelope("task-notification", clean)) return null;
+      const toolUseId = inner("tool-use-id", clean);
+      const taskId = inner("task-id", clean);
+      const taskTarget =
+        (toolUseId !== null ? asyncTasks.get(toolUseId) : undefined) ??
+        (taskId !== null ? asyncTasks.get(taskId) : undefined);
+      if (taskTarget === undefined) return null;
+      const status = inner("status", clean);
+      const report = inner("result", clean) ?? inner("summary", clean) ?? "";
+      const isError = status !== null && status !== "completed";
+      const next = toolResult(report, isError);
+      const prev = taskTarget.part.result;
+      if (prev !== undefined && prev.text === next.text && prev.isError === next.isError) {
+        return NO_CHANGE;
+      }
+      taskTarget.part.result = next;
+      changed.add(taskTarget.uuid);
+      return reduction(entries, changed);
+    };
     // The one bookkeeping row that is READ rather than merely counted, and it makes no turn: what the
     // operator has typed and the agent has not started on. See {@link createQueueTracker}.
     if (type === "queue-operation") {
       queue.apply(row);
+      if (typeof row.content === "string") {
+        const folded = foldTaskNotification(row.content);
+        if (folded !== null) return folded;
+      }
       return NO_CHANGE;
     }
     // A message absorbed into a running turn leaves this attachment right after its `remove`: proof
@@ -727,7 +752,9 @@ export function createClaudeReducer(opts: { includeSidechains?: boolean } = {}):
       const command = queuedCommand(row);
       if (command === null) return NO_CHANGE;
       queue.delivered(command.text);
-      if (!command.drawn) return NO_CHANGE;
+      if (!command.drawn) {
+        return foldTaskNotification(command.text) ?? NO_CHANGE;
+      }
       // ONE message, ONE row. The identity is Claude Code's own `delivery_id`, then `source_uuid`; the
       // row's `uuid` also keys the turn on the wire, so a replay would only replace it in place.
       if (command.key !== null) {
@@ -794,22 +821,8 @@ export function createClaudeReducer(opts: { includeSidechains?: boolean } = {}):
     let roleOverride: "note" | undefined = row.isMeta === true ? "note" : undefined;
 
     if (typeof content === "string") {
-      const clean = stripAnsi(content);
-      if (isEnvelope("task-notification", clean)) {
-        const toolUseId = inner("tool-use-id", clean);
-        const taskId = inner("task-id", clean);
-        const taskTarget =
-          (toolUseId !== null ? asyncTasks.get(toolUseId) : undefined) ??
-          (taskId !== null ? asyncTasks.get(taskId) : undefined);
-        if (taskTarget !== undefined) {
-          const status = inner("status", clean);
-          const report = inner("result", clean) ?? inner("summary", clean) ?? "";
-          const isError = status !== null && status !== "completed";
-          taskTarget.part.result = toolResult(report, isError);
-          changed.add(taskTarget.uuid);
-          return reduction(entries, changed);
-        }
-      }
+      const folded = foldTaskNotification(content);
+      if (folded !== null) return folded;
       // A string content is the HUMAN-turn carrier — but Claude Code also routes injected plumbing
       // through it, so classify before believing it (see classifyUserText).
       const classified = classifyUserText(content);

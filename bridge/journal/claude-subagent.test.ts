@@ -155,6 +155,58 @@ describe("async_launched subagent lifecycle in createClaudeReducer", () => {
     });
   });
 
+  test("folds a mid-turn task-notification delivered via queue-operation and queued_command attachment without a user row", () => {
+    const notification = [
+      "<task-notification>",
+      `<task-id>${AGENT_ID}</task-id>`,
+      "<tool-use-id>toolu_mid</tool-use-id>",
+      "<status>completed</status>",
+      '<summary>Agent "Demo subagent" finished</summary>',
+      "<result>Mid-turn subagent report.</result>",
+      "</task-notification>",
+    ].join("\n");
+    const entries = parseClaudeTranscript(
+      [
+        assistantToolUse("turn-1", "toolu_mid", {
+          subagent_type: "routed-mech",
+          description: "Demo subagent",
+        }),
+        userToolResult("turn-2", "toolu_mid", `Async agent launched.\nagentId: ${AGENT_ID}`, {
+          isAsync: true,
+          status: "async_launched",
+          agentId: AGENT_ID,
+        }),
+        JSON.stringify({
+          type: "queue-operation",
+          operation: "enqueue",
+          content: notification,
+        }),
+        JSON.stringify({
+          type: "queue-operation",
+          operation: "remove",
+          reason: "absorbed_mid_turn",
+          content: notification,
+        }),
+        JSON.stringify({
+          type: "attachment",
+          uuid: "att-1",
+          attachment: {
+            type: "queued_command",
+            prompt: notification,
+            commandMode: "task-notification",
+            origin: { kind: "task-notification", producer: "session-task" },
+          },
+        }),
+      ].join("\n"),
+    );
+    expect(entries).toHaveLength(1);
+    const part = entries[0]!.parts[0]!;
+    if (part.kind !== "tool") throw new Error("expected tool part");
+    expect(part.result).toEqual({
+      text: "Mid-turn subagent report.",
+    });
+  });
+
   test("preserves synchronous completed Agent tool results while attaching agentId", () => {
     const entries = parseClaudeTranscript(
       [

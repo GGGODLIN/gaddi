@@ -90,8 +90,19 @@ export function SubagentSheet({
     };
   }, [dismissRef, target]);
 
+  const view = useMemo<ParsedSubagentView>(() => {
+    if (loadState.kind === "ready") {
+      return splitSubagentEntries(loadState.entries, target?.output);
+    }
+    return {
+      prompt: null,
+      steps: [],
+      report: target?.output !== undefined && target.output.trim() !== "" ? target.output.trim() : null,
+    };
+  }, [loadState, target?.output]);
+
   const agentId = target?.agentId;
-  const running = target?.status === "running";
+  const running = target?.status === "running" && view.report === null;
   const host = scope?.host;
   const session = scope?.session;
 
@@ -123,23 +134,12 @@ export function SubagentSheet({
     };
   }, [paneId, agentId, running, host, session, scope]);
 
-  const view = useMemo<ParsedSubagentView>(() => {
-    if (loadState.kind === "ready") {
-      return splitSubagentEntries(loadState.entries, target?.output);
-    }
-    return {
-      prompt: null,
-      steps: [],
-      report: target?.output !== undefined && target.output.trim() !== "" ? target.output.trim() : null,
-    };
-  }, [loadState, target?.output]);
-
   const titleNode = target && (
     <span className="flex min-w-0 flex-col gap-0.5">
       <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Bot className="size-3.5 shrink-0" />
         <span className="truncate">{t("chat.card.agent", { agent: target.agent })}</span>
-        {target.status === "running" && (
+        {running && (
           <StatusDot status="working" live label={t("chat.card.status.running")} className="size-2" />
         )}
       </span>
