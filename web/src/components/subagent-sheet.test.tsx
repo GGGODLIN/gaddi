@@ -35,7 +35,7 @@ const SUBAGENT_ENTRIES: TranscriptEntry[] = [
     uuid: "sub-a2",
     ts: "2026-10-18T01:00:05.000Z",
     role: "assistant",
-    parts: [{ kind: "text", text: "The route `/api/pane/:id/claude-commands` is missing from **SOLO_ROUTES**." }],
+    parts: [{ kind: "text", text: "The route `/api/pane/:id/chat` is missing from **SOLO_ROUTES**." }],
   },
 ];
 
@@ -58,10 +58,10 @@ describe("SubagentSheet", () => {
         <ToolCard
           tool={{
             kind: "task",
-            agent: "deep-explore",
+            agent: "Explore",
             summary: "Check CI route allowlist",
             agentId: "af52a45b4a25847ac",
-            output: "The route `/api/pane/:id/claude-commands` is missing from **SOLO_ROUTES**.",
+            output: "The route `/api/pane/:id/chat` is missing from **SOLO_ROUTES**.",
           }}
           status="done"
         />
@@ -69,7 +69,7 @@ describe("SubagentSheet", () => {
     );
 
     expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /deep-explore/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Explore/i }));
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toBeTruthy();
@@ -102,20 +102,20 @@ describe("SubagentSheet", () => {
         <ToolCard
           tool={{
             kind: "task",
-            agent: "upstream-pr-reviewer",
+            agent: "Plan",
             summary: "Review bundle",
             agentId: "a0000000000000000",
-            output: "VERDICT: CLEAR — all 48 lines verified.",
+            output: "All 23 routes verified against the table.",
           }}
           status="done"
         />
       </SubagentSheet>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /upstream-pr-reviewer/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Plan/i }));
     expect(await screen.findByRole("dialog")).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByText(/VERDICT: CLEAR/)).toBeTruthy();
+      expect(screen.getByText(/All 23 routes verified/)).toBeTruthy();
     });
   });
 
@@ -147,7 +147,7 @@ describe("SubagentSheet", () => {
         <ToolCard
           tool={{
             kind: "task",
-            agent: "routed-mech",
+            agent: "general-purpose",
             summary: "Demo subagent phone test",
             agentId: "af52a45b4a25847ac",
           }}
@@ -156,7 +156,7 @@ describe("SubagentSheet", () => {
       </SubagentSheet>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /routed-mech/i }));
+    fireEvent.click(screen.getByRole("button", { name: /general-purpose/i }));
     const dialog = await screen.findByRole("dialog");
     await waitFor(() => {
       expect(within(dialog).getByText(/I will check bridge\/solo-baseline\.test\.ts first\./)).toBeTruthy();
@@ -183,7 +183,7 @@ describe("SubagentSheet", () => {
         <ToolCard
           tool={{
             kind: "task",
-            agent: "routed-mech",
+            agent: "general-purpose",
             summary: "Demo subagent phone test",
           }}
           status="running"
@@ -191,7 +191,7 @@ describe("SubagentSheet", () => {
       </SubagentSheet>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /routed-mech/i }));
+    fireEvent.click(screen.getByRole("button", { name: /general-purpose/i }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("img", { name: /Running|執行中/i })).toBeTruthy();
 
@@ -200,10 +200,10 @@ describe("SubagentSheet", () => {
         <ToolCard
           tool={{
             kind: "task",
-            agent: "routed-mech",
+            agent: "general-purpose",
             summary: "Demo subagent phone test",
             agentId: "af52a45b4a25847ac",
-            output: "The route `/api/pane/:id/claude-commands` is missing from **SOLO_ROUTES**.",
+            output: "The route `/api/pane/:id/chat` is missing from **SOLO_ROUTES**.",
           }}
           status="done"
         />
@@ -220,7 +220,7 @@ describe("SubagentSheet", () => {
         <ToolCard
           tool={{
             kind: "task",
-            agent: "routed-mech",
+            agent: "general-purpose",
             summary: "Demo subagent phone test",
             agentId: "af52a45b4a25847ac",
           }}
