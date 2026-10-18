@@ -70,6 +70,27 @@ describe("readClaudeTasks", () => {
     expect(await readClaudeTasks(dir, "not-a-uuid")).toBeUndefined();
     expect(await readClaudeTasks(dir, escapeId)).toBeUndefined();
   });
+
+  test("scans past 50 deleted task files to keep active tasks after them and returns an empty array when all are deleted", async () => {
+    const manyId = "33333333-3333-3333-3333-333333333333";
+    const sessionDir = join(dir, manyId);
+    mkdirSync(sessionDir, { recursive: true });
+    for (let i = 1; i <= 50; i++) {
+      writeFileSync(
+        join(sessionDir, `${String(i)}.json`),
+        JSON.stringify({ id: String(i), subject: `Deleted ${String(i)}`, status: "deleted" }),
+      );
+    }
+    expect(await readClaudeTasks(dir, manyId)).toEqual([]);
+
+    writeFileSync(
+      join(sessionDir, "51.json"),
+      JSON.stringify({ id: "51", subject: "Fifty-first task", status: "pending" }),
+    );
+    expect(await readClaudeTasks(dir, manyId)).toEqual([
+      { id: "51", text: "Fifty-first task", status: "pending" },
+    ]);
+  });
 });
 
 describe("parseJournalTodos", () => {
@@ -170,6 +191,84 @@ describe("parseJournalTodos", () => {
       { id: "1", text: "Step one", status: "completed" },
       { id: "2", text: "Step two", status: "completed" },
     ]);
+  });
+
+  test("re-reading the same tail that contains a batch reset does not resurrect the completed earlier batch", () => {
+    const lines = [
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "call_1", name: "TaskCreate", input: { subject: "Batch one" } }],
+        },
+      }),
+      JSON.stringify({
+        type: "user",
+        toolUseResult: { task: { id: "1", subject: "Batch one" } },
+        message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call_1", content: "Task #1 created" }] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "call_u1", name: "TaskUpdate", input: { taskId: "1", status: "completed" } }],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "call_2", name: "TaskCreate", input: { subject: "Batch two" } }],
+        },
+      }),
+      JSON.stringify({
+        type: "user",
+        toolUseResult: { task: { id: "2", subject: "Batch two" } },
+        message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call_2", content: "Task #2 created" }] },
+      }),
+    ];
+
+    const first = parseJournalTodos(lines);
+    expect(first).toEqual([{ id: "2", text: "Batch two", status: "pending" }]);
+    expect(parseJournalTodos(lines, first)).toEqual([{ id: "2", text: "Batch two", status: "pending" }]);
+  });
+
+  test("does not leave a ghost task when a TaskCreate is read before its toolUseResult assigns the real id", () => {
+    const createLine = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "call_A", name: "TaskCreate", input: { subject: "Unassigned yet" } }],
+      },
+    });
+    const resultLine = JSON.stringify({
+      type: "user",
+      toolUseResult: { task: { id: "6", subject: "Unassigned yet" } },
+      message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call_A", content: "Task #6 created" }] },
+    });
+
+    const pending = parseJournalTodos([createLine]);
+    expect(pending).toHaveLength(1);
+    expect(parseJournalTodos([createLine, resultLine], pending)).toEqual([
+      { id: "6", text: "Unassigned yet", status: "pending" },
+    ]);
+  });
+
+  test("clears previous tasks when TaskList returns an empty list or only deleted tasks", () => {
+    const previous = [{ id: "1", text: "Still here", status: "pending" as const }];
+    const emptyList = JSON.stringify({
+      type: "user",
+      toolUseResult: { tasks: [] },
+      message: { role: "user", content: [{ type: "tool_result", tool_use_id: "tl_1", content: "No tasks" }] },
+    });
+    expect(parseJournalTodos([emptyList], previous)).toBeUndefined();
+
+    const deletedList = JSON.stringify({
+      type: "user",
+      toolUseResult: { tasks: [{ id: "1", subject: "Still here", status: "deleted" }] },
+      message: { role: "user", content: [{ type: "tool_result", tool_use_id: "tl_2", content: "No tasks" }] },
+    });
+    expect(parseJournalTodos([deletedList], previous)).toBeUndefined();
   });
 
   test("reads Claude TodoWrite, OpenCode todowrite, Codex update_plan, and Grok todo_write", () => {

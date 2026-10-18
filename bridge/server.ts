@@ -143,6 +143,7 @@ import {
 } from "./update-action.ts";
 import type { StateEngine } from "./state-engine.ts";
 import { adapterFor, buildJournalRegistry } from "./journal/registry.ts";
+import { readClaudeSubagent } from "./journal/claude.ts";
 import { chatParams, LiveWindows } from "./journal/live.ts";
 import { parseDurableLog } from "./journal/durable.ts";
 import { redactText } from "./redact.ts";
@@ -537,6 +538,14 @@ const WORKSPACE_FILES_IMAGE_ROUTE = /^\/api\/workspace\/([^/]+)\/files\/image$/;
  * the crew wire. The lead answers 501 and the phone keeps the short title.
  */
 const PANE_DELIVERABLE_ROUTE = /^\/api\/pane\/([^/]+)\/deliverables(?:\/([^/]+))?$/;
+
+/**
+ * `GET /api/pane/<id>/subagent/<agentId>`: one Claude subagent's own JSONL transcript
+ * (`<session-uuid>/subagents/agent-<agentId>.jsonl`), read on demand when the operator opens a
+ * subagent card's sheet. Both `paneId` and `agentId` are opaque identifiers; `agentId` is checked
+ * against `isAgentId` and resolved through `containedRealpath` inside the parent session's directory.
+ */
+const PANE_SUBAGENT_ROUTE = /^\/api\/pane\/([^/]+)\/subagent\/([^/]+)$/;
 
 /**
  * `GET /api/pane/<id>/port/<port>`: what answers on a dev-server port of the machine this collie runs
@@ -1905,6 +1914,24 @@ export function startServer(opts: {
       );
     }
 
+    const subagentMatch = pathname.match(PANE_SUBAGENT_ROUTE);
+    if (subagentMatch) {
+      const denied = caller.gate("device-read");
+      if (denied) return denied;
+      if (req.method !== "GET") return text("method not allowed", 405);
+      const rt = await caller.resolve();
+      if (rt instanceof Response) return rt;
+      let paneId: string;
+      let agentId: string;
+      try {
+        paneId = decodeURIComponent(subagentMatch[1]!);
+        agentId = decodeURIComponent(subagentMatch[2]!);
+      } catch {
+        return text("malformed URL", 400);
+      }
+      return paneSubagent(cfg, journals, rt.engine, rt.herdr, paneId, agentId, req);
+    }
+
     const portMatch = pathname.match(PANE_PORT_ROUTE);
     if (portMatch) {
       const denied = caller.gate("read");
@@ -2084,7 +2111,7 @@ export function startServer(opts: {
       // A landed input makes the engine hot for a few polls (§ isPaneInput). On a member this runs
       // through the crew dispatch, so the member that owns the pane is the one that goes hot.
       // A reply that submits text runs this session's Send Protocol (M56 spec 06), on any terminal
-      // pane: an agent's (its string picks the profile) or a bare shell's (no profile, the probed path).
+      // pane: an agent's (its string picks the profile) or a bare shell's (no profile, typed and Entered blind).
       if (action === "reply" && req.method === "POST")
         return afterPaneInput(rt.engine, await replyPane(herdr, cfg, paneId, req, audit_, device, session, replySendOf(rt)));
       if (action === "keys" && req.method === "POST")
@@ -4161,6 +4188,52 @@ export async function paneChat(
     return secure(gzipJsonResponse(data, accept, { etag }));
   } catch (err) {
     return text(`transcript read failed: ${errorText(err)}`, 502);
+  }
+}
+
+/**
+ * GET /api/pane/:id/subagent/:agentId — one Claude subagent's own transcript log, read on demand.
+ */
+async function paneSubagent(
+  cfg: Config,
+  journals: Record<string, JournalAdapter> | null,
+  engine: StateEngine,
+  mux: Pick<MuxAdapter, "readGrid" | "foregroundProcesses">,
+  paneId: string,
+  agentId: string,
+  req: Request,
+): Promise<Response> {
+  const accept = req.headers.get("accept-encoding");
+  const unavailable = () => json({ paneId, agentId, available: false }, accept);
+  if (!cfg.transcript || journals === null) return unavailable();
+  const { agents, shellPanes } = engine.current();
+  const panes = [...agents, ...shellPanes];
+  const pane = panes.find((a) => a.paneId === paneId);
+  if (pane === undefined) return unavailable();
+  const adapter = adapterFor(journals, journalAgentOf(pane));
+  if (adapter === undefined) return unavailable();
+  const ref = await journalRefOf(adapter, pane, panes, await discoveryHints(adapter, pane, mux, paneId));
+  if (ref === null) return unavailable();
+  try {
+    const read = await readClaudeSubagent(adapter, ref, agentId);
+    if (read === null) return unavailable();
+    const masked = cfg.redact ? maskHistoryPage(read) : read;
+    const data = {
+      paneId,
+      agentId,
+      available: true,
+      entries: masked.entries,
+      fileTruncated: masked.fileTruncated,
+    };
+    const etag = computeEtag(JSON.stringify(data));
+    if (notModified(req.headers.get("if-none-match"), etag)) {
+      return secure(
+        new Response(null, { status: 304, headers: { etag, "cache-control": "no-store" } }),
+      );
+    }
+    return secure(gzipJsonResponse(data, accept, { etag }));
+  } catch (err) {
+    return text(`subagent read failed: ${errorText(err)}`, 502);
   }
 }
 
@@ -7519,7 +7592,7 @@ export async function sendRoute(
   if (request === null) return text("bad send request", 400);
   const refusal = rawInputRefusal(rt.herdr);
   if (refusal !== null) return json(refusal.body, context.acceptEncoding, refusal.status);
-  // An agent pane's string picks its profile; a bare shell has none and takes the probed path (M56 spec 06).
+  // An agent pane's string picks its profile; a bare shell, or an agent with no profile, has none and is typed and Entered blind.
   const harness = replySendOf(rt).harnessOf(request.pane);
   if (harness === null) return text("no such terminal pane", 404);
   const { pane: paneId, resendOf, ...asked } = request;

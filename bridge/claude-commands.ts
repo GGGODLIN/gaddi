@@ -28,7 +28,7 @@ export interface DiscoveryIo {
   /** The entries of `dir`, symlinks followed; null when the folder is absent or unreadable. */
   list(dir: string): Promise<Array<{ name: string; dir: boolean }> | null>;
   /** The file's text, or null when it is absent or unreadable. */
-  read(path: string): Promise<string | null>;
+  read(path: string, maxBytes?: number): Promise<string | null>;
 }
 
 export const discoveryDiskIo: DiscoveryIo = {
@@ -40,7 +40,7 @@ export const discoveryDiskIo: DiscoveryIo = {
       return null;
     }
     const out: Array<{ name: string; dir: boolean }> = [];
-    for (const name of names) {
+    for (const name of names.toSorted((a, b) => a.localeCompare(b)).slice(0, MAX_COMMANDS)) {
       try {
         const info = await stat(join(dir, name));
         if (info.isDirectory() || info.isFile()) out.push({ name, dir: info.isDirectory() });
@@ -50,10 +50,12 @@ export const discoveryDiskIo: DiscoveryIo = {
     }
     return out;
   },
-  async read(path) {
+  async read(path, maxBytes = MAX_FILE_BYTES) {
     try {
+      const info = await stat(path);
+      if (!info.isFile()) return null;
       const file = Bun.file(path);
-      if (file.size > MAX_FILE_BYTES) return (await file.slice(0, MAX_FILE_BYTES).text());
+      if (info.size > maxBytes) return await file.slice(0, maxBytes).text();
       return await file.text();
     } catch {
       return null;
@@ -63,13 +65,17 @@ export const discoveryDiskIo: DiscoveryIo = {
 
 /** Frontmatter sits at the top; a file this large is read only this far. */
 const MAX_FILE_BYTES = 64 * 1024;
+/** Settings and plugin registries are parsed as whole JSON documents up to 256 KiB. */
+const MAX_JSON_BYTES = 256 * 1024;
 /** A machine with more than this is not one a phone list can serve anyway. */
 export const MAX_COMMANDS = 1000;
 /** How many folders the walk from the cwd to the repository root may climb. */
 const MAX_WALK = 32;
 const MAX_DESCRIPTION = 200;
+/** Single folder or file name segment: letters, digits and `._-`. */
+const NAME_SEGMENT = /^[\p{L}\p{N}._-]{1,64}$/u;
 /** What Claude Code accepts as a command name, after the slash: letters, digits and `._:-`. */
-const NAME = /^[\p{L}\p{N}._:-]+$/u;
+const NAME = /^[\p{L}\p{N}._:-]{1,120}$/u;
 
 export interface Frontmatter {
   name?: string;
@@ -91,19 +97,21 @@ export function asString(value: JsonValue | undefined): string | undefined {
 }
 
 /** `skillOverrides` from a settings file: skill name → `on` / `name-only` / `user-invocable-only` / `off`. */
-interface OverrideStates {
-  [skill: string]: string;
-}
+type OverrideStates = Map<string, string>;
 /** `enabledPlugins` from a settings file: `<plugin>@<marketplace>` → on or off. */
 interface PluginSwitches {
   [plugin: string]: boolean;
 }
 
-/** Only the entries of `value` whose value is a string; for `skillOverrides`. */
+function isOverrideState(value: string): boolean {
+  return value === "on" || value === "name-only" || value === "user-invocable-only" || value === "off";
+}
+
+/** Only the entries of `value` whose value is a valid override state string; for `skillOverrides`. */
 function stringEntries(value: JsonValue | undefined): OverrideStates {
-  const out: OverrideStates = {};
+  const out = new Map<string, string>();
   for (const [key, entry] of Object.entries(asObject(value) ?? {})) {
-    if (typeof entry === "string") out[key] = entry;
+    if (typeof entry === "string" && isOverrideState(entry)) out.set(key, entry);
   }
   return out;
 }
@@ -169,9 +177,13 @@ interface Settings {
 }
 
 async function readSettings(io: DiscoveryIo, path: string, warn: (m: string) => void): Promise<Settings> {
-  const none = { skillOverrides: {}, enabledPlugins: {} };
-  const text = await io.read(path);
+  const none = { skillOverrides: new Map<string, string>(), enabledPlugins: {} };
+  const text = await io.read(path, MAX_JSON_BYTES + 1);
   if (text === null) return none;
+  if (Buffer.byteLength(text, "utf8") > MAX_JSON_BYTES) {
+    warn(`${path} exceeds ${String(MAX_JSON_BYTES)} bytes; its skill settings are ignored`);
+    return none;
+  }
   let doc: JsonValue;
   try {
     doc = parseJson(text);
@@ -234,7 +246,7 @@ async function skillsIn(
     }
     if (front.userInvocable === false) continue;
     const name = front.name?.trim() || entry.name;
-    if (!NAME.test(name)) continue;
+    if (!NAME_SEGMENT.test(name) || !NAME.test(`${prefix}${name}`)) continue;
     out.push({
       command: `/${prefix}${name}`,
       description: cleanDescription(front.description),
@@ -258,14 +270,16 @@ async function commandsIn(
   if (entries === null) return [];
   const out: Found[] = [];
   for (const entry of entries) {
+    if (out.length >= MAX_COMMANDS) break;
     const path = join(root, entry.name);
     if (entry.dir) {
+      if (!NAME_SEGMENT.test(entry.name)) continue;
       out.push(...(await commandsIn(io, path, `${prefix}${entry.name}:`, warn, depth + 1)));
       continue;
     }
     if (!entry.name.endsWith(".md")) continue;
     const name = entry.name.slice(0, -3);
-    if (!NAME.test(name)) continue;
+    if (!NAME_SEGMENT.test(name) || !NAME.test(`${prefix}${name}`)) continue;
     const text = await io.read(path);
     if (text === null) continue;
     const front = parseFrontmatter(text);
@@ -367,10 +381,10 @@ export async function discoverClaudeCommands(opts: DiscoverOptions): Promise<Cla
           await readSettings(io, join(root, ".claude", "settings.local.json"), warn),
         ]),
   ];
-  const overrides: OverrideStates = {};
+  const overrides = new Map<string, string>();
   const enabled: PluginSwitches = {};
   for (const layer of layers) {
-    Object.assign(overrides, layer.skillOverrides);
+    for (const [k, v] of layer.skillOverrides) overrides.set(k, v);
     Object.assign(enabled, layer.enabledPlugins);
   }
 
@@ -409,7 +423,7 @@ export async function discoverClaudeCommands(opts: DiscoverOptions): Promise<Cla
 
   const byName = new Map<string, Found>();
   for (const row of ordered) {
-    if (row.overrideKey !== null && overrides[row.overrideKey] === "off") continue;
+    if (row.overrideKey !== null && overrides.get(row.overrideKey) === "off") continue;
     if (!byName.has(row.command)) byName.set(row.command, row);
   }
   const syncedNames = new Set<string>();

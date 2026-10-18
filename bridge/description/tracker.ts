@@ -24,7 +24,13 @@ import { adapterFor } from "../journal/registry.ts";
 import type { AgentSessionRef, JournalAdapter, TranscriptSource } from "../journal/types.ts";
 import { journalAgentOf, type AgentView } from "../types.ts";
 import { describePane, journalFacts, type JournalFacts, type PaneDescription, type Recap } from "./resolve.ts";
-import { DEFAULT_TASKS_DIR, parseJournalTodos, readClaudeTasks, type PaneTodo } from "./todos.ts";
+import {
+  DEFAULT_TASKS_DIR,
+  parseJournalTodos,
+  readClaudeTaskFiles,
+  statClaudeTaskFiles,
+  type PaneTodo,
+} from "./todos.ts";
 
 export const DEFAULT_DESCRIPTION_FLOOR_MS = 5000;
 
@@ -57,11 +63,17 @@ interface Seen {
   mtimeMs: number;
 }
 
+interface TasksSeen {
+  sig: string;
+  todos: PaneTodo[] | undefined;
+}
+
 interface Entry {
   session: string | undefined;
   paneId: string;
   lastProbedAt: number;
   journalSeen?: Seen;
+  tasksSeen?: TasksSeen;
   facts?: JournalFacts;
   todos?: PaneTodo[];
   recapSeen?: Seen;
@@ -70,6 +82,8 @@ interface Entry {
 
 interface Found {
   session: string | undefined;
+  harness: string;
+  cwd: string;
   at: number;
   ref: AgentSessionRef | undefined;
 }
@@ -88,6 +102,8 @@ export class DescriptionTracker {
 
   private readonly tail: NonNullable<DescriptionTrackerOptions["tail"]>;
 
+  private pendingRefresh: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly registry: Record<string, JournalAdapter>,
     private readonly now: () => number,
@@ -104,7 +120,7 @@ export class DescriptionTracker {
    * `blockedAt` stamps the blocked sentence; the activity ledger's transition time is the right one.
    */
   describe(pane: AgentView, blockedAt?: number): PaneDescription | undefined {
-    const key = pane.agentSession?.value ?? this.found.get(pane.paneId)?.ref?.value;
+    const key = pane.agentSession?.value ?? this.discoveredKey(pane);
     const entry = key === undefined ? undefined : this.bySession.get(key);
     return describePane({
       status: pane.status,
@@ -116,44 +132,63 @@ export class DescriptionTracker {
 
   /** The active todo list for this pane as it is now, or undefined when there are none. */
   todos(pane: AgentView): PaneTodo[] | undefined {
-    const key = pane.agentSession?.value ?? this.found.get(pane.paneId)?.ref?.value;
+    const key = pane.agentSession?.value ?? this.discoveredKey(pane);
     const list = key === undefined ? undefined : this.bySession.get(key)?.todos;
     return list !== undefined && list.length > 0 ? list : undefined;
   }
 
-  /** Walk the panes and bring their readings up to date. NEVER THROWS. */
-  async refresh(panes: readonly AgentView[], scope: { session?: string } = {}): Promise<void> {
-    const at = this.now();
-    const session = scope.session;
-    const named = new Map<string, string | undefined>();
-    for (const pane of panes) {
-      const harness = journalAgentOf(pane);
-      const loaded = LOADED_AGENTS.has(harness);
-      const adapter = TAILED_AGENTS.has(harness) || loaded ? adapterFor(this.registry, harness) : undefined;
-      const ref = pane.agentSession ?? (await this.discover(adapter, pane, at, session));
-      named.set(pane.paneId, ref?.value);
-      if (ref === undefined) continue;
-      const wantsRecap = harness === "claude" && ref.kind === "id";
-      if (adapter === undefined && !wantsRecap) continue;
-      const previous = this.bySession.get(ref.value);
-      const owner = { session, paneId: pane.paneId };
-      if (previous !== undefined && at - previous.lastProbedAt < this.floorMs) {
-        this.bySession.set(ref.value, { ...previous, ...owner });
-        continue;
+  private discoveredKey(pane: AgentView): string | undefined {
+    const found = this.found.get(pane.paneId);
+    if (found === undefined) return undefined;
+    return found.harness === journalAgentOf(pane) && found.cwd === pane.cwd ? found.ref?.value : undefined;
+  }
+
+  /** Walk the panes and bring their readings up to date. Serialised and NEVER THROWS. */
+  refresh(panes: readonly AgentView[], scope: { session?: string } = {}): Promise<void> {
+    const run = this.pendingRefresh.then(() => this.runRefresh(panes, scope));
+    this.pendingRefresh = run.catch(() => {});
+    return run;
+  }
+
+  private async runRefresh(panes: readonly AgentView[], scope: { session?: string }): Promise<void> {
+    try {
+      const at = this.now();
+      const session = scope.session;
+      const named = new Map<string, string | undefined>();
+      for (const pane of panes) {
+        const harness = journalAgentOf(pane);
+        const loaded = LOADED_AGENTS.has(harness);
+        const adapter = TAILED_AGENTS.has(harness) || loaded ? adapterFor(this.registry, harness) : undefined;
+        if (pane.agentSession !== undefined) {
+          this.found.delete(pane.paneId);
+        }
+        const ref = pane.agentSession ?? (await this.discover(adapter, pane, harness, at, session));
+        named.set(pane.paneId, ref?.value);
+        if (ref === undefined) continue;
+        const explicitClaudeId =
+          harness === "claude" && pane.agentSession?.kind === "id" ? pane.agentSession.value : undefined;
+        const wantsRecap = harness === "claude" && ref.kind === "id";
+        if (adapter === undefined && !wantsRecap) continue;
+        const previous = this.bySession.get(ref.value);
+        const owner = { session, paneId: pane.paneId };
+        if (previous !== undefined && at - previous.lastProbedAt < this.floorMs) {
+          this.bySession.set(ref.value, { ...previous, ...owner });
+          continue;
+        }
+        const next: Entry = { ...previous, ...owner, lastProbedAt: at };
+        if (adapter !== undefined) await this.lookJournal(adapter, ref, next, loaded);
+        if (wantsRecap) await this.lookRecap(ref.value, next);
+        if (explicitClaudeId !== undefined) await this.lookTasks(explicitClaudeId, next);
+        this.bySession.set(ref.value, next);
       }
-      const next: Entry = { ...previous, ...owner, lastProbedAt: at };
-      if (adapter !== undefined) await this.lookJournal(adapter, ref, next, loaded);
-      if (wantsRecap) {
-        await this.lookRecap(ref.value, next);
-        await this.lookTasks(ref.value, next);
+      for (const [key, entry] of this.bySession) {
+        if (entry.session === session && departed(named, key, entry.paneId)) this.bySession.delete(key);
       }
-      this.bySession.set(ref.value, next);
-    }
-    for (const [key, entry] of this.bySession) {
-      if (entry.session === session && departed(named, key, entry.paneId)) this.bySession.delete(key);
-    }
-    for (const [paneId, found] of this.found) {
-      if (found.session === session && !named.has(paneId)) this.found.delete(paneId);
+      for (const [paneId, found] of this.found) {
+        if (found.session === session && !named.has(paneId)) this.found.delete(paneId);
+      }
+    } catch {
+      // Never throws: a poll failure leaves the previous readings intact.
     }
   }
 
@@ -165,19 +200,24 @@ export class DescriptionTracker {
   private async discover(
     adapter: JournalAdapter | undefined,
     pane: AgentView,
+    harness: string,
     at: number,
     session: string | undefined,
   ): Promise<AgentSessionRef | undefined> {
-    if (adapter?.discover === undefined) return undefined;
+    if (adapter?.discover === undefined) {
+      this.found.delete(pane.paneId);
+      return undefined;
+    }
     const seen = this.found.get(pane.paneId);
-    if (seen !== undefined && at - seen.at < this.floorMs) return seen.ref;
-    let ref = seen?.ref;
+    const sameContext = seen !== undefined && seen.harness === harness && seen.cwd === pane.cwd;
+    if (sameContext && at - seen.at < this.floorMs) return seen.ref;
+    let ref = sameContext ? seen.ref : undefined;
     try {
       ref = (await adapter.discover(pane.cwd)) ?? undefined;
     } catch {
       // A walk that threw: the last answer stands until the next floor.
     }
-    this.found.set(pane.paneId, { session, at, ref });
+    this.found.set(pane.paneId, { session, harness, cwd: pane.cwd, at, ref });
     return ref;
   }
 
@@ -191,9 +231,9 @@ export class DescriptionTracker {
     }
     if (seen === null) return;
     if (entry.journalSeen?.size === seen.size && entry.journalSeen.mtimeMs === seen.mtimeMs) return;
-    const tail = loaded ? await loadWhole(adapter.source, ref) : await this.tail(adapter.source, ref);
-    if (tail === null) return;
     try {
+      const tail = loaded ? await loadWhole(adapter.source, ref) : await this.tail(adapter.source, ref);
+      if (tail === null) return;
       // A row with no time of its own (Grok writes none) is dated by the log's mtime.
       let facts = journalFacts(adapter.parse(tail.lines.join("\n")), tail.mtimeMs);
       // A tail with no prompt means the newest prompt is older than the window, so it is the one an
@@ -218,8 +258,22 @@ export class DescriptionTracker {
 
   private async lookTasks(sessionId: string, entry: Entry): Promise<void> {
     try {
-      const disk = await readClaudeTasks(this.tasksDir, sessionId);
-      if (disk !== undefined) entry.todos = disk;
+      const st = await statClaudeTaskFiles(this.tasksDir, sessionId);
+      if (st === null) {
+        delete entry.tasksSeen;
+        return;
+      }
+      let disk: PaneTodo[] | undefined;
+      if (entry.tasksSeen?.sig === st.sig) {
+        disk = entry.tasksSeen.todos;
+      } else {
+        disk = await readClaudeTaskFiles(st.files);
+        entry.tasksSeen = { sig: st.sig, todos: disk };
+      }
+      if (disk !== undefined) {
+        if (disk.length === 0) delete entry.todos;
+        else entry.todos = disk;
+      }
     } catch {
       // An I/O failure mid-read: the journal or last reading stands until the next floor.
     }
