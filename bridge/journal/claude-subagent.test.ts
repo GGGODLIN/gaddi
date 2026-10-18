@@ -255,6 +255,12 @@ describe("ClaudeTranscriptSource.resolveSubagent", () => {
 
       expect(await source.resolveSubagent({ kind: "id", value: SESSION_ID }, "../etc")).toBeNull();
       expect(await source.resolveSubagent({ kind: "id", value: SESSION_ID }, escapedId)).toBeNull();
+
+      const siblingSession = join(proj, "99999999-9999-4999-8999-999999999999.jsonl");
+      await writeFile(siblingSession, "{\"uuid\":\"sibling\"}\n");
+      const siblingEscapeId = "a2222222222222222";
+      await symlink(siblingSession, join(subDir, `agent-${siblingEscapeId}.jsonl`));
+      expect(await source.resolveSubagent({ kind: "id", value: SESSION_ID }, siblingEscapeId)).toBeNull();
     } finally {
       await rm(base, { recursive: true, force: true });
     }

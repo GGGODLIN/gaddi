@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type MutableRefObject, type ReactNode } from "react";
 import { Bot, Check, ChevronRight } from "lucide-react";
 
-import { ItemView, SubagentSheetCtx, type SubagentTarget } from "@/components/chat-cards";
+import {
+  ItemView,
+  SubagentSheetCtx,
+  type SubagentSheetHandle,
+  type SubagentTarget,
+} from "@/components/chat-cards";
 import { MarkdownText } from "@/components/markdown-text";
 import { StatusDot } from "@/components/status-badge";
 import { BottomSheet, TALL_SHEET_CLEARANCE } from "@/components/ui/sheet";
 import { useLocale } from "@/hooks/use-locale";
 import { fetchSubagentTranscript } from "@/lib/api";
-import { itemsOf, type ChatItem } from "@/lib/chat-items";
+import { itemsOf, type ChatItem, type ChatToolStatus } from "@/lib/chat-items";
 import { t } from "@/lib/i18n";
 import type { Scope } from "@/lib/scope";
 import type { TranscriptEntry } from "@/lib/types";
@@ -26,7 +31,11 @@ interface ParsedSubagentView {
   readonly report: string | null;
 }
 
-function splitSubagentEntries(entries: readonly TranscriptEntry[], fallbackReport?: string): ParsedSubagentView {
+function splitSubagentEntries(
+  entries: readonly TranscriptEntry[],
+  status: ChatToolStatus | undefined,
+  fallbackReport?: string,
+): ParsedSubagentView {
   let prompt: string | null = null;
   let startIdx = 0;
   const first = entries[0];
@@ -41,14 +50,19 @@ function splitSubagentEntries(entries: readonly TranscriptEntry[], fallbackRepor
   }
 
   const allItems = entries.slice(startIdx).flatMap((entry) => itemsOf(entry, false));
-  const steps = allItems.filter((item) => item.kind === "tool" || item.kind === "thinking");
-  const replies = allItems.filter((item): item is Extract<ChatItem, { kind: "reply" }> => item.kind === "reply");
-  const lastReply = replies.at(-1)?.text.trim() ?? null;
+  const stepCandidates = allItems.filter(
+    (item) => item.kind === "tool" || item.kind === "thinking" || item.kind === "reply",
+  );
+  const finished = status !== "running";
+  const tailItem = stepCandidates.at(-1);
+  const trailingReply =
+    finished && tailItem?.kind === "reply" && tailItem.text.trim() !== "" ? tailItem : null;
+  const steps = trailingReply !== null ? stepCandidates.slice(0, -1) : stepCandidates;
   const fallback = fallbackReport !== undefined && fallbackReport.trim() !== "" ? fallbackReport.trim() : null;
   return {
     prompt,
     steps,
-    report: lastReply ?? fallback,
+    report: finished ? (trailingReply?.text.trim() ?? fallback) : null,
   };
 }
 
@@ -68,10 +82,42 @@ export function SubagentSheet({
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
   const [promptOpen, setPromptOpen] = useState(false);
 
-  const open = useCallback((next: SubagentTarget) => {
-    setTarget(next);
-    setPromptOpen(false);
-    setLoadState(next.agentId === undefined ? { kind: "unavailable" } : { kind: "loading" });
+  const host = scope?.host;
+  const session = scope?.session;
+  const paneAddress = `${host ?? ""}\0${session ?? ""}\0${paneId}`;
+  const [openedAtAddress, setOpenedAtAddress] = useState(paneAddress);
+
+  if (target !== null && openedAtAddress !== paneAddress) {
+    setTarget(null);
+    setOpenedAtAddress(paneAddress);
+  }
+
+  const open = useCallback(
+    (next: SubagentTarget) => {
+      setOpenedAtAddress(paneAddress);
+      setTarget(next);
+      setPromptOpen(false);
+      setLoadState(next.agentId === undefined ? { kind: "unavailable" } : { kind: "loading" });
+    },
+    [paneAddress],
+  );
+
+  const sync = useCallback((next: SubagentTarget) => {
+    setTarget((prev) => {
+      if (prev === null || prev.cardKey !== next.cardKey) return prev;
+      if (
+        prev.agentId === next.agentId &&
+        prev.status === next.status &&
+        prev.output === next.output &&
+        prev.summary === next.summary
+      ) {
+        return prev;
+      }
+      if (prev.agentId === undefined && next.agentId !== undefined) {
+        setLoadState({ kind: "loading" });
+      }
+      return next;
+    });
   }, []);
 
   const close = useCallback(() => {
@@ -92,19 +138,21 @@ export function SubagentSheet({
 
   const view = useMemo<ParsedSubagentView>(() => {
     if (loadState.kind === "ready") {
-      return splitSubagentEntries(loadState.entries, target?.output);
+      return splitSubagentEntries(loadState.entries, target?.status, target?.output);
     }
+    const finished = target?.status !== "running";
     return {
       prompt: null,
       steps: [],
-      report: target?.output !== undefined && target.output.trim() !== "" ? target.output.trim() : null,
+      report:
+        finished && target?.output !== undefined && target.output.trim() !== ""
+          ? target.output.trim()
+          : null,
     };
-  }, [loadState, target?.output]);
+  }, [loadState, target?.status, target?.output]);
 
   const agentId = target?.agentId;
-  const running = target?.status === "running" && view.report === null;
-  const host = scope?.host;
-  const session = scope?.session;
+  const running = target?.status === "running";
 
   useEffect(() => {
     if (agentId === undefined) return;
@@ -134,6 +182,15 @@ export function SubagentSheet({
     };
   }, [paneId, agentId, running, host, session, scope]);
 
+  const handle = useMemo<SubagentSheetHandle>(
+    () => ({
+      activeCardKey: target?.cardKey ?? null,
+      open,
+      sync,
+    }),
+    [target?.cardKey, open, sync],
+  );
+
   const titleNode = target && (
     <span className="flex min-w-0 flex-col gap-0.5">
       <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -148,7 +205,7 @@ export function SubagentSheet({
   );
 
   return (
-    <SubagentSheetCtx.Provider value={open}>
+    <SubagentSheetCtx.Provider value={handle}>
       {children}
       <BottomSheet
         open={target !== null}

@@ -543,7 +543,9 @@ const PANE_DELIVERABLE_ROUTE = /^\/api\/pane\/([^/]+)\/deliverables(?:\/([^/]+))
  * `GET /api/pane/<id>/subagent/<agentId>`: one Claude subagent's own JSONL transcript
  * (`<session-uuid>/subagents/agent-<agentId>.jsonl`), read on demand when the operator opens a
  * subagent card's sheet. Both `paneId` and `agentId` are opaque identifiers; `agentId` is checked
- * against `isAgentId` and resolved through `containedRealpath` inside the parent session's directory.
+ * against `isAgentId` and resolved through `containedRealpath` inside the parent session's folder.
+ * Not in `FORWARDABLE`: a pane on a crew member answers the lead's 501, and the sheet falls back to
+ * the report folded onto the card.
  */
 const PANE_SUBAGENT_ROUTE = /^\/api\/pane\/([^/]+)\/subagent\/([^/]+)$/;
 

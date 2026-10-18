@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The subagent bottom sheet syncs live card updates and isolates transcripts to the parent session folder.** Intermediate assistant commentary in a running subagent stays in the step list without marking the sheet finished, an open sheet updates when the parent card receives its `agentId` or final status, switching panes closes the sheet, and `resolveSubagent` bounds `containedRealpath` to the parent session's own directory.
+
 ## [2.7.0] - 2026-10-18
 
 ### Changed
