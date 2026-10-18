@@ -27,10 +27,10 @@
 
 set -uo pipefail
 
-cd "$CLAUDE_PROJECT_DIR" || exit 0
-
 file=$(jq -r '.tool_input.file_path // empty' 2>/dev/null)
 [ -z "$file" ] && exit 0
+# Windows hands a `D:\…` path, which dirname cannot split; Git Bash's cygpath converts it.
+command -v cygpath >/dev/null 2>&1 && file=$(cygpath -u "$file")
 
 case "$file" in
   *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs) ;;
@@ -39,20 +39,22 @@ esac
 
 [ -f "$file" ] || exit 0
 
-# A file outside this checkout is judged by where it lives, not by where the hook runs. oxlint
-# picks the nearest `.oxlintrc.json` above the file, so a file in a `git worktree` of this repo
-# found the worktree's config, whose plugin import cannot resolve without that worktree's own
-# `node_modules`, and every edit there was blocked with a module error instead of a finding. A
-# worktree of this repo is linted under this checkout's config; a file in no repo or in another
-# repo is not ours to lint.
-config_args=()
-root=$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null) || exit 0
-if [ "$root" != "$(pwd -P)" ] && [ "$root" != "$CLAUDE_PROJECT_DIR" ]; then
-  theirs=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-  ours=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-  [ -n "$theirs" ] && [ "$theirs" = "$ours" ] || exit 0
-  config_args=(-c "$CLAUDE_PROJECT_DIR/.oxlintrc.json")
-fi
+# Lint from the checkout that holds the file, with ITS config: a file in a sibling
+# worktree linted from $CLAUDE_PROJECT_DIR loads two configs and oxlint refuses the
+# anti-slop plugin as registered twice. A file outside any checkout of this tree
+# (no .oxlintrc.json at its root) is not ours to lint.
+# Climb with --show-cdup rather than take --show-toplevel: on a `subst` drive git
+# answers the toplevel in the backing drive's spelling, and a cwd and a file path on
+# two spellings of one folder also make oxlint load the one config twice.
+cd "$(dirname "$file")" 2>/dev/null || exit 0
+cdup=$(git rev-parse --show-cdup 2>/dev/null) || exit 0
+cd "./$cdup" || exit 0
+root=$(pwd)
+[ -f "$root/.oxlintrc.json" ] || exit 0
+file=${file#"$root"/}
+
+# Scratch files git ignores (.tmp/ probes) are not part of the tree.
+git check-ignore -q "$file" && exit 0
 
 # Vendored plugin sources are excluded in .oxlintrc.json, but naming a file on the
 # command line overrides that ignore — so skip the spawn entirely.
@@ -60,11 +62,22 @@ case "$file" in
   */tools/oxlint/anti-slop/* | tools/oxlint/anti-slop/* | */contrib/* | contrib/*) exit 0 ;;
 esac
 
+# The config loads the vendored plugin, which needs the checkout's dependencies.
+# Without them oxlint cannot run at all: say so, without blocking (exit 1), rather
+# than present a tooling failure as a finding in the edited file.
+if [ ! -d "$root/node_modules" ]; then
+  echo "lint hook skipped: $root has no node_modules — run \`bun install\` there." >&2
+  exit 1
+fi
+
 # Same config, same flags as `bun run lint`; only the file set narrows.
-# The `+` form, because bash 3.2 (macOS) treats an empty array as unbound under `set -u`.
-if ! output=$(bunx oxlint --max-warnings 0 ${config_args[@]+"${config_args[@]}"} "$file" 2>&1); then
+if ! output=$(bunx oxlint --max-warnings 0 "$file" 2>&1); then
+  if printf '%s' "$output" | grep -q "Failed to parse oxlint configuration file"; then
+    { echo "lint hook could not load the oxlint config in $root:"; echo "$output"; } >&2
+    exit 1
+  fi
   {
-    echo "oxlint found issues in ${file#"$CLAUDE_PROJECT_DIR"/}:"
+    echo "oxlint found issues in ${file#"$root"/}:"
     echo
     echo "$output"
     echo
