@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Added
 
 - **Long text pastes collapse into an editable chip above the input box.** Pasting five or more lines (or 300 or more characters) places a `[Pasted #N]` marker at the caret and adds a numbered chip with line and character counts above the field; tapping the chip opens a bottom sheet to inspect, edit or expand the pasted text back into the input box, and Send substitutes the full text in place.
+- **Diff lines in Changes can be selected and commented in a batch.** Tapping one or more lines in a file's diff opens a bottom sheet to write a comment with the file path, line numbers and quoted lines captured at selection time; comments pin inline under the commented lines, accumulate across files in a pending list, and stage as quoted blocks into the asking pane's draft (or a chosen agent's draft when opened from a workspace).
 
 ### Changed
 
