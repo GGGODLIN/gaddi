@@ -1401,7 +1401,7 @@ function ChangesScreen() {
               onChange={(e) => setCommentText(e.target.value)}
               placeholder={t("changes.comment.placeholder")}
               rows={4}
-              className="w-full resize-y rounded-md border border-input bg-background p-2.5 text-sm leading-relaxed text-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+              className="w-full resize-y rounded-md border border-input bg-background p-2.5 text-base leading-relaxed text-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
             />
             <div className="flex items-center justify-end gap-2">
               {commentSheet.mode === "edit" && (

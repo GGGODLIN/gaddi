@@ -2630,8 +2630,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               aria-label={translate("composer.paste.editAria", { n: activePaste.n })}
               value={activePaste.path}
               onChange={(e) => updatePasteAttachment(activePaste.n, e.target.value)}
-              rows={12}
-              className="max-h-[55dvh] w-full resize-y rounded-md border border-input bg-background p-2.5 font-mono text-xs leading-relaxed text-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+              rows={10}
+              className="max-h-[45dvh] w-full resize-y rounded-md border border-input bg-background p-2.5 font-mono text-base leading-relaxed text-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
             />
           </div>
         </BottomSheet>
