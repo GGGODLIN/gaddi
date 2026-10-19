@@ -126,10 +126,10 @@ describe("the Windows check runs the flake's Bun", () => {
     expect(String(setup[0]?.with?.["bun-version"])).toBe(flakeBunVersion());
   });
 
-  test("windows-suites.ps1 gives each suite its own skip budget, 127 in all, each skip named", () => {
+  test("windows-suites.ps1 gives each suite its own skip budget, 152 in all, each skip named", () => {
     const script = readFileSync(join(ROOT, "scripts", "windows-suites.ps1"), "utf8");
     const budget = (suite: string): number => Number(new RegExp(`\\[int\\]\\$MaxSkips${suite} = (\\d+)`).exec(script)?.[1] ?? Number.NaN);
-    expect([budget("Bridge"), budget("Cli"), budget("Scripts")]).toEqual([75, 17, 35]);
+    expect([budget("Bridge"), budget("Cli"), budget("Scripts")]).toEqual([81, 36, 35]);
     // The scripts allowance is install.sh's 23 tests and the pre-push describe: its tests, and its
     // beforeAll and afterAll, which bun counts as skips too. A pre-push test added without raising
     // the budget turns Windows CI red on the release commit, where it was first seen (2026-10-15).
@@ -139,17 +139,31 @@ describe("the Windows check runs the flake's Bun", () => {
     expect(budget("Scripts")).toBe(23 + 2 + prePushTests + 2);
     expect(script).toContain("scripts/pre-push.test.ts");
     // The bridge allowance is the local-cli tests that stay POSIX-only, the one real-engine Whistle
-    // case that needs the uncommitted model, the 4 hold socket tests, the 30 durable example tests and
-    // the 36 durable socket tests; the comment names them all.
+    // case that needs the uncommitted model, the one scan of real links to /etc, the 4 hold socket tests, the 5
+    // walky mode and socket tests, the 30 durable example tests and the 36 durable socket tests; the comment
+    // names them all.
     const localCli = readFileSync(join(ROOT, "bridge", "stt", "local-cli.test.ts"), "utf8");
     const posixOnly = [...localCli.matchAll(/test\.if\(posix\)\("([^"]+)"/g)].map((m) => m[1]!);
     expect(posixOnly).toHaveLength(4);
     const holdSocket = [...readFileSync(join(ROOT, "bridge", "surface", "hook-ask.test.ts"), "utf8").matchAll(/test\.skipIf\(POSIX_ONLY\)\("([^"]+)"/g)].map((m) => m[1]!);
     expect(holdSocket).toHaveLength(4);
     for (const name of holdSocket) expect(script).toContain(name);
-    expect(budget("Bridge")).toBe(posixOnly.length + 1 + holdSocket.length + 30 + 36);
-    // The cli allowance adds the three real runs of the POSIX install leg a crew member runs.
-    expect(budget("Cli")).toBe(2 + 12 + 3);
+    // The walky tests: a file mode or a Unix socket, each one a skipped test beside a part that runs on Windows.
+    const walkySkips = ["instances", "log", "refusals", "seen", "socket"].flatMap((file) =>
+      [...readFileSync(join(ROOT, "bridge", "walky", `${file}.test.ts`), "utf8").matchAll(/test\.skipIf\(POSIX_ONLY\)\("([^"]+)"/g)].map((m) => m[1]!),
+    );
+    expect(walkySkips).toHaveLength(5);
+    for (const name of walkySkips) expect(script).toContain(name);
+    // The /etc link scan: the one skip in bridge/claude-commands.test.ts.
+    const etcLinks = [...readFileSync(join(ROOT, "bridge", "claude-commands.test.ts"), "utf8").matchAll(/test\.skipIf\([^)]*\)\("([^"]+)"/g)].map((m) => m[1]!);
+    expect(etcLinks).toHaveLength(1);
+    for (const name of etcLinks) expect(script).toContain(name);
+    expect(budget("Bridge")).toBe(posixOnly.length + 1 + etcLinks.length + holdSocket.length + walkySkips.length + 30 + 36);
+    // The cli allowance adds the three real runs of the POSIX install leg a crew member runs, and the
+    // 19 tests of cli/walky.test.ts that talk to a real walky socket (`socketTest`).
+    const walkySocketTests = readFileSync(join(ROOT, "cli", "walky.test.ts"), "utf8").match(/^ {2}socketTest\(/gm) ?? [];
+    expect(walkySocketTests).toHaveLength(19);
+    expect(budget("Cli")).toBe(2 + 12 + 3 + walkySocketTests.length);
     for (const name of posixOnly) expect(script).toContain(name);
     expect(script).toContain("a 13 s WAV becomes text through a real child of this Collie");
     expect(script).toContain("a child of this checkout's CLI turns 10.4 s of speech into text");

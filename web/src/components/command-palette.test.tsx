@@ -198,4 +198,43 @@ describe("CommandPalette", () => {
     render(<CommandPalette open onClose={vi.fn()} agent="claude" paneId="w1:p1" onInsert={vi.fn()} />);
     expect(await screen.findByText("/status")).toBeInTheDocument();
   });
+
+  it("clears previously discovered rows when a later refresh fails, and skips the fetch when operator rows replace the palette", async () => {
+    let calls = 0;
+    let failNext = false;
+    server.use(
+      http.get("/api/pane/w1%3Ap1/claude-commands", () => {
+        calls += 1;
+        if (failNext) return new HttpResponse(null, { status: 501 });
+        return HttpResponse.json({ commands: [{ command: "/to-spec", description: "Write the spec", argHint: "" }] });
+      }),
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <CommandPalette open onClose={vi.fn()} agent="claude" paneId="w1:p1" onInsert={vi.fn()} />,
+    );
+    await user.type(screen.getByPlaceholderText(/Search \d+ commands/), "to-spec");
+    expect(await screen.findByText("/to-spec")).toBeInTheDocument();
+    expect(calls).toBe(1);
+
+    failNext = true;
+    rerender(<CommandPalette open={false} onClose={vi.fn()} agent="claude" paneId="w1:p1" onInsert={vi.fn()} />);
+    rerender(<CommandPalette open onClose={vi.fn()} agent="claude" paneId="w1:p1" onInsert={vi.fn()} />);
+    await user.type(screen.getByPlaceholderText(/Search \d+ commands/), "to-spec");
+    expect(await screen.findByText(/No commands match/i)).toBeInTheDocument();
+    expect(calls).toBe(2);
+
+    rerender(
+      <CommandPalette
+        open
+        onClose={vi.fn()}
+        agent="codex"
+        paneId="w1:p2"
+        mine={[{ agent: "codex", command: "/custom", description: "Custom", takesArg: false, argHint: "" }]}
+        onInsert={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText("/custom")).toBeInTheDocument();
+    expect(calls).toBe(2);
+  });
 });

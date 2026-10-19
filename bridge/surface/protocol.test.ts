@@ -79,6 +79,14 @@ class FakePane {
   dropLastChar = false;
   enterSubmits = true;
   /**
+   * A harness that swallows a too-soon Enter (#507, Muse): an Enter within this many ms of the last
+   * text write does nothing. Null takes every Enter at once. Reads the rig's clock through {@link now}.
+   */
+  swallowEnterWithinMs: number | null = null;
+  /** The rig's clock, for {@link swallowEnterWithinMs}; the test wires it. */
+  now: (() => number) | null = null;
+  private lastWriteAt: number | null = null;
+  /**
    * Enter during a turn draws Claude Code 2.1.301's queued shape: the text on a pointer row with the
    * "ctrl+enter to send now" hint under it, both over the running row, instead of a transcript row.
    */
@@ -191,7 +199,15 @@ class FakePane {
     return (this.height === null ? rows : rows.slice(-this.height)).join("\n");
   }
 
+  /** Whether an Enter now submits: a too-soon Enter is swallowed where {@link swallowEnterWithinMs} says so. */
+  private takesEnter(): boolean {
+    if (!this.enterSubmits) return false;
+    if (this.swallowEnterWithinMs === null || this.now === null || this.lastWriteAt === null) return true;
+    return this.now() - this.lastWriteAt >= this.swallowEnterWithinMs;
+  }
+
   private take(text: string, pasted: boolean): void {
+    if (this.now !== null) this.lastWriteAt = this.now();
     if (this.swallow || this.dialog !== null) return;
     if (this.echo !== null) {
       this.echo.field += text;
@@ -256,12 +272,12 @@ class FakePane {
         if (this.box.length > 0 && this.running()) this.queued.push(this.box.replace(/\n/gu, " "));
         else if (this.box.length > 0) this.transcript.push(`› ${this.box.replace(/\n/gu, " ")}`);
         this.box = "";
-      } else if (key === "Enter" && this.mode === "codex" && this.enterSubmits) {
+      } else if (key === "Enter" && this.mode === "codex" && this.takesEnter()) {
         // Enter during a Codex turn steers: the text joins the running turn, above the running row.
         if (this.box.length > 0 && this.running()) this.over = [`› ${this.box.replace(/\n/gu, " ")}`, "", ...this.over];
         else if (this.box.length > 0) this.transcript.push(`› ${this.box.replace(/\n/gu, " ")}`);
         this.box = "";
-      } else if (key === "Enter" && this.enterSubmits) {
+      } else if (key === "Enter" && this.takesEnter()) {
         if (this.drawsQueuedRow && this.box.length > 0) this.over = [`❯ ${this.box.replace(/\n/gu, " ")}`, "  ctrl+enter to send now", ...this.over];
         else if (this.box.length > 0) this.transcript.push(`> ${this.box.replace(/\n/gu, " ")}`);
         this.box = "";
@@ -295,6 +311,17 @@ function nextId(): string {
   ids++;
   return `req-${String(ids).padStart(6, "0")}`;
 }
+
+/**
+ * The Claude range these tests were written against: verified through 2.1.296. In them 2.1.301 and
+ * 2.1.302 stand for the provisional versions the live screens of 2026-10-17 came from, and the
+ * probed path they take is what the tests prove. A harness lab run that moves claude.json's range
+ * (2.1.302 on 2026-10-18) must not turn those versions verified under the tests, so the rig keeps
+ * this range for Claude. profile.test.ts covers the shipped range itself.
+ */
+const CLAUDE_TEST_RANGE: readonly [VersionRange] = [
+  { range: "2.1.0 - 2.1.296", low: "2.1.0", high: "2.1.296", status: "verified", verifiedThrough: "2.1.296", verifiedOn: "2026-10-12" },
+];
 
 function rig(
   options: {
@@ -330,8 +357,10 @@ function rig(
     profile: (harness: string) => {
       // An edited profile is matched as the bridge would match it, so an edited range moves the status.
       const { edit, status } = options;
-      const base = harness === FRAMELESS ? framelessProfile() : loadProfiles().get(harness);
-      const profiles = base === undefined ? undefined : edit !== undefined ? new Map([[harness, edit(base)]]) : harness === FRAMELESS ? new Map([[harness, base]]) : undefined;
+      const loaded = harness === FRAMELESS ? framelessProfile() : loadProfiles().get(harness);
+      const base = harness === "claude" && loaded !== undefined ? { ...loaded, versions: CLAUDE_TEST_RANGE } : loaded;
+      const pinned = harness === FRAMELESS || harness === "claude";
+      const profiles = base === undefined ? undefined : edit !== undefined ? new Map([[harness, edit(base)]]) : pinned ? new Map([[harness, base]]) : undefined;
       const lookup: ProfileForOptions = profiles === undefined ? { log: () => undefined } : { log: () => undefined, profiles };
       const match = profileFor(harness, version, lookup);
       if (match === null) return Promise.resolve(null);
@@ -358,6 +387,15 @@ function noCommandQueue(profile: Profile): Profile {
   const { commandWhileRunning, ...keys } = profile.keys;
   void commandWhileRunning;
   return { ...profile, keys };
+}
+
+/** A profile whose harness takes nothing in a turn: Enter steers it and no key queues (Hermes's shape). */
+function steersWithNoQueueKey(profile: Profile): Profile {
+  const { commandWhileRunning, queueKey, queueKeyByPlatform, ...keys } = profile.keys;
+  void commandWhileRunning;
+  void queueKey;
+  void queueKeyByPlatform;
+  return { ...profile, keys: { ...keys, enterWhileRunning: "steers" } };
 }
 
 function neverEscape(pane: FakePane): void {
@@ -453,6 +491,57 @@ describe("a send that goes through", () => {
       if (what === "keys:Enter") p.over = ["✻ Thinking… (2s · esc to interrupt)"];
     };
     expect((await send("start the long job")).receipt?.outcome).toBe("sent");
+  });
+
+  test("a turn that starts while the text goes in stops the send before an Enter that would steer it", async () => {
+    // S0 reads idle; the turn's row shows up once the text is in. Where Enter queues, it goes; where
+    // Enter steers the turn (Hermes's shape), the text stays in the box and no Enter is pressed.
+    const steering = rig({ edit: steersWithNoQueueKey });
+    steering.pane.afterInput = (p, what) => {
+      if (what.includes("then summarize the changes")) p.over = [LIVE_ROW];
+    };
+    const answer = await steering.send("then summarize the changes");
+    expect(answer.receipt).toMatchObject({ outcome: "typed_not_submitted", reason: "changed" });
+    expect(answer.detail).toBe("A turn started while the text was typed, so Enter was not pressed. The text is in the box. Submit it when the turn ends.");
+    expect(steering.pane.keysSeen).not.toContain("Enter");
+    const queuing = rig();
+    queuing.pane.afterInput = (p, what) => {
+      if (what.includes("then summarize the changes")) p.over = [LIVE_ROW];
+    };
+    expect((await queuing.send("then summarize the changes")).receipt?.outcome).toBe("sent");
+  });
+});
+
+describe("a harness that swallows a too-soon Enter takes the send with its profile settle (#507)", () => {
+  // Muse on 1.4.10: the checked send wrote the text and sent Enter ~85 ms later, the box never
+  // emptied, and the receipt read unknown/no_evidence with keys [probe, Backspace, Enter]. The fake
+  // pane below swallows an Enter within 350 ms of the text write, the way the reply route measured
+  // on Muse 1.4.4 (fails at <=50 ms, smallest success 411 ms).
+  const swallowRig = (options: { edit?: (profile: Profile) => Profile } = {}) => {
+    const clock = { now: 1_000_000 };
+    const pane = new FakePane("claude");
+    pane.now = () => clock.now;
+    pane.swallowEnterWithinMs = 350;
+    const rigOptions: Parameters<typeof rig>[0] = { pane, clock, harness: "muse", version: "1.4.5" };
+    if (options.edit !== undefined) rigOptions.edit = options.edit;
+    return rig(rigOptions);
+  };
+
+  test("muse: the settle holds Enter past the swallow window and the send goes through", async () => {
+    const { pane, send } = swallowRig();
+    const answer = await send("please fix the parser test");
+    expect(answer.receipt).toMatchObject({ outcome: "sent", keys: ["probe", "Backspace", "Enter"] });
+    expect(answer.receipt?.gapsMs.s1).toBeGreaterThanOrEqual(350);
+    expect(pane.box).toBe("");
+    neverEscape(pane);
+  });
+
+  test("with no settle the same pane swallows Enter: unknown/no_evidence, the text still in the box", async () => {
+    const { pane, send } = swallowRig({ edit: (profile) => ({ ...profile, paste: { bracketed: true } }) });
+    const answer = await send("please fix the parser test");
+    expect(answer.receipt).toMatchObject({ outcome: "unknown", reason: "no_evidence", keys: ["probe", "Backspace", "Enter"] });
+    expect(pane.box).toBe("please fix the parser test");
+    neverEscape(pane);
   });
 });
 
@@ -3100,6 +3189,55 @@ describe("real screens from the fixture corpus", () => {
     expect(pane.transcript.at(-1)).toBe("> hello");
   });
 
+  // Lane 8788, 2026-10-19: Claude Code's rating survey stood on the update row right over the box, and
+  // every send was refused `unconfirmed` (modal unreadable) until it went. The survey is a notice now
+  // (ADR 0109) and the update row a gap the profile names: a sentence goes on one tap, a digit takes the
+  // notice path. The field record: ~/.local/state/collie-next/surface/examples/01792385882274-*.json.
+  const SURVEY_ROWS = ["● How is Claude doing this session? (optional)", "  1: Bad    2: Fine   3: Good   0: Dismiss"];
+  const UPDATE_ROW = `${" ".repeat(40)}✔ Update installed · Restart to update`;
+
+  test("on the rating survey over the update row: a sentence goes on one tap, with or without a blank row between", async () => {
+    for (const between of [[UPDATE_ROW], ["", UPDATE_ROW]]) {
+      const { pane, send } = rig();
+      pane.over = [...SURVEY_ROWS, ...between];
+      const answer = await send("ok merge the five, running the crew update now");
+      expect(answer.receipt, JSON.stringify(between)).toMatchObject({ outcome: "sent" });
+      expect(answer.cause).toBeUndefined();
+      expect(pane.transcript.at(-1)).toBe("> ok merge the five, running the crew update now");
+    }
+  });
+
+  test("on the rating survey over the update row: a digit takes the notice path and answers the survey without Enter", async () => {
+    for (const digit of ["0", "1", "2", "3"]) {
+      const { pane, send } = rig();
+      pane.over = [...SURVEY_ROWS, UPDATE_ROW];
+      const first = await send(digit);
+      expect(first.receipt, digit).toMatchObject({ outcome: "refused", reason: "unconfirmed", keys: [] });
+      expect(first.cause).toBe("notice_key");
+      expect(first.offers).toEqual(["commit", "keys"]);
+      pane.afterInput = answersDigit;
+      const commit = await send(digit, { rowsHash: first.rowsHash! });
+      expect(commit.receipt).toMatchObject({ outcome: "sent", keys: [] });
+      expect(pane.calls).toEqual([`paste:${digit}`]);
+      expect(pane.keysSeen).toEqual([]);
+    }
+    // A digit the survey does not print is an ordinary message.
+    const { pane, send } = rig();
+    pane.over = [...SURVEY_ROWS, UPDATE_ROW];
+    expect((await send("4")).receipt).toMatchObject({ outcome: "sent" });
+    expect(pane.transcript.at(-1)).toBe("> 4");
+  });
+
+  test("the field screen's capture reads free with the survey over the titled box, and a digit is refused to the notice path", async () => {
+    const captured = rig({ pane: still(fixture("claude--v2303-titled-edge-survey--w160.txt")) });
+    const prepared = await captured.protocol.handle({ id: "fixture-survey-1", text: "", mode: "prepare" }, { session: "main", paneId: "%1", harness: "claude" });
+    expect(prepared.surface).toMatchObject({ turn: "idle", modal: "none", composer: "empty" });
+    const digit = await captured.send("2");
+    expect(digit.receipt).toMatchObject({ outcome: "refused", reason: "unconfirmed", keys: [] });
+    expect(digit.cause).toBe("notice_key");
+    expect(captured.pane.calls).toEqual([]);
+  });
+
   /** The notice's plugin: a box holding one of its digits alone answers it, clearing the box and the notice. */
   function answersDigit(pane: FakePane, what: string): void {
     if (/^(?:type|paste):\d$/u.test(what) && pane.over.length > 0) {
@@ -3933,6 +4071,45 @@ describe("the held send (M56 spec 15)", () => {
     expect(holds.list().map((entry) => entry.text)).toEqual(["/compact"]);
   });
 
+  test("Muse: every measured session-acting command in a turn is refused, never held, and never typed after the turn ends (MUSE-08, #519)", async () => {
+    // Spellings measured live on Muse 1.4.10 (palette/help, nothing destructive executed):
+    // /clear and /new clear to a fresh session, /exit and /quit quit, /logout logs out and exits,
+    // /resume swaps session, /fork branches it, /rewind rewinds it, and ! is the shell escape.
+    const NEVER = "Collie does not queue this command during a turn. Send it when the turn ends.";
+    const holds = new HoldStore(join(dir, "held"));
+    const r = rig({ harness: "muse", version: "1.4.7", holds });
+    r.pane.placeholder = "Start a message with ! to run a shell command yourself";
+    r.pane.over = ["◇ Double checking (2m 40s · esc to interrupt)"];
+    for (const text of ["/clear", "/new", "/exit", "/quit", "/logout", "/resume", "/fork", "/rewind", "!git status"]) {
+      const answer = await r.send(text, { mode: "command" });
+      expect(answer.receipt, text).toMatchObject({ outcome: "refused", reason: "turn_running", keys: [] });
+      expect(answer.detail, text).toBe(NEVER);
+    }
+    expect(holds.list()).toEqual([]);
+    expect(r.pane.calls).toEqual([]);
+    // Nothing is delivered when the turn ends.
+    turnEnds(r.pane);
+    await freeTwice(r);
+    await tick(r);
+    expect(r.pane.calls).toEqual([]);
+    expect(r.pane.transcript.join("\n")).not.toContain("/clear");
+    // Ordinary sends in a Muse turn still hold and queue; /compact is not session-acting.
+    r.pane.over = ["◇ Double checking (2m 40s · esc to interrupt)"];
+    expect((await r.send("/compact", { mode: "command" })).receipt?.outcome).toBe("held");
+    // A never-held command sent behind an existing hold still refuses, never joins the queue.
+    expect((await r.send("/clear", { mode: "command" })).receipt).toMatchObject({ outcome: "refused", reason: "turn_running", keys: [] });
+    expect((await r.send("then give it a title")).receipt?.outcome).toBe("held");
+    expect(holds.list().map((entry) => entry.text)).toEqual(["/compact", "then give it a title"]);
+    // The matcher is per spelling: unmeasured or non-session spellings are not caught.
+    const muse = profileFor("muse", "1.4.7", { log: () => undefined });
+    expect(loadProfiles().get("muse")?.keys.neverHeld).toEqual(["/clear", "/new", "/exit", "/quit", "/logout", "/resume", "/fork", "/rewind", "!"]);
+    expect(neverHeldEntry("/fork fix the parser", muse)).toBe("/fork");
+    expect(neverHeldEntry("/compact", muse)).toBeNull();
+    expect(neverHeldEntry("/branch", muse)).toBeNull();
+    expect(neverHeldEntry("/resume-claude", muse)).toBeNull();
+    expect(neverHeldEntry("/clearly", muse)).toBeNull();
+  });
+
   describe("a never-held command on a profile the turn cannot be trusted with (PR 491)", () => {
     const NEVER = "Collie does not queue this command during a turn. Send it when the turn ends.";
     const CODEX_WORKING = "• Working (4s • esc to interrupt)";
@@ -3989,6 +4166,83 @@ describe("the held send (M56 spec 15)", () => {
       const answer = await r.send("/exit", { id: "never-ext-01", mode: "command" });
       expect(outcomeOf(answer, holds)).toEqual({ outcome: "refused", detail: NEVER, held: 0 });
     });
+  });
+
+  test("a held send never goes into a box that answers the agent's question (idle.answerPrompt); a person's send still may", async () => {
+    const capture = (name: string): string => readFileSync(join(import.meta.dir, `../../web/src/fixtures/panes/${name}`), "utf8");
+    const clock = { now: 1_000_000 };
+    const holds = new HoldStore(join(dir, "held"), () => clock.now);
+    const r = rig({ harness: "hermes", version: "0.22.2", holds, clock });
+    // Hermes works (`☤`): the message is held.
+    r.pane.fixed = capture("hermes--running.txt");
+    expect((await r.send("then summarize the changes", { id: "held-answer-01" })).receipt?.outcome).toBe("held");
+    // The turn pauses on an open question (`✎`): the Surface reads free, but the box answers it.
+    r.pane.fixed = capture("hermes--clarify-other.txt");
+    const [released] = await freeTwice(r);
+    expect(released?.receipt).toMatchObject({ requestId: "held-answer-01", outcome: "held" });
+    expect(holds.get("held-answer-01")?.state).toBe("held");
+    expect(r.pane.calls).toEqual([]);
+    // The person, looking at the question, may answer it from the phone: that send is typed.
+    const direct = rig({ harness: "hermes", version: "0.22.2" });
+    direct.pane.fixed = capture("hermes--clarify-other.txt");
+    const answer = await direct.send("CockroachDB");
+    expect(answer.receipt?.reason).not.toBe("not_free");
+    expect(direct.pane.calls.length).toBeGreaterThan(0);
+  });
+
+  test("a held Replace waits at an answer box too, and an open question spends none of a request's tries", async () => {
+    const capture = (name: string): string => readFileSync(join(import.meta.dir, `../../web/src/fixtures/panes/${name}`), "utf8");
+    const clock = { now: 1_000_000 };
+    const holds = new HoldStore(join(dir, "held"), () => clock.now);
+    const r = rig({ harness: "hermes", version: "0.22.2", holds, clock });
+    r.pane.fixed = capture("hermes--running.txt");
+    expect((await r.send("then summarize the changes", { id: "held-answer-02", mode: "replace" })).receipt?.outcome).toBe("held");
+    r.pane.fixed = capture("hermes--clarify-other.txt");
+    // Far past the five tries a pane that is not ready gets: the question stays open for minutes.
+    for (let i = 0; i < 30; i++) {
+      clock.now += 10_000;
+      await tick(r);
+    }
+    expect(holds.get("held-answer-02")).toMatchObject({ state: "held", tries: 0 });
+    expect(r.pane.calls).toEqual([]);
+  });
+
+  test("a never-held command on a running screen with no frame is refused, not held", async () => {
+    // Hermes mid-redraw: the `☤` row stands, its rules are not drawn yet, so no frame is read and the
+    // screen takes the manual path, where the running row is read by the steering-turn gate.
+    const capture = readFileSync(join(import.meta.dir, "../../web/src/fixtures/panes/hermes--running.txt"), "utf8");
+    const rows = capture.split("\n");
+    const sgr = new RegExp(`${String.fromCodePoint(0x1b)}\\[[0-9;]*m`, "gu");
+    const isRule = (row: string): boolean => /^─{20,}\s*$/u.test(row.replace(sgr, ""));
+    const rules = new Set(rows.map((row, i) => (isRule(row) ? i : -1)).filter((i) => i >= 0).slice(-2));
+    const holds = new HoldStore(join(dir, "held"));
+    const r = rig({ harness: "hermes", version: "0.22.2", holds });
+    r.pane.fixed = rows.filter((_, i) => !rules.has(i)).join("\n");
+    const answer = await r.send("/exit", { mode: "command" });
+    expect(answer.receipt).toMatchObject({ outcome: "refused", reason: "turn_running", keys: [] });
+    expect(answer.detail).toBe("Collie does not queue this command during a turn. Send it when the turn ends.");
+    expect(holds.list()).toEqual([]);
+  });
+
+  test("a never-held command is refused, not held, on a harness that takes nothing in a turn", async () => {
+    // Hermes's shape: Enter steers a turn and no key queues, so every send in a turn is held, except
+    // the commands the profile never lets wait. An untrusted version takes the same path.
+    const holds = new HoldStore(join(dir, "held"));
+    const r = rig({ edit: steersWithNoQueueKey, holds });
+    r.pane.over = [LIVE_ROW];
+    for (const text of ["/clear", "/resume", "!git status"]) {
+      const answer = await r.send(text, { mode: "command" });
+      expect(answer.receipt).toMatchObject({ outcome: "refused", reason: "turn_running", keys: [] });
+      expect(answer.detail).toBe("Collie does not queue this command during a turn. Send it when the turn ends.");
+    }
+    expect((await r.send("/compact", { mode: "command" })).receipt?.outcome).toBe("held");
+    expect((await r.send("then give it a title")).receipt?.outcome).toBe("held");
+    expect(holds.list().map((entry) => entry.text)).toEqual(["/compact", "then give it a title"]);
+    expect(r.pane.calls).toEqual([]);
+    const untrustedHolds = new HoldStore(join(dir, "held-untrusted"));
+    const u = untrusted({ holds: untrustedHolds });
+    expect((await u.send("/clear", { mode: "command" })).receipt).toMatchObject({ outcome: "refused", reason: "turn_running", keys: [] });
+    expect(untrustedHolds.list()).toEqual([]);
   });
 
   test("a held command expires after 10 minutes, a held text after 30 (H6)", async () => {
@@ -5372,5 +5626,127 @@ describe("omp 18.11's box composer (issue 497)", () => {
       expect(pane.calls).toEqual([]);
       expect(pane.keysSeen).toEqual([]);
     }
+  });
+});
+
+describe("S1 reads the turn again before the commit key (PR 491): a turn starts between S0 and the Enter", () => {
+  const TURN_STARTED = "A turn started while the text was typed, so Enter was not pressed. The text is in the box. Submit it when the turn ends.";
+
+  test("pi: /model typed on an idle box, a turn starts while it goes in: Enter must not steer the turn", async () => {
+    const pane = new PiPane("alt+Enter");
+    const { send } = rig({ pane, harness: "pi", version: "0.87.1" });
+    pane.afterInput = (_p, what) => {
+      if (what === "type:/model" || what === "paste:/model") pane.inTurn = true;
+    };
+    const answer = await send("/model", { mode: "command" });
+    expect({ steered: pane.steered, outcome: answer.receipt?.outcome }).toEqual({ steered: [], outcome: "typed_not_submitted" });
+  });
+
+  test("omp: /model typed on an idle box, a turn starts while it goes in: Enter must not steer the turn", async () => {
+    const { pane, send } = omp();
+    pane.afterInput = (_p, what) => {
+      if (what === "type:/model" || what === "paste:/model") pane.inTurn = true;
+    };
+    const answer = await send("/model", { mode: "command" });
+    expect({ steered: pane.steered, outcome: answer.receipt?.outcome }).toEqual({ steered: [], outcome: "typed_not_submitted" });
+  });
+
+  test("codex: /new (never held) typed on an idle box, a turn starts while it goes in: no Enter into the turn", async () => {
+    const pane = new FakePane("codex");
+    const { send } = rig({ pane, harness: "codex", version: "0.159.2" });
+    pane.afterInput = (p, what) => {
+      if (what === "type:/new" || what === "paste:/new") p.over = ["• Working (0s • esc to interrupt)"];
+    };
+    const answer = await send("/new", { mode: "command" });
+    expect({ enter: pane.keysSeen.includes("Enter"), outcome: answer.receipt?.outcome }).toEqual({ enter: false, outcome: "typed_not_submitted" });
+  });
+
+  test("claude: /clear (never held) typed on an idle box, a turn starts while it goes in: no Enter (Claude would queue /clear)", async () => {
+    const { pane, send } = rig();
+    pane.afterInput = (p, what) => {
+      if (what === "type:/clear" || what === "paste:/clear") p.over = [LIVE_ROW];
+    };
+    const answer = await send("/clear", { mode: "command" });
+    expect({ enter: pane.keysSeen.includes("Enter"), outcome: answer.receipt?.outcome }).toEqual({ enter: false, outcome: "typed_not_submitted" });
+    expect(answer.receipt).toMatchObject({ reason: "changed", detail: TURN_STARTED });
+  });
+
+  test("claude, version unread: a message typed on an idle box, a turn starts while it goes in: no Enter (S0 would have held it)", async () => {
+    const { pane, send } = rig({ version: "no version here" });
+    pane.afterInput = (p, what) => {
+      if (what.endsWith("then give it a title")) p.over = [LIVE_ROW];
+    };
+    const answer = await send("then give it a title");
+    expect({ enter: pane.keysSeen.includes("Enter"), outcome: answer.receipt?.outcome }).toEqual({ enter: false, outcome: "typed_not_submitted" });
+  });
+
+  test("pi on a full screen (the turn's Working row scrolls the transcript up one row): Enter must not steer the turn", async () => {
+    const pane = new PiPane("alt+Enter");
+    const render = pane.render.bind(pane);
+    pane.render = () => render().split("\n").slice(-16).join("\n");
+    const { send } = rig({ pane, harness: "pi", version: "0.87.1" });
+    pane.afterInput = (_p, what) => {
+      if (what === "type:/model" || what === "paste:/model") pane.inTurn = true;
+    };
+    const answer = await send("/model", { mode: "command" });
+    expect({ steered: pane.steered, outcome: answer.receipt?.outcome }).toEqual({ steered: [], outcome: "typed_not_submitted" });
+  });
+
+  test("omp on a full screen (the turn's Working row scrolls the transcript up one row): Enter must not steer the turn", async () => {
+    const { pane, send } = omp();
+    const render = pane.render.bind(pane);
+    pane.render = () => render().split("\n").slice(-16).join("\n");
+    pane.afterInput = (_p, what) => {
+      if (what === "type:/model" || what === "paste:/model") pane.inTurn = true;
+    };
+    const answer = await send("/model", { mode: "command" });
+    expect({ steered: pane.steered, outcome: answer.receipt?.outcome }).toEqual({ steered: [], outcome: "typed_not_submitted" });
+  });
+
+  test("unchanged: a message on a Claude whose version was read, a turn starts while it goes in: Enter still goes out (Claude queues it)", async () => {
+    // The same screens as the unread-version case above, where S1 reads the turn; here the rule allows the send.
+    const { pane, send } = rig();
+    pane.afterInput = (p, what) => {
+      if (what.endsWith("then give it a title")) p.over = [LIVE_ROW];
+    };
+    const answer = await send("then give it a title");
+    expect({ enter: pane.keysSeen.includes("Enter"), outcome: answer.receipt?.outcome }).toEqual({ enter: true, outcome: "sent" });
+  });
+
+  test("codex: /status (a command Codex queues) typed on an idle box, a turn starts while it goes in: it takes Tab, as at S0, never Enter", async () => {
+    const pane = new FakePane("codex");
+    const { send } = rig({ pane, harness: "codex", version: "0.159.2" });
+    pane.afterInput = (p, what) => {
+      if (what === "type:/status" || what === "paste:/status") p.over = ["• Working (0s • esc to interrupt)"];
+    };
+    const answer = await send("/status", { mode: "command" });
+    expect({ enter: pane.keysSeen.includes("Enter"), last: answer.receipt?.keys.at(-1), queued: pane.queued }).toEqual({ enter: false, last: "Tab", queued: ["/status"] });
+  });
+
+  test("omp, no box found (the manual send, two taps): /model typed, a running row draws under it: Enter must not steer the turn", async () => {
+    const pane = new FakePane("generic");
+    const { send, protocol } = rig({ pane, harness: "omp", version: "18.11.3" });
+    const prepared = await protocol.handle({ id: "prepare-omp-s1", text: "", mode: "prepare" }, { session: "main", paneId: "%1", harness: "omp" });
+    expect(prepared.surface?.reason).toBe("no-match");
+    pane.afterInput = (p, what) => {
+      if (what === "type:/model" || what === "paste:/model") p.footer = "⠋ Working... (4s • esc to interrupt)";
+    };
+    const answer = await send("/model", { mode: "command", rowsHash: prepared.rowsHash! });
+    expect({ enter: pane.keysSeen.includes("Enter"), outcome: answer.receipt?.outcome, detail: answer.detail }).toEqual({ enter: false, outcome: "typed_not_submitted", detail: TURN_STARTED });
+  });
+
+  test("control: pi, a turn start that also adds two transcript rows above the band: the S1 compare keeps Enter back on its own", async () => {
+    const pane = new PiPane("alt+Enter");
+    const render = pane.render.bind(pane);
+    pane.render = () => render().split("\n").slice(-16).join("\n");
+    const { send } = rig({ pane, harness: "pi", version: "0.87.1" });
+    pane.afterInput = (p, what) => {
+      if (what === "type:/model" || what === "paste:/model") {
+        pane.inTurn = true;
+        p.transcript.push(" > a queued prompt that started the turn", "");
+      }
+    };
+    const answer = await send("/model", { mode: "command" });
+    expect({ steered: pane.steered, outcome: answer.receipt?.outcome }).toEqual({ steered: [], outcome: "typed_not_submitted" });
   });
 });

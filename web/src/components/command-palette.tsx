@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { Pencil, Search } from "lucide-react";
+import { Pencil } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { SearchField } from "@/components/ui/search-field";
 import { BottomSheet } from "@/components/ui/sheet";
 import { AgentIcon } from "@/components/agent-icon";
 import { commandsFor, FOUND_AGENTS, type AgentCommand } from "@/lib/agent-commands";
 import { fetchClaudeCommands, type ClaudeCommand } from "@/lib/api";
-import { canonicalAgent } from "@/lib/operator-scope";
+import { canonicalAgent, rowsFor } from "@/lib/operator-scope";
 import type { Scope } from "@/lib/scope";
 import type { OperatorCommand } from "@/lib/types";
 import { t } from "@/lib/i18n";
@@ -21,7 +22,7 @@ interface CommandPaletteProps {
   scope?: Scope;
   /** The operator's own rows (`commands.toml`); Claude merges them, other harnesses replace. */
   mine?: readonly OperatorCommand[];
-  /** On-disk skills already read for this pane by the composer, when shared with inline suggestions. */
+  /** On-disk skills already read for this pane by the composer. */
   found?: readonly ClaudeCommand[];
   /** Put the command in the composer for review; arg-taking commands include a trailing space. */
   onInsert: (text: string) => void;
@@ -29,87 +30,51 @@ interface CommandPaletteProps {
 
 /**
  * Reads the skills and commands the pane's agent would load off disk (ADR 9009, ADR 9011) whenever
- * `active` turns on (the Agent sheet opens, or the composer starts a `/` or `$` token).
+ * `active` turns on and no operator `commands.toml` rows replace the palette for this pane (ADR 0018;
+ * Claude merges operator rows per ADR 9001).
  */
-export function useFoundCommands(
+export function useClaudeCommands(
   active: boolean,
   agent: string | undefined | null,
   paneId: string | undefined,
   scope?: Scope,
+  mine: readonly OperatorCommand[] = [],
 ): readonly ClaudeCommand[] {
   const [state, setState] = useState<{ key: string; rows: readonly ClaudeCommand[] }>({
     key: "",
     rows: [],
   });
-  const readsFound = FOUND_AGENTS.has(canonicalAgent(agent?.toLowerCase().trim() ?? ""));
+  const family = canonicalAgent(agent?.toLowerCase().trim() ?? "");
+  const readsFound = FOUND_AGENTS.has(family);
+  const replacedByOperator = family !== "claude" && rowsFor(mine, agent, (row) => row.command).length > 0;
   const host = scope?.host ?? "";
   const session = scope?.session ?? "";
   const targetKey = `${host}\0${session}\0${paneId ?? ""}`;
 
-  // Asked on every open/trigger, because a skill installed a minute ago should be there; a failed
-  // read (an older bridge, a crew member) leaves the palette as it was before ADR 9009.
+  // Asked on every open, because a skill installed a minute ago should be there; a failed read
+  // (an older bridge, a crew member) clears any stale rows from an earlier open and keeps the catalog.
   useEffect(() => {
-    if (!active || !readsFound || paneId === undefined) return;
+    if (!active || !readsFound || replacedByOperator || paneId === undefined) return;
     const ac = new AbortController();
+    const requestScope: Scope = {};
+    if (host !== "") requestScope.host = host;
+    if (session !== "") requestScope.session = session;
     const run = async () => {
       try {
-        const rows = await fetchClaudeCommands(paneId, scope, ac.signal);
+        const rows = await fetchClaudeCommands(paneId, requestScope, ac.signal);
         if (!ac.signal.aborted) setState({ key: targetKey, rows });
       } catch {
-        // The palette keeps the reference catalog and the operator's rows; nothing to say.
+        if (!ac.signal.aborted) setState({ key: targetKey, rows: [] });
       }
     };
     void run();
     return () => ac.abort();
-  }, [active, readsFound, paneId, host, session, scope, targetKey]);
+  }, [active, readsFound, replacedByOperator, paneId, host, session, targetKey]);
 
-  return state.key === targetKey ? state.rows : [];
+  return !replacedByOperator && state.key === targetKey ? state.rows : [];
 }
 
-interface CommandSuggestionsProps {
-  commands: readonly AgentCommand[];
-  onSelect: (command: AgentCommand) => void;
-}
-
-export function CommandSuggestions({ commands, onSelect }: CommandSuggestionsProps) {
-  useLocale();
-  return (
-    <ul
-      data-slot="command-suggestions"
-      aria-label={t("commands.title")}
-      className="mb-2 max-h-44 divide-y divide-border overflow-y-auto rounded-lg border border-border bg-card"
-    >
-      {commands.map((c) => (
-        <li key={c.command}>
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() => onSelect(c)}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-accent"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={cn(
-                    "font-mono text-xs font-semibold",
-                    c.dangerous ? "text-destructive" : "text-foreground",
-                  )}
-                >
-                  {c.command}
-                </span>
-                {c.takesArg && (
-                  <span className="font-mono text-[11px] text-muted-foreground">{c.argHint}</span>
-                )}
-              </div>
-              <p className="truncate text-xs text-muted-foreground">{c.description}</p>
-            </div>
-            <Pencil aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
+export const useFoundCommands = useClaudeCommands;
 
 export function CommandPalette({
   open,
@@ -122,13 +87,16 @@ export function CommandPalette({
   onInsert,
 }: CommandPaletteProps) {
   useLocale();
-  const fetched = useFoundCommands(open && foundProp === undefined, agent, paneId, scope);
+  const fetched = useClaudeCommands(open && foundProp === undefined, agent, paneId, scope, mine);
   const all = commandsFor(agent, mine, foundProp ?? fetched);
   const [query, setQuery] = useState("");
 
+  // Reset transient state whenever the sheet (re)opens or switches pane.
   useEffect(() => {
-    if (open) setQuery("");
-  }, [open]);
+    if (open) {
+      setQuery("");
+    }
+  }, [open, paneId]);
 
   const q = query.trim().toLowerCase();
   const list = q
@@ -151,21 +119,12 @@ export function CommandPalette({
           <span className="text-sm font-medium">{agent}</span>
         </div>
       )}
-      <div className="relative mb-3">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          inputMode="search"
-          autoComplete="off"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("commands.search.placeholder", { count: all.length })}
-          className="h-11 w-full rounded-md border border-input bg-transparent pl-9 pr-3 text-base placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        />
-      </div>
+      <SearchField
+        className="mb-3"
+        value={query}
+        onChange={setQuery}
+        placeholder={t("commands.search.placeholder", { count: all.length })}
+      />
 
       {!q && (
         <p className="mb-2 text-[11px] label-caps text-muted-foreground">

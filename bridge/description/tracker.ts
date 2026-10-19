@@ -24,13 +24,6 @@ import { adapterFor } from "../journal/registry.ts";
 import type { AgentSessionRef, JournalAdapter, TranscriptSource } from "../journal/types.ts";
 import { journalAgentOf, type AgentView } from "../types.ts";
 import { describePane, journalFacts, type JournalFacts, type PaneDescription, type Recap } from "./resolve.ts";
-import {
-  DEFAULT_TASKS_DIR,
-  parseJournalTodos,
-  readClaudeTaskFiles,
-  statClaudeTaskFiles,
-  type PaneTodo,
-} from "./todos.ts";
 
 export const DEFAULT_DESCRIPTION_FLOOR_MS = 5000;
 
@@ -52,8 +45,6 @@ export interface DescriptionTrackerOptions {
   floorMs?: number;
   /** Where the recap plugin writes. A containment root, never a request input. */
   recapDir?: string;
-  /** Where Claude Code writes per-session task JSON files. A containment root, never a request input. */
-  tasksDir?: string;
   /** The tail read, injectable so a test counts reads instead of opening files. */
   tail?: (source: TranscriptSource, ref: AgentSessionRef, bytes?: number) => Promise<ProbeTail | null>;
 }
@@ -63,19 +54,12 @@ interface Seen {
   mtimeMs: number;
 }
 
-interface TasksSeen {
-  sig: string;
-  todos: PaneTodo[] | undefined;
-}
-
 interface Entry {
   session: string | undefined;
   paneId: string;
   lastProbedAt: number;
   journalSeen?: Seen;
-  tasksSeen?: TasksSeen;
   facts?: JournalFacts;
-  todos?: PaneTodo[];
   recapSeen?: Seen;
   recap?: Recap;
 }
@@ -98,8 +82,6 @@ export class DescriptionTracker {
 
   private readonly recapDir: string;
 
-  private readonly tasksDir: string;
-
   private readonly tail: NonNullable<DescriptionTrackerOptions["tail"]>;
 
   private pendingRefresh: Promise<void> = Promise.resolve();
@@ -111,7 +93,6 @@ export class DescriptionTracker {
   ) {
     this.floorMs = options.floorMs ?? DEFAULT_DESCRIPTION_FLOOR_MS;
     this.recapDir = options.recapDir ?? DEFAULT_RECAP_DIR;
-    this.tasksDir = options.tasksDir ?? DEFAULT_TASKS_DIR;
     this.tail = options.tail ?? ((source, ref, bytes) => probeTail(source, ref, bytes));
   }
 
@@ -128,13 +109,6 @@ export class DescriptionTracker {
       facts: entry?.facts,
       now: blockedAt ?? entry?.lastProbedAt ?? this.now(),
     });
-  }
-
-  /** The active todo list for this pane as it is now, or undefined when there are none. */
-  todos(pane: AgentView): PaneTodo[] | undefined {
-    const key = pane.agentSession?.value ?? this.discoveredKey(pane);
-    const list = key === undefined ? undefined : this.bySession.get(key)?.todos;
-    return list !== undefined && list.length > 0 ? list : undefined;
   }
 
   private discoveredKey(pane: AgentView): string | undefined {
@@ -165,8 +139,6 @@ export class DescriptionTracker {
         const ref = pane.agentSession ?? (await this.discover(adapter, pane, harness, at, session));
         named.set(pane.paneId, ref?.value);
         if (ref === undefined) continue;
-        const explicitClaudeId =
-          harness === "claude" && pane.agentSession?.kind === "id" ? pane.agentSession.value : undefined;
         const wantsRecap = harness === "claude" && ref.kind === "id";
         if (adapter === undefined && !wantsRecap) continue;
         const previous = this.bySession.get(ref.value);
@@ -178,7 +150,6 @@ export class DescriptionTracker {
         const next: Entry = { ...previous, ...owner, lastProbedAt: at };
         if (adapter !== undefined) await this.lookJournal(adapter, ref, next, loaded);
         if (wantsRecap) await this.lookRecap(ref.value, next);
-        if (explicitClaudeId !== undefined) await this.lookTasks(explicitClaudeId, next);
         this.bySession.set(ref.value, next);
       }
       for (const [key, entry] of this.bySession) {
@@ -246,36 +217,10 @@ export class DescriptionTracker {
         const prompt = wide === null ? undefined : journalFacts(adapter.parse(wide.lines.join("\n")), wide.mtimeMs).prompt;
         if (prompt !== undefined) facts = { ...facts, prompt };
       }
-      const todos = parseJournalTodos(tail.lines, entry.todos);
-      if (todos === undefined) delete entry.todos;
-      else entry.todos = todos;
       entry.facts = facts;
       entry.journalSeen = seen;
     } catch {
       // A grammar that threw on a foreign line: keep the last facts, retry at the next floor.
-    }
-  }
-
-  private async lookTasks(sessionId: string, entry: Entry): Promise<void> {
-    try {
-      const st = await statClaudeTaskFiles(this.tasksDir, sessionId);
-      if (st === null) {
-        delete entry.tasksSeen;
-        return;
-      }
-      let disk: PaneTodo[] | undefined;
-      if (entry.tasksSeen?.sig === st.sig) {
-        disk = entry.tasksSeen.todos;
-      } else {
-        disk = await readClaudeTaskFiles(st.files);
-        entry.tasksSeen = { sig: st.sig, todos: disk };
-      }
-      if (disk !== undefined) {
-        if (disk.length === 0) delete entry.todos;
-        else entry.todos = disk;
-      }
-    } catch {
-      // An I/O failure mid-read: the journal or last reading stands until the next floor.
     }
   }
 

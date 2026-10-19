@@ -75,6 +75,10 @@ let currentHostClipboard = false;
 // reports it, so `noteWhistleStatus` (below) writes the newest answer back.
 let currentWhistle: WhistleStatus | null = null;
 let inflight: Promise<void> | null = null;
+// Bumped by the test reset. A read that started before a reset and answers after it must not write
+// into the fresh state: its answer is the previous case's `/api/config`, and it would land on top of
+// the next case's own read whenever that one answered first.
+let generation = 0;
 let loaded = false;
 // True once any read has succeeded, and unlike `loaded` it stays true through `refreshOperatorConfig`,
 // so a page that must tell "not asked yet" from "asked, and nothing was offered" does not flicker.
@@ -96,9 +100,11 @@ subscribePairing(() => {
 export function loadOperatorCommands(): Promise<void> {
   if (loaded) return Promise.resolve();
   if (inflight) return inflight;
+  const startedIn = generation;
   inflight = (async () => {
     try {
       const cfg = await fetchConfig();
+      if (startedIn !== generation) return;
       current = cfg.operatorCommands ?? [];
       currentKeys = cfg.operatorKeys ?? [];
       currentReplies = cfg.operatorQuickReplies ?? [];
@@ -121,7 +127,7 @@ export function loadOperatorCommands(): Promise<void> {
     } catch {
       // Additive feature — see the header. Leave the list empty and allow a later retry.
     } finally {
-      inflight = null;
+      if (startedIn === generation) inflight = null;
     }
   })();
   return inflight;
@@ -415,6 +421,7 @@ export function __resetOperatorCommands(): void {
   currentRetell = false;
   currentHostClipboard = false;
   inflight = null;
+  generation++;
   loaded = false;
   everLoaded = false;
   listeners.clear();
