@@ -35,7 +35,7 @@ const SUBAGENT_ENTRIES: TranscriptEntry[] = [
     uuid: "sub-a2",
     ts: "2026-10-18T01:00:05.000Z",
     role: "assistant",
-    parts: [{ kind: "text", text: "The route `/api/pane/:id/claude-commands` is missing from **SOLO_ROUTES**." }],
+    parts: [{ kind: "text", text: "The route `/api/pane/:id/chat` is missing from **SOLO_ROUTES**." }],
   },
 ];
 
@@ -58,10 +58,10 @@ describe("SubagentSheet", () => {
         <ToolCard
           tool={{
             kind: "task",
-            agent: "deep-explore",
+            agent: "Explore",
             summary: "Check CI route allowlist",
             agentId: "af52a45b4a25847ac",
-            output: "The route `/api/pane/:id/claude-commands` is missing from **SOLO_ROUTES**.",
+            output: "The route `/api/pane/:id/chat` is missing from **SOLO_ROUTES**.",
           }}
           status="done"
         />
@@ -69,7 +69,7 @@ describe("SubagentSheet", () => {
     );
 
     expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /deep-explore/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Explore/i }));
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toBeTruthy();
@@ -102,24 +102,70 @@ describe("SubagentSheet", () => {
         <ToolCard
           tool={{
             kind: "task",
-            agent: "upstream-pr-reviewer",
+            agent: "Plan",
             summary: "Review bundle",
             agentId: "a0000000000000000",
-            output: "VERDICT: CLEAR — all 48 lines verified.",
+            output: "All 23 routes verified against the table.",
           }}
           status="done"
         />
       </SubagentSheet>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /upstream-pr-reviewer/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Plan/i }));
     expect(await screen.findByRole("dialog")).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByText(/VERDICT: CLEAR/)).toBeTruthy();
+      expect(screen.getByText(/All 23 routes verified/)).toBeTruthy();
     });
   });
 
-  it("clears the sheet's running indicator once the subagent transcript carries a final report", async () => {
+  it("keeps intermediate assistant commentary in steps without marking a running subagent finished", async () => {
+    const midRunEntries: TranscriptEntry[] = [
+      SUBAGENT_ENTRIES[0]!,
+      {
+        uuid: "sub-mid-text",
+        ts: "2026-10-18T01:00:01.000Z",
+        role: "assistant",
+        parts: [{ kind: "text", text: "I will check bridge/solo-baseline.test.ts first." }],
+      },
+      SUBAGENT_ENTRIES[1]!,
+    ];
+    server.use(
+      http.get("/api/pane/w1%3Ap1/subagent/af52a45b4a25847ac", () =>
+        HttpResponse.json({
+          paneId: "w1:p1",
+          agentId: "af52a45b4a25847ac",
+          available: true,
+          entries: midRunEntries,
+          fileTruncated: false,
+        }),
+      ),
+    );
+
+    render(
+      <SubagentSheet paneId="w1:p1">
+        <ToolCard
+          tool={{
+            kind: "task",
+            agent: "general-purpose",
+            summary: "Demo subagent phone test",
+            agentId: "af52a45b4a25847ac",
+          }}
+          status="running"
+        />
+      </SubagentSheet>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /general-purpose/i }));
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => {
+      expect(within(dialog).getByText(/I will check bridge\/solo-baseline\.test\.ts first\./)).toBeTruthy();
+    });
+    expect(within(dialog).queryByText("Report")).toBeNull();
+    expect(within(dialog).getByRole("img", { name: /Running|執行中/i })).toBeTruthy();
+  });
+
+  it("syncs live card updates (agentId arrival and completion status) into an already-open sheet, and closes on pane switch", async () => {
     server.use(
       http.get("/api/pane/w1%3Ap1/subagent/af52a45b4a25847ac", () =>
         HttpResponse.json({
@@ -132,25 +178,56 @@ describe("SubagentSheet", () => {
       ),
     );
 
-    render(
+    const { rerender } = render(
       <SubagentSheet paneId="w1:p1">
         <ToolCard
           tool={{
             kind: "task",
-            agent: "routed-mech",
+            agent: "general-purpose",
             summary: "Demo subagent phone test",
-            agentId: "af52a45b4a25847ac",
           }}
           status="running"
         />
       </SubagentSheet>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /routed-mech/i }));
+    fireEvent.click(screen.getByRole("button", { name: /general-purpose/i }));
     const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("img", { name: /Running|執行中/i })).toBeTruthy();
+
+    rerender(
+      <SubagentSheet paneId="w1:p1">
+        <ToolCard
+          tool={{
+            kind: "task",
+            agent: "general-purpose",
+            summary: "Demo subagent phone test",
+            agentId: "af52a45b4a25847ac",
+            output: "The route `/api/pane/:id/chat` is missing from **SOLO_ROUTES**.",
+          }}
+          status="done"
+        />
+      </SubagentSheet>,
+    );
+
     await waitFor(() => {
       expect(within(dialog).getByText("SOLO_ROUTES")).toBeTruthy();
     });
     expect(within(dialog).queryByRole("img", { name: /Running|執行中/i })).toBeNull();
+
+    rerender(
+      <SubagentSheet paneId="w1:p2">
+        <ToolCard
+          tool={{
+            kind: "task",
+            agent: "general-purpose",
+            summary: "Demo subagent phone test",
+            agentId: "af52a45b4a25847ac",
+          }}
+          status="done"
+        />
+      </SubagentSheet>,
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

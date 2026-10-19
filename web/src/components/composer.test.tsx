@@ -21,6 +21,7 @@ import { type ServerSummary } from "@/lib/types";
 import type { Surface } from "@/lib/surface/surface";
 import { asJsonObject } from "@/lib/json";
 import { markLive } from "@/lib/liveness";
+import { beginCatchUp, endCatchUp, setLocked } from "@/lib/idle";
 import { offersFor, SEND_REASONS, type SendReason } from "@/lib/surface/send";
 import { WAY_OUT_STATES, type WayOutState } from "@/lib/way-out";
 import { wayOutCase } from "@/test/way-out-states";
@@ -893,6 +894,32 @@ describe("Composer — typing into the terminal", () => {
     );
   });
 
+  it.each(["idle lock", "catch-up"])("disarms behind the %s cover and never restores automatically", (cover) => {
+    renderComposer();
+    startDirectTyping();
+    try {
+      act(() => {
+        if (cover === "idle lock") setLocked(true);
+        else beginCatchUp();
+      });
+      expect(screen.queryByPlaceholderText(/type into the terminal/i)).toBeNull();
+      // A named choice cannot re-arm while the view is still covered, even if invoked directly.
+      fireEvent.click(screen.getByRole("button", { name: /^type into terminal$/i }));
+      expect(screen.queryByPlaceholderText(/type into the terminal/i)).toBeNull();
+      act(() => {
+        setLocked(false);
+        endCatchUp();
+      });
+      expect(screen.getByPlaceholderText(/type a reply/i)).toBeInTheDocument();
+      expect(startDirectTyping()).toBeInTheDocument();
+    } finally {
+      act(() => {
+        setLocked(false);
+        endCatchUp();
+      });
+    }
+  });
+
   // The mirror stops tracking the pane when the page is backgrounded, so the next keystroke would
   // go into a terminal the user is not looking at.
   it("stops when the page is hidden", async () => {
@@ -1762,9 +1789,13 @@ describe("Composer — terminal-draft preview", () => {
     strandDraft("floating");
     await screen.findByText(/draft in terminal/i);
 
+    // The floating column does the positioning (it is shared with the held-send card); the notice's
+    // own wrapper is only the pass-through.
     const wrapper = screen.getByText("floating").closest('[data-slot="terminal-draft-notice"]')!;
-    expect(wrapper.className).toMatch(/(?:^|\s)absolute(?=\s|$)/);
     expect(wrapper.className).toMatch(/(?:^|\s)pointer-events-none(?=\s|$)/);
+    const column = wrapper.closest('[data-slot="floating-cards"]')!;
+    expect(column.className).toMatch(/(?:^|\s)absolute(?=\s|$)/);
+    expect(column.className).toMatch(/(?:^|\s)pointer-events-none(?=\s|$)/);
     // No Collapse around it: nothing in the composer's flow grows when it arrives.
     expect(wrapper.closest('[data-slot="collapse"]')).toBeNull();
     // The notice itself takes touches back from the pass-through wrapper.
@@ -2376,6 +2407,63 @@ describe("Composer — clipboard image paste", () => {
     expect(box).toHaveValue("");
     expect(screen.queryByText(/Image added/i)).not.toBeInTheDocument();
     expect(uploadCalls).toBe(0);
+  });
+
+  it("collapses a 5+ line paste into a [Pasted #1] chip, lets the sheet edit or expand it, and sends the expanded text", async () => {
+    const user = userEvent.setup();
+    renderComposer();
+    const box = screen.getByPlaceholderText(/type a reply/i);
+    const longText = "line 1\nline 2\nline 3\nline 4\nline 5";
+
+    fireEvent.paste(box, {
+      clipboardData: {
+        items: [{ kind: "string", type: "text/plain", getAsFile: () => null }],
+        getData: (type: string) => (type === "text/plain" ? longText : ""),
+      },
+    });
+
+    await waitFor(() => expect(box).toHaveValue("[Pasted #1] "));
+    const chipBtn = screen.getByRole("button", { name: "Edit pasted text #1" });
+    expect(chipBtn).toHaveTextContent("5 lines · 34 chars");
+
+    // Open the sheet and edit the pasted content
+    await user.click(chipBtn);
+    const sheetEditor = screen.getByRole("textbox", { name: "Edit pasted text #1" });
+    expect(sheetEditor).toHaveValue(longText);
+    fireEvent.change(sheetEditor, { target: { value: "edited 1\nedited 2\nedited 3\nedited 4\nedited 5" } });
+    expect(chipBtn).toHaveTextContent("5 lines · 44 chars");
+
+    // Close sheet and send with additional instructions
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.change(box, { target: { value: "[Pasted #1] please check" } });
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() =>
+      expect(recordedSends().at(-1)?.text).toBe(
+        "edited 1\nedited 2\nedited 3\nedited 4\nedited 5 please check",
+      ),
+    );
+  });
+
+  it("expands a collapsed paste chip back into the input box when requested from the sheet", async () => {
+    const user = userEvent.setup();
+    renderComposer();
+    const box = screen.getByPlaceholderText(/type a reply/i);
+    const longText = "alpha 1\nalpha 2\nalpha 3\nalpha 4\nalpha 5";
+
+    fireEvent.paste(box, {
+      clipboardData: {
+        items: [],
+        getData: (type: string) => (type === "text/plain" ? longText : ""),
+      },
+    });
+
+    await waitFor(() => expect(box).toHaveValue("[Pasted #1] "));
+    await user.click(screen.getByRole("button", { name: "Edit pasted text #1" }));
+    await user.click(screen.getByRole("button", { name: "Expand into input" }));
+
+    expect(screen.queryByRole("button", { name: "Edit pasted text #1" })).not.toBeInTheDocument();
+    expect(box).toHaveValue(`${longText} `);
   });
 });
 

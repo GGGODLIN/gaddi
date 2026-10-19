@@ -74,16 +74,22 @@ before_sources="$(sha256sum "$here/nix/sources.json" | cut -d' ' -f1)"
 tree_pkgver="$(sourced "$here/aur/PKGBUILD" pkgver)"
 tree_x64_sha="$(bash -c 'source "$1"; printf "%s" "${sha256sums_x86_64[0]}"' bash "$here/aur/PKGBUILD")"
 
+# Portable in-place sed: BSD sed requires `-i ''` while GNU sed treats a separate `''` as a file.
+rewrite_file() {
+  local target="$1"
+  shift
+  sed "$@" "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+}
+
 # Stands in for `makepkg --printsrcinfo` on a machine that has no makepkg: the four fields this
 # script compares, copied from the PKGBUILD into .SRCINFO. It is not a substitute for makepkg in the
 # release job, only a way to give the comparator a file that agrees.
 sync_srcinfo() {
-  sed -i \
-    -e "s/^\(\s*pkgver = \).*/\1$(sourced "$pkgbuild" pkgver)/" \
-    -e "s/^\(\s*pkgrel = \).*/\1$(sourced "$pkgbuild" pkgrel)/" \
-    -e "s/^\(\s*sha256sums_x86_64 = \).*/\1$(bash -c 'source "$1"; printf "%s" "${sha256sums_x86_64[0]}"' bash "$pkgbuild")/" \
-    -e "s/^\(\s*sha256sums_aarch64 = \).*/\1$(bash -c 'source "$1"; printf "%s" "${sha256sums_aarch64[0]}"' bash "$pkgbuild")/" \
-    "$srcinfo"
+  rewrite_file "$srcinfo" \
+    -e "s/^\([[:space:]]*pkgver = \).*/\1$(sourced "$pkgbuild" pkgver)/" \
+    -e "s/^\([[:space:]]*pkgrel = \).*/\1$(sourced "$pkgbuild" pkgrel)/" \
+    -e "s/^\([[:space:]]*sha256sums_x86_64 = \).*/\1$(bash -c 'source "$1"; printf "%s" "${sha256sums_x86_64[0]}"' bash "$pkgbuild")/" \
+    -e "s/^\([[:space:]]*sha256sums_aarch64 = \).*/\1$(bash -c 'source "$1"; printf "%s" "${sha256sums_aarch64[0]}"' bash "$pkgbuild")/"
 }
 
 # ── The rewrite ────────────────────────────────────────────────────────────
@@ -154,7 +160,8 @@ rc=$?
 check "--check passes when .SRCINFO agrees" "test $rc -eq 0"
 [ "$rc" -eq 0 ] || cat "$tmp/check.log"
 
-sed -i 's/^\(\s*pkgrel = \).*/\19/' "$srcinfo"
+rewrite_file "$srcinfo" 's/^\([[:space:]]*pkgrel = \).*/\19/'
+check "fixture drifted .SRCINFO pkgrel to 9" "grep -qx '[[:space:]]*pkgrel = 9' '$srcinfo'"
 bun "$script" --manifest "$tmp/next.json" --root "$tmp/root" --check > "$tmp/srcinfo.log" 2>&1
 rc=$?
 check "a .SRCINFO pkgrel that drifted fails --check" "test $rc -ne 0"
@@ -169,7 +176,9 @@ check "--check left the PKGBUILD byte-identical" "cmp -s '$pkgbuild' '$tmp/pkgbu
 
 # ── A deliberate mismatch must FAIL ────────────────────────────────────────
 echo "a mismatch fails loudly:"
-sed -i "s/sha256sums_x86_64=('$X64_SHA')/sha256sums_x86_64=('deadbeef00000000000000000000000000000000000000000000000000000000')/" "$pkgbuild"
+rewrite_file "$pkgbuild" "s/sha256sums_x86_64=('$X64_SHA')/sha256sums_x86_64=('deadbeef00000000000000000000000000000000000000000000000000000000')/"
+check "fixture tampered PKGBUILD x86_64 hash" \
+  "grep -qx \"sha256sums_x86_64=('deadbeef00000000000000000000000000000000000000000000000000000000')\" '$pkgbuild'"
 bun "$script" --manifest "$tmp/next.json" --root "$tmp/root" --check > "$tmp/mismatch.log" 2>&1
 rc=$?
 check "a wrong hash exits non-zero" "test $rc -ne 0"
@@ -182,7 +191,8 @@ check "a rewrite repairs the tampered field" "grep -qx \"sha256sums_x86_64=('$X6
 check "repairing a hash on the same version bumped pkgrel" "test \"\$(sourced '$pkgbuild' pkgrel)\" = 2"
 
 # A field this script owns that has gone missing must fail, not be silently appended.
-sed -i '/^pkgver=/d' "$pkgbuild"
+rewrite_file "$pkgbuild" '/^pkgver=/d'
+check "fixture removed pkgver line from PKGBUILD" "! grep -q '^pkgver=' '$pkgbuild'"
 bun "$script" --manifest "$tmp/next.json" --root "$tmp/root" > "$tmp/missing.log" 2>&1
 rc=$?
 check "a missing pkgver line exits non-zero" "test $rc -ne 0"

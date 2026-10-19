@@ -32,7 +32,7 @@
 // translated: a path, a command, a query, a URL, a sub-agent's name, a tool's own name and a
 // harness's own name are the agent's words or the machine's, and they go through as they arrived.
 
-import { createContext, memo, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowRightLeft,
   Bot,
@@ -121,6 +121,7 @@ export const CardWaitingCtx = createContext<Record<string, CardWaiting>>({});
 
 /** What the subagent bottom sheet needs when a `task` card is tapped. */
 export interface SubagentTarget {
+  readonly cardKey: string;
   readonly agent: string;
   readonly summary: string;
   readonly agentId?: string;
@@ -128,10 +129,14 @@ export interface SubagentTarget {
   readonly output?: string;
 }
 
-export type SubagentOpener = (target: SubagentTarget) => void;
+export interface SubagentSheetHandle {
+  readonly activeCardKey: string | null;
+  readonly open: (target: SubagentTarget) => void;
+  readonly sync: (target: SubagentTarget) => void;
+}
 
 /** Supplied by `SubagentSheet` on the pane route; `null` in unit tests that mount `ToolCard` bare. */
-export const SubagentSheetCtx = createContext<SubagentOpener | null>(null);
+export const SubagentSheetCtx = createContext<SubagentSheetHandle | null>(null);
 
 // ---------- items ----------
 
@@ -711,10 +716,29 @@ export function ToolCard({
   preview?: boolean;
 }) {
   useLocale();
-  const openSubagent = useContext(SubagentSheetCtx);
+  const subagentSheet = useContext(SubagentSheetCtx);
   // `data-waiting` lets a host find the card of the thing it is waiting on (scroll to it, see if it
   // is on screen).
   const anchor = waiting?.id;
+  const subagentCardKey = anchor ?? (tool.kind === "task" ? `${tool.agent}:${tool.summary}` : "");
+  const taskAgent = tool.kind === "task" ? tool.agent : "";
+  const taskSummary = tool.kind === "task" ? tool.summary : "";
+  const taskAgentId = tool.kind === "task" ? tool.agentId : undefined;
+  const taskOutput = tool.kind === "task" ? tool.output : undefined;
+  const isActiveSubagent =
+    tool.kind === "task" && subagentSheet !== null && subagentSheet.activeCardKey === subagentCardKey;
+  const syncSubagent = subagentSheet?.sync;
+  useEffect(() => {
+    if (!isActiveSubagent || syncSubagent === undefined) return;
+    syncSubagent({
+      cardKey: subagentCardKey,
+      agent: taskAgent,
+      summary: taskSummary,
+      agentId: taskAgentId,
+      status,
+      output: taskOutput,
+    });
+  }, [isActiveSubagent, syncSubagent, subagentCardKey, taskAgent, taskSummary, taskAgentId, status, taskOutput]);
   // A card waiting on the reader recolours the edge it always has (DESIGN.md §2): the border is in
   // every card's base, so the body arriving changes paint, not the box.
   const held = waiting?.body !== undefined && "border-status-blocked";
@@ -815,9 +839,12 @@ export function ToolCard({
         );
       const body = (tool.kind === "task" || tool.kind === "other") && tool.summary.includes("\n") ? tool.summary : null;
       const onTap =
-        tool.kind === "task" && openSubagent !== null && (tool.agentId !== undefined || output !== undefined || status === "running")
+        tool.kind === "task" &&
+        subagentSheet !== null &&
+        (tool.agentId !== undefined || output !== undefined || status === "running")
           ? () =>
-              openSubagent({
+              subagentSheet.open({
+                cardKey: subagentCardKey,
                 agent: tool.agent,
                 summary: tool.summary,
                 agentId: tool.agentId,

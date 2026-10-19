@@ -69,7 +69,7 @@ describe("async_launched subagent lifecycle in createClaudeReducer", () => {
 
     const r1 = reducer.push(
       assistantToolUse("turn-1", "toolu_sub1", {
-        subagent_type: "deep-explore",
+        subagent_type: "Explore",
         description: "Check CI failure",
         prompt: "Inspect solo-baseline.test.ts",
       }),
@@ -96,7 +96,7 @@ describe("async_launched subagent lifecycle in createClaudeReducer", () => {
     expect([...r2.changed]).toEqual(["turn-1"]);
     expect(part.call).toEqual({
       kind: "task",
-      agent: "deep-explore",
+      agent: "Explore",
       summary: "Check CI failure",
       agentId: AGENT_ID,
     });
@@ -125,7 +125,7 @@ describe("async_launched subagent lifecycle in createClaudeReducer", () => {
     const entries = parseClaudeTranscript(
       [
         assistantToolUse("turn-1", "toolu_sub2", {
-          subagent_type: "routed-judge",
+          subagent_type: "Plan",
           description: "Verify bundle",
         }),
         userToolResult("turn-2", "toolu_sub2", "Async agent launched successfully.", {
@@ -168,7 +168,7 @@ describe("async_launched subagent lifecycle in createClaudeReducer", () => {
     const entries = parseClaudeTranscript(
       [
         assistantToolUse("turn-1", "toolu_mid", {
-          subagent_type: "routed-mech",
+          subagent_type: "general-purpose",
           description: "Demo subagent",
         }),
         userToolResult("turn-2", "toolu_mid", `Async agent launched.\nagentId: ${AGENT_ID}`, {
@@ -255,6 +255,12 @@ describe("ClaudeTranscriptSource.resolveSubagent", () => {
 
       expect(await source.resolveSubagent({ kind: "id", value: SESSION_ID }, "../etc")).toBeNull();
       expect(await source.resolveSubagent({ kind: "id", value: SESSION_ID }, escapedId)).toBeNull();
+
+      const siblingSession = join(proj, "99999999-9999-4999-8999-999999999999.jsonl");
+      await writeFile(siblingSession, "{\"uuid\":\"sibling\"}\n");
+      const siblingEscapeId = "a2222222222222222";
+      await symlink(siblingSession, join(subDir, `agent-${siblingEscapeId}.jsonl`));
+      expect(await source.resolveSubagent({ kind: "id", value: SESSION_ID }, siblingEscapeId)).toBeNull();
     } finally {
       await rm(base, { recursive: true, force: true });
     }

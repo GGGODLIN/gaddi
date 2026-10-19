@@ -1083,7 +1083,7 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     for (const stem of stems) {
       const candidate = join(stem, "subagents", `agent-${agentId}.jsonl`);
       if (!(await exists(candidate))) continue;
-      const real = await containedRealpath(candidate, projectDir);
+      const real = await containedRealpath(candidate, stem);
       if (real !== null) return real;
     }
     return null;

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CHANGES_POLL_MS } from "@/hooks/use-visible-interval";
 import { keepChangeCount, resetChangeCountCache } from "@/hooks/use-workspace-change-counts";
 import { resetChangesListCache } from "@/lib/changes-list-cache";
+import { loadDraft } from "@/lib/drafts";
 import { t } from "@/lib/i18n";
 import { en } from "@/lib/i18n/messages/en";
 import { ROOT_ROUTE_ID, type HomeData } from "@/lib/loaders";
@@ -599,3 +600,65 @@ describe("ChangesRoute — re-reading while open", () => {
     await vi.waitFor(() => expect(screen.queryByText(en["changes.stale"])).toBeNull());
   });
 });
+
+describe("ChangesRoute — batch diff comments", () => {
+  it("accumulates comments across files and stages the formatted batch into the asking pane's draft", async () => {
+    const user = userEvent.setup();
+    const router = renderAt("/pane/w1%3Ap1/changes?repo=.&path=src%2Flib%2Fcart.ts");
+    const expectedRow = "export function cartTotal(items: { price: number }[]): number {";
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-slot="diff"]')?.textContent ?? "").toContain(expectedRow),
+    );
+
+    const rows = document.querySelectorAll<HTMLElement>('[data-slot="diff"] button');
+    expect(rows.length).toBeGreaterThan(0);
+    await user.click(rows[0]!);
+
+    await user.click(screen.getByRole("button", { name: "Comment on selected (1)" }));
+    const commentBox = screen.getByPlaceholderText("Write your comment for these lines…");
+    await user.type(commentBox, "Handle empty items array explicitly.");
+    await user.click(screen.getByRole("button", { name: "Add comment" }));
+
+    expect(screen.getByText(/Handle empty items array explicitly\./)).toBeInTheDocument();
+    const pendingBtn = screen.getByRole("button", { name: "Pending comments (1) · Bring to agent" });
+    expect(pendingBtn).toBeInTheDocument();
+
+    await user.click(pendingBtn);
+    await user.click(screen.getByRole("button", { name: "Bring to claude draft (1)" }));
+
+    expect(router.state.location.pathname).toBe("/pane/w1%3Ap1");
+    expect(loadDraft(undefined, "w1:p1")).toContain("> `src/lib/cart.ts`");
+    expect(loadDraft(undefined, "w1:p1")).toContain("Handle empty items array explicitly.");
+  });
+
+  it("lets a workspace Changes view pick which agent in the workspace receives the batch", async () => {
+    const user = userEvent.setup();
+    const wsId = fixtureAgents[0]!.workspaceId;
+    loaderAgents = [
+      fixtureAgents[0]!,
+      { ...fixtureAgents[0]!, paneId: "w1:p9", agent: "codex", paneLabel: "codex-worker" },
+    ];
+    const router = renderAt(`/space/${encodeURIComponent(wsId)}/changes?repo=.&path=src%2Flib%2Fcart.ts`);
+    const expectedRow = "export function cartTotal(items: { price: number }[]): number {";
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-slot="diff"]')?.textContent ?? "").toContain(expectedRow),
+    );
+
+    const rows = document.querySelectorAll<HTMLElement>('[data-slot="diff"] button');
+    await user.click(rows[0]!);
+    await user.click(screen.getByRole("button", { name: "Comment on selected (1)" }));
+    await user.type(
+      screen.getByPlaceholderText("Write your comment for these lines…"),
+      "Route this to codex.",
+    );
+    await user.click(screen.getByRole("button", { name: "Add comment" }));
+
+    await user.click(screen.getByRole("button", { name: "Pending comments (1) · Bring to agent" }));
+    await user.click(screen.getByRole("button", { name: /codex · codex-worker/i }));
+    await user.click(screen.getByRole("button", { name: "Bring to codex draft (1)" }));
+
+    expect(router.state.location.pathname).toBe("/pane/w1%3Ap9");
+    expect(loadDraft(undefined, "w1:p9")).toContain("Route this to codex.");
+  });
+});
+

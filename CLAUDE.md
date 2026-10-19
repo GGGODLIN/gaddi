@@ -1027,13 +1027,20 @@ change, so the review is part of the merge, not an extra:
 
 1. Before: estimate the conflicts with `git merge-tree --write-tree dev upstream/vX.Y.Z`, read any
    policy document upstream added or changed (`CLAUDE.md`, `.adr/`, contributing guides), and list
-   the API and contract changes with the fork code that consumes each.
-2. During: after resolving, review every conflicted file through its three diffs (base to fork,
-   base to upstream, base to result) for a side whose change disappeared; a file of mechanical
-   conflicts only (dictionaries, lockfile, `CHANGELOG.md`) is checked by a script instead.
+   the API and contract changes with the fork code and tests (such as request spies) that consume
+   each.
+2. During: invoke `resolving-merge-conflicts`; after resolving, build the three-diff bundle
+   (`prepare_merge_review.py`) and review every conflicted file through its three diffs (base to
+   fork, base to upstream, base to result) with a fresh reviewer agent that has no conversation
+   context for a side whose change disappeared. Whether main merges directly or receives a worker
+   handoff, main must obtain that fresh reviewer's per-file verdicts and resolve any findings
+   before the merge counts as done. A file is checked by a script instead of the reviewer only
+   when its conflict in this merge is purely mechanical (a manifest where only `version` differed
+   and kept the fork version, a lockfile, `CHANGELOG.md`, or dictionary additions with no changed
+   existing key).
 3. After: check the Gaddi brand swap survived in strings and tests, the `CHANGELOG.md` entries and
-   the i18n keys in all six dictionaries; run both typechecks, lint, build, both suites and the
-   fork's live e2e; compare any failure with pure upstream by test name, not by count.
+   the i18n keys in all six dictionaries; run both typechecks, lint, build and both suites; compare
+   any failure with pure upstream by test name, not by count.
 
 ### Cutting a release
 
