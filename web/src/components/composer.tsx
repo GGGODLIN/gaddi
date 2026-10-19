@@ -1165,7 +1165,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // The operator's own palette rows, resolved against the shipped catalog for both the button's
   // visibility test here and the palette's own list below (same call, same arguments).
   const operatorCommands = useOperatorCommands();
-  const claudeCommands = useClaudeCommands(drawer === "cmd", agent, paneId, scope, operatorCommands);
+  const suggestingLead = !locked && !direct.active && !isShell && /^([/$])\S*$/u.test(input);
+  const claudeCommands = useClaudeCommands(
+    drawer === "cmd" || suggestingLead,
+    agent,
+    paneId,
+    scope,
+    operatorCommands,
+  );
   const commands = commandsFor(agent, operatorCommands, claudeCommands);
   const todoList = todos ?? [];
   const todoDone = todoList.filter((item) => item.status === "completed").length;
@@ -1214,9 +1221,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     if (target.agentId !== undefined && runningIds.split(" ").includes(target.agentId)) return;
     syncSubagent({ ...target, status: "done" });
   }, [activeSheetKey, runningIds, syncSubagent]);
-  // The suggestions above the box read the agent's command list only (the shipped catalog, or the
-  // operator's rows): never the skill and command files the palette finds on disk.
-  const commandSuggestions = locked || direct.active || isShell ? [] : suggestCommands(input, commandsFor(agent, operatorCommands));
+  // Fork divergence (ADR 9009 / 9011): the suggestions above the box read `commands` (including the
+  // skill, command and plugin files `useClaudeCommands` found on disk), whereas upstream 1.23.0 (#475)
+  // restricts the strip to `commandsFor(agent, operatorCommands)`.
+  const commandSuggestions = locked || direct.active || isShell ? [] : suggestCommands(input, commands);
   // What this collie takes as an attachment, off the same one-shot /api/config read. On a bridge
   // that publishes nothing (older than the field, or the read has not landed) `uploadLimits` answers
   // with the contract that shipped before attachments — images, 10 MB — so the button is never

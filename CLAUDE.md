@@ -627,16 +627,18 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   composer, an argument-taking row includes one trailing space, and only the explicit Send action
   submits it. The harness bar is the separate direct-action surface
   ([ADR 9002](./.adr/9002-the-agent-palette-stages-never-sends.md)).
-- **On a Claude pane the palette also lists what Claude Code would load there** — the bridge reads
-  the skills and command files from disk (`bridge/claude-commands.ts`, `GET
-  /api/pane/<id>/claude-commands`) and they join the same list and search; `commands.toml` rows still
-  come first and win a name. It mirrors Claude Code's loader, it is not a registry, and it is fork-only
-  ([ADR 9009](./.adr/9009-the-palette-lists-what-claude-code-would-load.md)). Codex, opencode, pi,
-  Oh My Pi, Grok, Antigravity and Muse get the same through `bridge/agent-skills.ts`, each in its own
-  spelling (`$name` for Codex, `/skill:name` for pi and Oh My Pi); the bridge never runs an agent's
-  own lister, and those agents keep ADR 0018's replacement rule
-  ([ADR 9011](./.adr/9011-the-palette-lists-what-seven-more-agents-would-load.md)). Their built-in
-  skills are shipped catalog rows instead.
+- **On a Claude pane the palette and the composer `/` strip also list what Claude Code would load
+  there** — the bridge reads the skills, command files and enabled plugins from disk
+  (`bridge/claude-commands.ts`, `GET /api/pane/<id>/claude-commands`) and they join the same list,
+  search and inline `/` suggestion strip; `commands.toml` rows still come first and win a name.
+  Upstream 1.23.0 took the Claude palette scan (#478) while restricting the composer `/` suggestion
+  strip (#475) to the shipped catalog and `commands.toml`; this fork feeds on-disk skills into the
+  composer suggestion strip too ([ADR 9009](./.adr/9009-the-palette-lists-what-claude-code-would-load.md),
+  addendum 2026-10-20). Codex, opencode, pi, Oh My Pi, Grok, Antigravity and Muse get the same
+  through `bridge/agent-skills.ts`, each in its own spelling (`$name` for Codex, `/skill:name` for pi
+  and Oh My Pi); the bridge never runs an agent's own lister, and those agents keep ADR 0018's
+  replacement rule ([ADR 9011](./.adr/9011-the-palette-lists-what-seven-more-agents-would-load.md)).
+  Their built-in skills are shipped catalog rows instead.
 - **The composition rule runs PER SURFACE, and the harness bar still replaces** — a row with
   `bar = true` goes on the bar above the keys as well as into the palette, and the bar's
   replace-or-fall-back runs over the `bar = true` rows ALONE
@@ -1036,7 +1038,11 @@ change, so the review is part of the merge, not an extra:
 1. Before: estimate the conflicts with `git merge-tree --write-tree dev upstream/vX.Y.Z`, read any
    policy document upstream added or changed (`CLAUDE.md`, `.adr/`, contributing guides), and list
    the API and contract changes with the fork code and tests (such as request spies) that consume
-   each.
+   each. When an upstream change (or an upstreamed PR returning in a release) narrows, replaces or
+   conflicts with behaviour this fork deliberately chose, do not silently adopt upstream's narrowing
+   to satisfy upstream's new test: surface the behavioural trade-off to the operator for a decision,
+   and when the fork keeps its own behaviour, record the divergence in `.adr/90XX` (or an addendum),
+   `CLAUDE.md` and `docs/philip/upstream-ledger.md`.
 2. During: invoke `resolving-merge-conflicts`; after resolving, build the three-diff bundle
    (`prepare_merge_review.py`) and review every conflicted file through its three diffs (base to
    fork, base to upstream, base to result) with a fresh reviewer agent that has no conversation
