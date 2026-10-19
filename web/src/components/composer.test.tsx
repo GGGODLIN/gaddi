@@ -2408,6 +2408,63 @@ describe("Composer — clipboard image paste", () => {
     expect(screen.queryByText(/Image added/i)).not.toBeInTheDocument();
     expect(uploadCalls).toBe(0);
   });
+
+  it("collapses a 5+ line paste into a [Pasted #1] chip, lets the sheet edit or expand it, and sends the expanded text", async () => {
+    const user = userEvent.setup();
+    renderComposer();
+    const box = screen.getByPlaceholderText(/type a reply/i);
+    const longText = "line 1\nline 2\nline 3\nline 4\nline 5";
+
+    fireEvent.paste(box, {
+      clipboardData: {
+        items: [{ kind: "string", type: "text/plain", getAsFile: () => null }],
+        getData: (type: string) => (type === "text/plain" ? longText : ""),
+      },
+    });
+
+    await waitFor(() => expect(box).toHaveValue("[Pasted #1] "));
+    const chipBtn = screen.getByRole("button", { name: "Edit pasted text #1" });
+    expect(chipBtn).toHaveTextContent("5 lines · 34 chars");
+
+    // Open the sheet and edit the pasted content
+    await user.click(chipBtn);
+    const sheetEditor = screen.getByRole("textbox", { name: "Edit pasted text #1" });
+    expect(sheetEditor).toHaveValue(longText);
+    fireEvent.change(sheetEditor, { target: { value: "edited 1\nedited 2\nedited 3\nedited 4\nedited 5" } });
+    expect(chipBtn).toHaveTextContent("5 lines · 44 chars");
+
+    // Close sheet and send with additional instructions
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.change(box, { target: { value: "[Pasted #1] please check" } });
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() =>
+      expect(recordedSends().at(-1)?.text).toBe(
+        "edited 1\nedited 2\nedited 3\nedited 4\nedited 5 please check",
+      ),
+    );
+  });
+
+  it("expands a collapsed paste chip back into the input box when requested from the sheet", async () => {
+    const user = userEvent.setup();
+    renderComposer();
+    const box = screen.getByPlaceholderText(/type a reply/i);
+    const longText = "alpha 1\nalpha 2\nalpha 3\nalpha 4\nalpha 5";
+
+    fireEvent.paste(box, {
+      clipboardData: {
+        items: [],
+        getData: (type: string) => (type === "text/plain" ? longText : ""),
+      },
+    });
+
+    await waitFor(() => expect(box).toHaveValue("[Pasted #1] "));
+    await user.click(screen.getByRole("button", { name: "Edit pasted text #1" }));
+    await user.click(screen.getByRole("button", { name: "Expand into input" }));
+
+    expect(screen.queryByRole("button", { name: "Edit pasted text #1" })).not.toBeInTheDocument();
+    expect(box).toHaveValue(`${longText} `);
+  });
 });
 
 describe("Composer — keys dock (in-flow, not an overlay)", () => {

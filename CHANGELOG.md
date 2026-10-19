@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **Long text pastes collapse into an editable chip above the input box.** Pasting five or more lines (or 300 or more characters) places a `[Pasted #N]` marker at the caret and adds a numbered chip with line and character counts above the field; tapping the chip opens a bottom sheet to inspect, edit or expand the pasted text back into the input box, and Send substitutes the full text in place.
+
 ### Changed
 
 - **A queued send no longer moves the layout.** The sends Collie holds until a turn ends now float over the bottom of the terminal view as one card, in the place of the terminal draft notice, so the box and the mirror stay where they are. Two or more collapse to a count and the next message, with Show all.
