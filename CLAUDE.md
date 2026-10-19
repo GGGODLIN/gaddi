@@ -1028,8 +1028,9 @@ change, so the review is part of the merge, not an extra:
 1. Before: estimate the conflicts with `git merge-tree --write-tree dev upstream/vX.Y.Z`, read any
    policy document upstream added or changed (`CLAUDE.md`, `.adr/`, contributing guides), and list
    the API and contract changes with the fork code that consumes each.
-2. During: after resolving, review every conflicted file through its three diffs (base to fork,
-   base to upstream, base to result) for a side whose change disappeared; a file of mechanical
+2. During: invoke `resolving-merge-conflicts`; after resolving, review every conflicted file
+   through its three diffs (base to fork, base to upstream, base to result) with a fresh reviewer
+   agent that has no conversation context for a side whose change disappeared; a file of mechanical
    conflicts only (dictionaries, lockfile, `CHANGELOG.md`) is checked by a script instead.
 3. After: check the Gaddi brand swap survived in strings and tests, the `CHANGELOG.md` entries and
    the i18n keys in all six dictionaries; run both typechecks, lint, build, both suites and the
