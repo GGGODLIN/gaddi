@@ -23,9 +23,19 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Changed
+
+- **A queued send no longer moves the layout.** The sends Collie holds until a turn ends now float over the bottom of the terminal view as one card, in the place of the terminal draft notice, so the box and the mirror stay where they are. Two or more collapse to a count and the next message, with Show all.
+
 ### Fixed
 
 - **The subagent bottom sheet syncs live card updates and isolates transcripts to the parent session folder.** Intermediate assistant commentary in a running subagent stays in the step list without marking the sheet finished, an open sheet updates when the parent card receives its `agentId` or final status, switching panes closes the sheet, and `resolveSubagent` bounds `containedRealpath` to the parent session's own directory.
+- **Korean reads more naturally across the app.** Settings, pane actions, alerts, uploads and refusal messages have better wording, and instructions name the buttons as the screen shows them. Thanks @mud-the-developer (#498).
+- **Direct typing leaves composition keys to the keyboard.** While a Korean, Japanese or Chinese keyboard composes a word, Enter, Backspace, the arrows, Escape and Tab stay with it, and a blur ends a composition that never finished. Keys still waiting on a slow link when you stop typing are dropped. Thanks @mud-the-developer (#500).
+- **Korean, Chinese and Japanese text keeps its columns in the terminal view.** With wrap off, the pane mirror and a dialog card's raw view hold each wide character to two cells, so dividers and tables line up, and a link keeps its underline. Thanks @mud-the-developer (#499).
+- **The Heads up card shows while background agents are listed.** With three or more agents in Claude Code's panel under the box, the card was withheld and its tap refused. Only the panel's own named rows are skipped, so plain output under a box still counts. Thanks @leftos (#493).
+- **A command that must never wait for a turn is no longer held and typed after it.** When the bridge could not read the agent's version, a `/clear`, `/new`, `/exit` or `!` shell line sent during a turn was kept and typed when the turn ended. It is refused again. Thanks @mikebenner (#491).
+- **omp's box composer sends again with Nerd Font symbols and its own word hint.** A wrapped or two-line draft, an image chip, a slash or skill command, omp's grey word guess after the cursor and a send during a tool turn no longer end as typed but not sent. Thanks @christensenjames (#497).
 
 ## [2.7.0] - 2026-10-18
 
