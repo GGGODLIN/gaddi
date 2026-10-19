@@ -23,24 +23,27 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
-### Added
-
-- **Long text pastes collapse into an editable chip above the input box.** Pasting five or more lines (or 300 or more characters) places a `[Pasted #N]` marker at the caret and adds a numbered chip with line and character counts above the field; tapping the chip opens a bottom sheet to inspect, edit or expand the pasted text back into the input box, and Send substitutes the full text in place.
-- **Diff lines in Changes can be selected and commented in a batch.** Tapping one or more lines in a file's diff opens a bottom sheet to write a comment with the file path, line numbers and quoted lines captured at selection time; comments pin inline under the commented lines, accumulate across files in a pending list, and stage as quoted blocks into the asking pane's draft (or a chosen agent's draft when opened from a workspace).
+## [2.8.0] - 2026-10-19
 
 ### Changed
 
-- **A queued send no longer moves the layout.** The sends Collie holds until a turn ends now float over the bottom of the terminal view as one card, in the place of the terminal draft notice, so the box and the mirror stay where they are. Two or more collapse to a count and the next message, with Show all.
+- **Built on upstream Collie 1.22.6.** AltanS/collie v1.22.6, commit 9cc40c8a.
+- **A queued send no longer moves the layout.** The sends Collie holds until a turn ends now float over the bottom of the terminal view as one card, in the place of the terminal draft notice, so the box and the mirror stay where they are. Two or more collapse to a count and the next message, with Show all. ([3a4e4c4f](https://github.com/GGGODLIN/gaddi/commit/3a4e4c4f), [6a86b1f1](https://github.com/GGGODLIN/gaddi/commit/6a86b1f1))
+
+### Added
+
+- **Long text pastes collapse into an editable chip above the input box.** Pasting five or more lines (or 300 or more characters) places a `[Pasted #N]` marker at the caret and adds a numbered chip with line and character counts above the field; tapping the chip opens a bottom sheet to inspect, edit or expand the pasted text back into the input box, and Send substitutes the full text in place. ([05f11338](https://github.com/GGGODLIN/gaddi/commit/05f11338), [ef8fa8df](https://github.com/GGGODLIN/gaddi/commit/ef8fa8df))
+- **Diff lines in Changes can be selected and commented in a batch.** Tapping one or more lines in a file's diff opens a bottom sheet to write a comment with the file path, line numbers and quoted lines captured at selection time; comments pin inline under the commented lines, accumulate across files in a pending list, and stage as quoted blocks into the asking pane's draft (or a chosen agent's draft when opened from a workspace). ([16b4076f](https://github.com/GGGODLIN/gaddi/commit/16b4076f), [ef8fa8df](https://github.com/GGGODLIN/gaddi/commit/ef8fa8df))
 
 ### Fixed
 
-- **The subagent bottom sheet syncs live card updates and isolates transcripts to the parent session folder.** Intermediate assistant commentary in a running subagent stays in the step list without marking the sheet finished, an open sheet updates when the parent card receives its `agentId` or final status, switching panes closes the sheet, and `resolveSubagent` bounds `containedRealpath` to the parent session's own directory.
-- **Korean reads more naturally across the app.** Settings, pane actions, alerts, uploads and refusal messages have better wording, and instructions name the buttons as the screen shows them. Thanks @mud-the-developer (#498).
-- **Direct typing leaves composition keys to the keyboard.** While a Korean, Japanese or Chinese keyboard composes a word, Enter, Backspace, the arrows, Escape and Tab stay with it, and a blur ends a composition that never finished. Keys still waiting on a slow link when you stop typing are dropped. Thanks @mud-the-developer (#500).
-- **Korean, Chinese and Japanese text keeps its columns in the terminal view.** With wrap off, the pane mirror and a dialog card's raw view hold each wide character to two cells, so dividers and tables line up, and a link keeps its underline. Thanks @mud-the-developer (#499).
-- **The Heads up card shows while background agents are listed.** With three or more agents in Claude Code's panel under the box, the card was withheld and its tap refused. Only the panel's own named rows are skipped, so plain output under a box still counts. Thanks @leftos (#493).
-- **A command that must never wait for a turn is no longer held and typed after it.** When the bridge could not read the agent's version, a `/clear`, `/new`, `/exit` or `!` shell line sent during a turn was kept and typed when the turn ended. It is refused again. Thanks @mikebenner (#491).
-- **omp's box composer sends again with Nerd Font symbols and its own word hint.** A wrapped or two-line draft, an image chip, a slash or skill command, omp's grey word guess after the cursor and a send during a tool turn no longer end as typed but not sent. Thanks @christensenjames (#497).
+- **The subagent bottom sheet syncs live card updates and isolates transcripts to the parent session folder.** Intermediate assistant commentary in a running subagent stays in the step list without marking the sheet finished, an open sheet updates when the parent card receives its `agentId` or final status, switching panes closes the sheet, and `resolveSubagent` bounds `containedRealpath` to the parent session's own directory. ([11835daf](https://github.com/GGGODLIN/gaddi/commit/11835daf), [c78a2f1f](https://github.com/GGGODLIN/gaddi/commit/c78a2f1f))
+- **Korean reads more naturally across the app.** Settings, pane actions, alerts, uploads and refusal messages have better wording, and instructions name the buttons as the screen shows them. Thanks @mud-the-developer (#498). ([dba70627](https://github.com/GGGODLIN/gaddi/commit/dba70627))
+- **Direct typing leaves composition keys to the keyboard.** While a Korean, Japanese or Chinese keyboard composes a word, Enter, Backspace, the arrows, Escape and Tab stay with it, and a blur ends a composition that never finished. Keys still waiting on a slow link when you stop typing are dropped. Thanks @mud-the-developer (#500). ([5c93d9f0](https://github.com/GGGODLIN/gaddi/commit/5c93d9f0), [368c1472](https://github.com/GGGODLIN/gaddi/commit/368c1472))
+- **Korean, Chinese and Japanese text keeps its columns in the terminal view.** With wrap off, the pane mirror and a dialog card's raw view hold each wide character to two cells, so dividers and tables line up, and a link keeps its underline. Thanks @mud-the-developer (#499). ([1bf90884](https://github.com/GGGODLIN/gaddi/commit/1bf90884), [275c0eb7](https://github.com/GGGODLIN/gaddi/commit/275c0eb7))
+- **The Heads up card shows while background agents are listed.** With three or more agents in Claude Code's panel under the box, the card was withheld and its tap refused. Only the panel's own named rows are skipped, so plain output under a box still counts. Thanks @leftos (#493). ([cb5cbf53](https://github.com/GGGODLIN/gaddi/commit/cb5cbf53), [1ca658b3](https://github.com/GGGODLIN/gaddi/commit/1ca658b3))
+- **A command that must never wait for a turn is no longer held and typed after it.** When the bridge could not read the agent's version, a `/clear`, `/new`, `/exit` or `!` shell line sent during a turn was kept and typed when the turn ended. It is refused again. Thanks @mikebenner (#491). ([18eb3e21](https://github.com/GGGODLIN/gaddi/commit/18eb3e21))
+- **omp's box composer sends again with Nerd Font symbols and its own word hint.** A wrapped or two-line draft, an image chip, a slash or skill command, omp's grey word guess after the cursor and a send during a tool turn no longer end as typed but not sent. Thanks @christensenjames (#497). ([a66c5702](https://github.com/GGGODLIN/gaddi/commit/a66c5702))
 
 ## [2.7.0] - 2026-10-18
 
