@@ -58,6 +58,7 @@ const KEYS = new Map<string, KeyFate>([
   ["collie:locale:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
   ["collie:haptics:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
   ["collie:harness-bar:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
+  ["collie:harness-prefs:v1", { area: "local", prefix: false, fate: "kept", why: "preference, per harness (status line shown)" }],
   ["collie:strips-collapsed:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
   // Counters only, never the clipboard text (ADR 9010). Kept across a re-pair, a stale counter costs
   // at most one banner, and it says nothing about what the clipboard held.

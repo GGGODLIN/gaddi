@@ -423,3 +423,105 @@ describe("detectPreviewSelect — a dialog rule wrapped beside a theme's gutter"
     expect(kinds).toContain("preview-select");
   });
 });
+
+describe("detectPreviewSelect — chip-anchored and fullwidth-question prompts (#543)", () => {
+  function previewScreen(opts: {
+    header?: string;
+    questionRows: string[];
+  }): StyledLine[] {
+    const col = 30;
+    const rows = [
+      "❯ 1. Boxy".padEnd(col) + "┌──────┐",
+      "  2. Rounded".padEnd(col) + "│ DEMO │",
+      " ".repeat(col) + "└──────┘",
+    ];
+    return splitLines(
+      parseAnsi(
+        [
+          "─".repeat(50),
+          ...(opts.header === undefined ? [" ☐ Design"] : opts.header === "" ? [] : [opts.header]),
+          "",
+          ...opts.questionRows,
+          "",
+          ...rows,
+          "",
+          " ".repeat(col) + "Notes: press n to add notes",
+          "",
+          "─".repeat(50),
+          "  Chat about this",
+          "",
+          "Enter to select · n to add notes · Esc to cancel",
+        ].join("\n"),
+      ),
+    );
+  }
+
+  it("lifts a single-question preview ending in fullwidth '？' or ':' and keeps startLine on the first option", () => {
+    for (const q of ["どのウィジェットデザインを使いますか？", "請選擇要採用的版型："]) {
+      const lines = previewScreen({ questionRows: [` │ ${q}`] });
+      const region = detectPreviewSelectRegion(lines);
+      expect(region, q).not.toBeNull();
+      expect(region!.model.question).toBe(q);
+      expect(region!.model.steps).toBeNull();
+      expect(lineText(lines[region!.startLine]!)).toMatch(/^❯\s*1\.\s+Boxy/);
+    }
+  });
+
+  it("lifts a wizard-step preview with a fullwidth '？' or no question mark and starts at the stepper", () => {
+    const lines = previewScreen({
+      header: "←  \u001b[48;2;177;185;249m\u001b[38;2;0;0;0m ☐ 版型 \u001b[0m  ☐ 配色  ✔ Submit  →",
+      questionRows: [" │ 請選擇卡片版型："],
+    });
+    const region = detectPreviewSelectRegion(lines);
+    expect(region).not.toBeNull();
+    expect(region!.model.question).toBe("請選擇卡片版型：");
+    expect(region!.model.steps).toHaveLength(2);
+    expect(lineText(lines[region!.startLine]!)).toContain("✔ Submit");
+  });
+
+  it("keeps the full paragraph under the chip when an earlier line carries a '?' URL", () => {
+    const lines = previewScreen({
+      questionRows: [
+        " │ Preview URL: https://example.com/design?variant=2",
+        "",
+        " │ 請選擇最終版型：",
+      ],
+    });
+    const region = detectPreviewSelectRegion(lines);
+    expect(region).not.toBeNull();
+    expect(region!.model.question).toBe("Preview URL: https://example.com/design?variant=2 請選擇最終版型：");
+  });
+
+  it("bails when the question under the chip is blank", () => {
+    expect(detectPreviewSelectRegion(previewScreen({ questionRows: ["   "] }))).toBeNull();
+  });
+
+  it("splits CJK option labels from the preview column by display width, not UTF-16 length", () => {
+    // "❯ 1. 方案一" is 8 UTF-16 code units but 11 display columns (3 CJK chars × 2 cols).
+    // With Notes: at column 30, 19 spaces pad the row to column 30 where the preview box starts.
+    const col = 30;
+    const text = [
+      "─".repeat(50),
+      " ☐ 版型",
+      "",
+      "請選擇接下來要採用的版型：",
+      "",
+      "❯ 1. 方案一" + " ".repeat(col - 11) + "┌──────┐",
+      "  2. 方案二" + " ".repeat(col - 11) + "│ ┌──┐ │",
+      " ".repeat(col) + "│ │A1│ │",
+      " ".repeat(col) + "└──────┘",
+      "",
+      " ".repeat(col) + "Notes: press n to add notes",
+      "",
+      "─".repeat(50),
+      "  Chat about this",
+      "",
+      "Enter to select · n to add notes · Esc to cancel",
+    ].join("\n");
+    const region = detectPreviewSelectRegion(splitLines(parseAnsi(text)));
+    expect(region).not.toBeNull();
+    expect(region!.model.options.map((o) => o.label)).toEqual(["方案一", "方案二"]);
+    expect(region!.model.preview).toEqual(["┌──────┐", "│ ┌──┐ │", "│ │A1│ │", "└──────┘"]);
+  });
+});
+

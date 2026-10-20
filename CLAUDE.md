@@ -163,15 +163,17 @@ release. 1.14.2 was cut this way on 2026-09-28.
    the only commit allowed to touch it, and `scripts/check-flake-lock.sh` refuses the others.
    Leaving it alone is the ordinary case; a release does not owe the lock a bump.
 6. **Run `scripts/check-version.sh`** — it must print `✓`.
-7. **Run `make win-rehearse LOCAL=collie` from the workspace root before the tag.** Windows is a
-   supported host ([ADR 0075](./.adr/0075-windows-is-a-supported-host.md)), and this rehearsal
-   installs, updates and rolls back a Windows build on the test VM, which no CI job can do. It
-   resets the VM's disk and takes 13 to 16 minutes, and it ships the commits of `LOCAL`, so commit
-   the release first. Read its table: a failed step holds the tag, and so does an unavailable VM.
-   The `windows.yml` run on the release commit must be green as well. **Fork override:** this fork
-   never runs that VM rehearsal. The only rule for what is waived and what still holds is *Fork
-   branches and releases* → *Windows VM rehearsal*. [ADR 0075](./.adr/0075-windows-is-a-supported-host.md)
-   is not withdrawn. Then run the browser leg (step 8), then tag and push (the paragraph after it).
+7. **For a minor or major release, run `make win-rehearse LOCAL=collie` from the workspace root
+   before the tag.** Windows is a supported host
+   ([ADR 0075](./.adr/0075-windows-is-a-supported-host.md)), and this rehearsal installs, updates
+   and rolls back a Windows build on the test VM, which no CI job can do. It resets the VM's disk
+   and takes 13 to 16 minutes, and it ships the commits of `LOCAL`, so commit the release first.
+   Read its table: a failed step holds the tag, and so does an unavailable VM. **A patch release
+   skips the rehearsal** (Altan, 2026-10-18). Every release, patch included, still needs a green
+   `windows.yml` run on the release commit. **Fork override:** this fork never runs that VM
+   rehearsal. The only rule for what is waived and what still holds is *Fork branches and releases*
+   → *Windows VM rehearsal*. [ADR 0075](./.adr/0075-windows-is-a-supported-host.md) is not
+   withdrawn. Then run the browser leg (step 8), then tag and push (the paragraph after it).
 
    A missing Windows zip stops the release from the first of two moments: once an earlier stable
    release (not a draft, not a prerelease) has carried one, or on 2026-11-15
@@ -183,8 +185,9 @@ release. 1.14.2 was cut this way on 2026-09-28.
 8. **Run the browser leg on the release head before the tag.** In `web/`, with `COLLIE_RIG_KEY_FILE`
    set: `bunx playwright test -c e2e/rig/playwright.config.ts` (*Browser tests*; the prerequisites are
    in `web/e2e/rig/README.md`). It starts a scratch bridge and Herdr with real Claude Code, pi and omp,
-   and takes about 5 minutes. All fifteen cases must pass on the first tap. A failed case holds the
-   tag, and so does a case that was not reached.
+   and takes about 5 minutes. Then run the crew leg, `bunx playwright test -c e2e/rig/crew.config.ts`:
+   a lead and a member, about 4 minutes. All thirty-four cases (twenty-seven solo, seven on the crew leg)
+   must pass on the first tap. A failed case holds the tag, and so does a case that was not reached.
 
 **A PR from a fork is the exception: leave all four files alone.** Bump nothing, add no CHANGELOG
 line — send the functional commits only. The version is the maintainer's to pick, because it depends
@@ -475,9 +478,12 @@ component, not a spec. On 2026-10-17 the specs that did not pass that test moved
   running real Claude Code, pi and omp. It is not a tier of the CI suite and not the VM lab. It lives
   under `web/e2e/rig/` with its own config (`cd web && bunx playwright test -c
   e2e/rig/playwright.config.ts`, the provider key file named by `COLLIE_RIG_KEY_FILE`), it spends
-  model turns (about 5 minutes and a few cents a run), and it never runs in CI. It is **the gate before
+  model turns (about 5 minutes and a few cents a run), and it never runs in CI. Beside it runs **the
+  crew leg** (`-c e2e/rig/crew.config.ts`): the same phone against a lead and a member, for the walky
+  talky cases that need a crew. It is **the gate before
   every release tag**, and **the proof for a change to a harness reader, the Surface, the Send
-  Protocol or the ask code**: run it on the branch, and all fifteen cases pass on the first tap. A
+  Protocol or the ask code**: run it on the branch, and all thirty-four cases (twenty-seven solo, seven
+  on the crew leg) pass on the first tap. A
   unit test cannot show that a tap works on a real screen. `web/e2e/rig/nightly.ts` also runs it every
   night on `origin/main`, once for each main commit and set of agent versions. The README beside it
   (*When it runs*) has the rules and the cost.
@@ -621,16 +627,18 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   composer, an argument-taking row includes one trailing space, and only the explicit Send action
   submits it. The harness bar is the separate direct-action surface
   ([ADR 9002](./.adr/9002-the-agent-palette-stages-never-sends.md)).
-- **On a Claude pane the palette also lists what Claude Code would load there** — the bridge reads
-  the skills and command files from disk (`bridge/claude-commands.ts`, `GET
-  /api/pane/<id>/claude-commands`) and they join the same list and search; `commands.toml` rows still
-  come first and win a name. It mirrors Claude Code's loader, it is not a registry, and it is fork-only
-  ([ADR 9009](./.adr/9009-the-palette-lists-what-claude-code-would-load.md)). Codex, opencode, pi,
-  Oh My Pi, Grok, Antigravity and Muse get the same through `bridge/agent-skills.ts`, each in its own
-  spelling (`$name` for Codex, `/skill:name` for pi and Oh My Pi); the bridge never runs an agent's
-  own lister, and those agents keep ADR 0018's replacement rule
-  ([ADR 9011](./.adr/9011-the-palette-lists-what-seven-more-agents-would-load.md)). Their built-in
-  skills are shipped catalog rows instead.
+- **On a Claude pane the palette and the composer `/` strip also list what Claude Code would load
+  there** — the bridge reads the skills, command files and enabled plugins from disk
+  (`bridge/claude-commands.ts`, `GET /api/pane/<id>/claude-commands`) and they join the same list,
+  search and inline `/` suggestion strip; `commands.toml` rows still come first and win a name.
+  Upstream 1.23.0 took the Claude palette scan (#478) while restricting the composer `/` suggestion
+  strip (#475) to the shipped catalog and `commands.toml`; this fork feeds on-disk skills into the
+  composer suggestion strip too ([ADR 9009](./.adr/9009-the-palette-lists-what-claude-code-would-load.md),
+  addendum 2026-10-20). Codex, opencode, pi, Oh My Pi, Grok, Antigravity and Muse get the same
+  through `bridge/agent-skills.ts`, each in its own spelling (`$name` for Codex, `/skill:name` for pi
+  and Oh My Pi); the bridge never runs an agent's own lister, and those agents keep ADR 0018's
+  replacement rule ([ADR 9011](./.adr/9011-the-palette-lists-what-seven-more-agents-would-load.md)).
+  Their built-in skills are shipped catalog rows instead.
 - **The composition rule runs PER SURFACE, and the harness bar still replaces** — a row with
   `bar = true` goes on the bar above the keys as well as into the palette, and the bar's
   replace-or-fall-back runs over the `bar = true` rows ALONE
@@ -793,7 +801,9 @@ don't drop a `-c` there without reading the module header. The Files view (`brid
 root comes off the snapshot, never the request, and its real path must pass the same bound; the
 client's path is relative, refused on its shape before any disk call, and its real path must sit
 inside the root's through `containedRealpath`; `.git` and the bridge's state and config folders are
-denied on top. It needs an authorised device (`device-read`), and its bytes go out as JSON, never as
+denied on top. The New page's folder browser (`bridge/folder-browse.ts`, #467) is the same place
+with home as the root: folder names only, the same shape check, containment, deny list, refusal and
+gate, and no new rule. It needs an authorised device (`device-read`), and its bytes go out as JSON, never as
 a document, with one exception: `files/image` ([ADR 0090](./.adr/0090-files-shows-images.md)) sends a
 picture's raw bytes, typed by `sniffImageType` from the bytes alone (PNG, JPEG, GIF, WebP, AVIF; no
 SVG), with `no-store` and a `default-src 'none'; sandbox` CSP, through the same `readFile` checks. `GET /api/fonts/<basename>` does not become a fifth such place: the request's name is **looked up** in the rows the operator's own
@@ -1028,7 +1038,11 @@ change, so the review is part of the merge, not an extra:
 1. Before: estimate the conflicts with `git merge-tree --write-tree dev upstream/vX.Y.Z`, read any
    policy document upstream added or changed (`CLAUDE.md`, `.adr/`, contributing guides), and list
    the API and contract changes with the fork code and tests (such as request spies) that consume
-   each.
+   each. When an upstream change (or an upstreamed PR returning in a release) narrows, replaces or
+   conflicts with behaviour this fork deliberately chose, do not silently adopt upstream's narrowing
+   to satisfy upstream's new test: surface the behavioural trade-off to the operator for a decision,
+   and when the fork keeps its own behaviour, record the divergence in `.adr/90XX` (or an addendum),
+   `CLAUDE.md` and `docs/philip/upstream-ledger.md`.
 2. During: invoke `resolving-merge-conflicts`; after resolving, build the three-diff bundle
    (`prepare_merge_review.py`) and review every conflicted file through its three diffs (base to
    fork, base to upstream, base to result) with a fresh reviewer agent that has no conversation

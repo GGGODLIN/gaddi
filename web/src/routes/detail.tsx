@@ -3,6 +3,7 @@ import { useLoaderData, useLocation, useParams } from "react-router";
 
 import { AgentChat } from "@/components/agent-chat";
 import { DeliverableLinks } from "@/components/deliverable-links";
+import { WalkyLogProvider } from "@/components/walky-log";
 import { FileLinksProvider, usePaneFileLinks } from "@/components/file-links";
 import { SubagentSheet } from "@/components/subagent-sheet";
 import { useDashPrefs } from "@/hooks/use-dash-prefs";
@@ -124,7 +125,7 @@ export function DetailRoute() {
   const herd = useMemo(() => [...root.agents, ...root.shellPanes], [root.agents, root.shellPanes]);
   const fileLinks = usePaneFileLinks({ paneId, scope, pane: agent, panes: herd, workspaces: root.workspaces });
 
-  return (
+  const view = (
     <DeliverableLinks paneId={paneId} scope={scope} dismissRef={dismissDeliverable}>
     <FileLinksProvider value={fileLinks}>
     <SubagentSheet paneId={paneId} scope={scope} dismissRef={dismissSubagent}>
@@ -176,4 +177,7 @@ export function DetailRoute() {
     </FileLinksProvider>
     </DeliverableLinks>
   );
+
+  // The pane's walky talky list, the cross-check behind the Chat card and the mirror's row style (lib/walky.ts).
+  return <WalkyLogProvider rows={pane.walky} reads={pane.walkyReads}>{view}</WalkyLogProvider>;
 }

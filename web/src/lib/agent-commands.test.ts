@@ -463,7 +463,8 @@ describe("suggestCommands (#458)", () => {
       "/cost",
     ]);
     expect(hits.indexOf("/to-compact-note")).toBeGreaterThan(hits.indexOf("/cost"));
-    // `/init` matches only via description ("conversation"/"context" rows come after command hits).
+    expect(hits.indexOf("/to-compact-note")).toBeLessThan(hits.indexOf("/export"));
+    // `/compact` matches via description ("Summarize the conversation to free up context; optional focus").
     const descOnly = suggestCommands("/summarize", all).map((c) => c.command);
     expect(descOnly).toContain("/compact");
   });

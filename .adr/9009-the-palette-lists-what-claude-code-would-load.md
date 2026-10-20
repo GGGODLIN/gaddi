@@ -75,3 +75,25 @@ does not separate built-in, personal and plugin commands, so neither does the pa
   reverses a premise upstream's maintainer chose.
 - Revisit if Claude Code publishes an enumerable command list a bridge can read without starting a
   session, which would replace the disk walk.
+
+## Addendum — 2026-10-20: upstream 1.23.0 (#475, #478) and the composer suggestion strip
+
+Status is unchanged: **Accepted**. Nothing above this line is rewritten.
+
+Upstream 1.23.0 accepted the Claude on-disk skill and command scan into the Agent palette (#478,
+`bridge/claude-commands.ts`), extended it to installed, enabled plugins (`plugin:` prefix), and gated
+`GET /api/pane/:id/claude-commands` behind `device-read`. At the same time, upstream merged the
+composer `/` and `$` suggestion strip (#475, `web/src/components/suggestion-strip.tsx`) with an
+explicit restriction: in upstream, `useClaudeCommands` runs only when the Agent palette opens
+(`drawer === "cmd"`), and the composer suggestion strip reads `commandsFor(agent, operatorCommands)`
+alone, never the on-disk skills.
+
+This fork keeps its original composer behaviour (`48ab2f9f`) as an intentional divergence:
+
+- **Typing `/` or `$` in the composer triggers on-disk discovery** (`suggestingLead` in
+  `web/src/components/composer.tsx`), without opening the Agent palette first.
+- **The composer suggestion strip reads `commands`** (`commandsFor(agent, operatorCommands,
+  claudeCommands)`), so personal/project skills, commands, enabled Claude plugins (`#478`), and the
+  seven other agents' on-disk skills ([ADR 9011](./9011-the-palette-lists-what-seven-more-agents-would-load.md))
+  are suggested inline above the input box.
+

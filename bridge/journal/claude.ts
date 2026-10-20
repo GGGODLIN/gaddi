@@ -46,7 +46,7 @@ import {
   type RowReducer,
 } from "./reduce.ts";
 import { asRecord, asText, probeTail, tokenCount } from "./cache-probe.ts";
-import { claudeResets, lastTwoTurns, modelChosenAfter } from "./claude-resets.ts";
+import { claudeResets, effortChosenAfter, lastTwoTurns, modelChosenAfter } from "./claude-resets.ts";
 // The shared guard on what an image block may become. It lives in pi's adapter because it also
 // resolves pi's `blob:sha256:` refs against pi's own store, and `bridge/server.ts` reaches for it
 // from there for the same reason. The rule it enforces is not pi's, though: a journal is an AGENT's
@@ -1073,20 +1073,55 @@ export class ClaudeTranscriptSource implements TranscriptSource {
    * and the candidate goes through {@link containedRealpath} against the parent log's directory.
    */
   async resolveSubagent(ref: AgentSessionRef, agentId: string): Promise<string | null> {
-    if (ref.kind !== "id" || !isSessionId(ref.value) || !isAgentId(agentId)) return null;
+    if (!isAgentId(agentId)) return null;
+    const found = await this.sessionStems(ref);
+    if (found === null) return null;
+    for (const stem of found.stems) {
+      const candidate = join(stem, "subagents", `agent-${agentId}.jsonl`);
+      if (!(await exists(candidate))) continue;
+      const real = await containedRealpath(candidate, stem);
+      if (real !== null && (await containedRealpath(real, found.root)) !== null) return real;
+    }
+    return null;
+  }
+
+  /**
+   * The real `<session-uuid>/subagents/` folders beside the session `ref` names, the same places
+   * {@link resolveSubagent} looks in, each contained in its session folder and in the root that
+   * built the parent log's path. Empty when the session has none. The subagent tracker
+   * (bridge/subagents.ts) lists these; it never builds a folder path of its own.
+   */
+  async subagentDirs(ref: AgentSessionRef): Promise<string[]> {
+    const found = await this.sessionStems(ref);
+    if (found === null) return [];
+    const dirs: string[] = [];
+    for (const stem of found.stems) {
+      const candidate = join(stem, "subagents");
+      if (!(await exists(candidate))) continue;
+      const real = await containedRealpath(candidate, stem);
+      if (real !== null && !dirs.includes(real) && (await containedRealpath(real, found.root)) !== null) dirs.push(real);
+    }
+    return dirs;
+  }
+
+  /**
+   * The session folders a subagent of `ref` can sit in: beside the log `resolve` lands on, then beside
+   * `<projectDir>/<sessionId>.jsonl` when a hand-over moved the log. Null for an unsafe ref or no log.
+   */
+  private async sessionStems(ref: AgentSessionRef): Promise<{ stems: string[]; root: string } | null> {
+    if (ref.kind !== "id" || !isSessionId(ref.value)) return null;
     const mainPath = await this.resolve(ref);
     if (mainPath === null) return null;
+    // The root that built the parent log's path is the outer bound (files.ts header): the session's
+    // own folder is the inner one, but a session folder that is itself a symlink moves that inner
+    // bound wherever it points, so the real path must also stay inside the building root.
+    const root = this.pathCache.get(ref.value)?.root;
+    if (root === undefined) return null;
     const projectDir = dirname(mainPath);
     const mainStem = mainPath.endsWith(".jsonl") ? mainPath.slice(0, -".jsonl".length) : null;
     const fallbackStem = join(projectDir, ref.value);
     const stems = mainStem !== null && mainStem !== fallbackStem ? [mainStem, fallbackStem] : [fallbackStem];
-    for (const stem of stems) {
-      const candidate = join(stem, "subagents", `agent-${agentId}.jsonl`);
-      if (!(await exists(candidate))) continue;
-      const real = await containedRealpath(candidate, stem);
-      if (real !== null) return real;
-    }
-    return null;
+    return { stems, root };
   }
 
   /**
@@ -1361,6 +1396,9 @@ async function claudeCacheProbe(
   if (model !== undefined) probe.model = model;
   const chosen = modelChosenAfter(turns);
   if (chosen !== undefined) probe.selectedModel = chosen;
+  // Claude Code stamps `effort` on each assistant record; an `/effort` since then wins (#463).
+  const effort = effortChosenAfter(turns) ?? asText(entry.effort);
+  if (effort !== undefined) probe.effort = effort;
   const resets = claudeResets(turns, tail.path);
   if (resets.length > 0) probe.resets = resets;
   return probe;
