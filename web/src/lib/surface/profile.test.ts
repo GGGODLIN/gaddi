@@ -265,6 +265,22 @@ describe("the codex profile (M56 spec 13)", () => {
     expect(omp.pointer("│ ❯ ⬢ All models          34 │  All available models")).toBeNull();
   });
 
+  it("muse: the slash palette inside the box names its entries, its pointer bold paint (MUSE-03, #519)", () => {
+    const list = loadProfiles().get("muse")!.idle.volatile.below.commandList!;
+    const commandOf = (source: string, text: string): string | null => new RegExp(source, "u").exec(text)?.groups?.["command"] ?? null;
+    expect(list).toMatchObject({ sides: ["inside"], pointerBold: true, argumentHint: true });
+    // 1.4.10 at 138 columns: the description in a second column; 1.4.8: a skill's tags before the gap.
+    expect(commandOf(list.entry, `  /bug${" ".repeat(51)}Report a bug to the team`)).toBe("/bug");
+    expect(commandOf(list.entry, "  /plan · built-in · default skill  On an explicit planning request")).toBe("/plan");
+    expect(commandOf(list.entry, "  /usage  Show session usage")).toBe("/usage");
+    expect(new RegExp(list.wrapped, "u").test("  ↓ 72 more")).toBe(true);
+    // Not a list row: the box's prompt, a dialog's pointed option, a wrapped prose row, the statusline.
+    expect(commandOf(list.entry, "❯ /model")).toBeNull();
+    expect(commandOf(list.entry, " ❯ 1. Yes")).toBeNull();
+    expect(commandOf(list.entry, "  some wrapped draft text")).toBeNull();
+    expect(commandOf(list.entry, "  muse-wonder-full-1.0 · xhigh · /tmp · YOLO")).toBeNull();
+  });
+
   it("codex: the rows above may lose text, and the hint rows under the box are named (lab, 0.163.0)", () => {
     const codex = parseProfile(rawCodex());
     expect(codex.idle.volatile.above.losesText).toBe(true);
@@ -683,6 +699,12 @@ describe("the frame schema of the interior walk (M56 spec 14)", () => {
     expect(omp.idle.inlineHint).toEqual({ fg: ["rgb(107,114,128)"] });
   });
 
+  it("muse (issue 510): the placeholder is named by its colour as well as its texts", () => {
+    const muse = parseProfile(parseJsonObject(readFileSync(join(PROFILES_DIR, "muse.json"), "utf8"))!);
+    expect(muse.idle.placeholders.fg).toEqual(["rgb(175,177,179)"]);
+    expect(muse.idle.placeholders.texts).toContain("/loop 10m <prompt> schedules a recurring prompt");
+  });
+
   it("omp 18.11 (issue 497): the prompt and continuation rows leave the box's right border out of the draft", () => {
     const omp = parseProfile(parseJsonObject(readFileSync(join(PROFILES_DIR, "omp.json"), "utf8"))!);
     const prompt = new RegExp(omp.idle.frame.prompt.pattern, "u");
@@ -770,6 +792,8 @@ describe("parseProfile names the failing field", () => {
     ["no command list side", ["idle", "volatile", "below", "commandList", "sides"], [], "idle.volatile.below.commandList.sides"],
     ["an unknown command list side", ["idle", "volatile", "below", "commandList", "sides"], ["under", "left"], "idle.volatile.below.commandList.sides[1]"],
     ["a command list side named twice", ["idle", "volatile", "below", "commandList", "sides"], ["under", "under"], "idle.volatile.below.commandList.sides[1]"],
+    ["a command list pointerBold that is no boolean", ["idle", "volatile", "below", "commandList", "pointerBold"], "yes", "idle.volatile.below.commandList.pointerBold"],
+    ["a command list argumentHint that is no boolean", ["idle", "volatile", "below", "commandList", "argumentHint"], "yes", "idle.volatile.below.commandList.argumentHint"],
     ["a command list footer that is no object", ["idle", "volatile", "below", "commandList", "footer"], "^\\S", "idle.volatile.below.commandList.footer"],
     ["a command list footer that matches a blank row", ["idle", "volatile", "below", "commandList", "footer"], { pattern: "^\\s*$", maxRows: 2 }, "idle.volatile.below.commandList.footer.pattern"],
     ["a command list footer of no rows", ["idle", "volatile", "below", "commandList", "footer"], { pattern: "^\\S", maxRows: 0 }, "idle.volatile.below.commandList.footer.maxRows"],
@@ -783,6 +807,11 @@ describe("parseProfile names the failing field", () => {
     ["an inline hint colour written as hex", ["idle", "inlineHint"], { fg: ["#6b7280"] }, "idle.inlineHint.fg[0]"],
     ["an inline hint colour out of range", ["idle", "inlineHint"], { fg: ["rgb(107,114,256)"] }, "idle.inlineHint.fg[0]"],
     ["an inline hint colour named twice", ["idle", "inlineHint"], { fg: ["rgb(1,2,3)", "rgb(1,2,3)"] }, "idle.inlineHint.fg[1]"],
+    ["placeholder colours that are no list", ["idle", "placeholders", "fg"], "rgb(175,177,179)", "idle.placeholders.fg"],
+    ["no placeholder colour", ["idle", "placeholders", "fg"], [], "idle.placeholders.fg"],
+    ["a placeholder colour written as hex", ["idle", "placeholders", "fg"], ["#afb1b3"], "idle.placeholders.fg[0]"],
+    ["a placeholder colour out of range", ["idle", "placeholders", "fg"], ["rgb(175,177,256)"], "idle.placeholders.fg[0]"],
+    ["a placeholder colour named twice", ["idle", "placeholders", "fg"], ["rgb(1,2,3)", "rgb(1,2,3)"], "idle.placeholders.fg[1]"],
     ["a hold on an event hooks does not list as an ask", ["hold", "event"], "Stop", "hold.event"],
     ["a hold tool event hooks does not list as an edge", ["hold", "toolEvent"], "PermissionRequest", "hold.toolEvent"],
     ["a hold limit at the hook timeout", ["hold", "limitMs"], 300000, "hold.limitMs"],

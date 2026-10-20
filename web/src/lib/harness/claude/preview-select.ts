@@ -16,7 +16,7 @@
 
 import type { StyledLine } from "../../blocks";
 import { displayWidth, widePieces } from "../../text-width";
-import { classifyFooter, isBlank, isRuleRow, lineText, questionRowText } from "./markers";
+import { classifyFooter, hasQuestionMark, isBlank, isRuleRow, lineText, questionRowText } from "./markers";
 import { parseOptionRow } from "./prompt-select";
 import { parseStepperLine } from "./wizard";
 import type { PreviewNote, PreviewOption, PreviewSelectModel } from "../preview-model";
@@ -77,12 +77,19 @@ function splitAtDisplayColumn(text: string, col: number) {
     }
     if (!piece.wide) {
       const take = col - width;
-      if (piece.text.length <= take) {
+      const pw = displayWidth(piece.text);
+      if (pw <= take) {
         left += piece.text;
-        width += piece.text.length;
+        width += pw;
       } else {
-        left += piece.text.slice(0, take);
-        right += piece.text.slice(take);
+        let cut = 0;
+        for (const ch of piece.text) {
+          const next = cut + ch.length;
+          if (displayWidth(piece.text.slice(0, next)) > take) break;
+          cut = next;
+        }
+        left += piece.text.slice(0, cut);
+        right += piece.text.slice(cut);
         width = col;
       }
       continue;
@@ -236,12 +243,27 @@ export function detectPreviewSelectRegion(lines: StyledLine[]): PreviewSelectReg
   while (preview.length > 0 && preview[0]!.length === 0) preview.shift();
   while (preview.length > 0 && preview[preview.length - 1]!.length === 0) preview.pop();
 
-  // 5. The question paragraph, and a wizard stepper above it, which makes this a wizard step
+  // 5. The question above the options (every dialog's prompt carries a "?"), bounded, stopping at
+  //    a rule so the search can't cross out of the dialog.
+  let questionIdx = -1;
+  for (let i = firstOpt - 1, seen = 0; i >= 0 && seen < DIALOG_SCAN_LIMIT; i--, seen++) {
+    const t = texts[i]!;
+    if (isRuleRow(texts, i)) break;
+    if (hasQuestionMark(t)) {
+      questionIdx = i;
+      break;
+    }
+  }
+
+  // 6. The question paragraph, and a wizard stepper above it, which makes this a wizard step
   //    (Left/Right navigation applies and the question joins the block region, as in the standard
   //    wizard grammar). A lone chip line (" ☐ Design") never parses as a stepper, so single-question
-  //    dialogs get steps: null. When neither a stepper nor a chip row tops the question, fall back
-  //    to the nearest "?" / "？" row before a rule.
-  const head = findPreviewQuestionHead(lines, texts, firstOpt);
+  //    dialogs get steps: null. Fork-only (ADR 9012): when the prompt ends without a question mark,
+  //    accept a stepper or unanswered `☐` chip that sits directly below the dialog's top rule.
+  const head =
+    questionIdx >= 0
+      ? readQuestionHead(lines, texts, questionIdx)
+      : readRuleAnchoredPreviewHead(lines, texts, firstOpt);
   if (!head) return null;
   const { steps } = head;
   const startLine = head.stepperIdx >= 0 ? head.stepperIdx : firstOpt;
@@ -274,6 +296,7 @@ export function detectPreviewSelectRegion(lines: StyledLine[]): PreviewSelectReg
 // A single-question dialog's chip row (" ☐ Design"): the first row of the dialog under its rule, which
 // tops the question the way a wizard's stepper does.
 const CHIP_ROW = /^[←→\s]*[☐☒☑✔✅]\s/u;
+const SINGLE_SELECT_CHIP = /^\s*☐\s+\S/u;
 
 /** What sits above a preview dialog's question paragraph. */
 interface QuestionHead {
@@ -285,28 +308,48 @@ interface QuestionHead {
 }
 
 /**
- * The row that tops the question paragraph above `firstOpt`, walking up: the wizard stepper (with
- * its chips) or the single-question chip row when present, else the dialog's rule or the row above
- * a "?" / "？" question line. Null when neither a stepper/chip nor a question mark sits inside the
- * dialog's top rule.
+ * The row that tops the question paragraph whose "?" sits on `questionIdx`, walking up: the wizard
+ * stepper (with its chips), the chip row, or the dialog's rule, whichever comes first. With none in
+ * reach, `top` is the row above the "?" row, so the paragraph starts there.
  */
-function findPreviewQuestionHead(
+function readQuestionHead(lines: StyledLine[], texts: string[], questionIdx: number): QuestionHead {
+  for (let i = questionIdx - 1, seen = 0; i >= 0 && seen < DIALOG_SCAN_LIMIT; i--, seen++) {
+    if (isRuleRow(texts, i)) return { top: i, stepperIdx: -1, steps: null };
+    const stepper = parseStepperLine(lines[i]!);
+    if (stepper) return { top: i, stepperIdx: i, steps: stepper.chips };
+    if (CHIP_ROW.test(texts[i]!)) return { top: i, stepperIdx: -1, steps: null };
+  }
+  return { top: questionIdx - 1, stepperIdx: -1, steps: null };
+}
+
+/**
+ * Fork-only (ADR 9012): when a preview dialog's question carries no question mark at all, locate its
+ * top rule within `DIALOG_SCAN_LIMIT` and accept a wizard stepper or unanswered `☐ <label>` chip only
+ * when it is the very first non-blank row under that rule (so a `✅` line inside the question body is
+ * never mistaken for the header chip).
+ */
+function readRuleAnchoredPreviewHead(
   lines: StyledLine[],
   texts: string[],
   firstOpt: number,
 ): QuestionHead | null {
-  let questionIdx = -1;
+  let ruleAt = -1;
   for (let i = firstOpt - 1, seen = 0; i >= 0 && seen < DIALOG_SCAN_LIMIT; i--, seen++) {
-    const t = texts[i]!;
     if (isRuleRow(texts, i)) {
-      return questionIdx >= 0 ? { top: i, stepperIdx: -1, steps: null } : null;
+      ruleAt = i;
+      break;
     }
+  }
+  if (ruleAt < 0) return null;
+  for (let i = ruleAt + 1; i < firstOpt; i++) {
+    const t = texts[i]!;
+    if (isBlank(t) || isRuleRow(texts, i)) continue;
     const stepper = parseStepperLine(lines[i]!);
     if (stepper) return { top: i, stepperIdx: i, steps: stepper.chips };
-    if (CHIP_ROW.test(t)) return { top: i, stepperIdx: -1, steps: null };
-    if (questionIdx < 0 && (t.includes("?") || t.includes("？"))) questionIdx = i;
+    if (SINGLE_SELECT_CHIP.test(t)) return { top: i, stepperIdx: -1, steps: null };
+    return null;
   }
-  return questionIdx >= 0 ? { top: questionIdx - 1, stepperIdx: -1, steps: null } : null;
+  return null;
 }
 
 /** Every non-blank row in [`from` … `to`), without the `│` gutter Claude paints down a question of

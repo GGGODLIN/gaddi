@@ -738,7 +738,12 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   [`PLAN_FEEDBACK_NOTES.md`](./web/src/lib/grammar/PLAN_FEEDBACK_NOTES.md); re-walk it before touching
   `harness/claude/prompt-select.ts` or `lib/prompt-action.ts`. AskUserQuestion's "Type something."
   row and a permission dialog's amend note are the same kind of field, found by position, modelled
-  with the `free-text` purpose, and never typed into (same notes file, 2026-09-26 section).
+  with the `free-text` purpose, and never typed into (same notes file, 2026-09-26 section). On a
+  single-question `select` or `preview-select` dialog whose first non-blank row under the top `─` rule
+  is `☐ <label>` (plus a live `❯` pointer on `select`, or a wizard stepper on `preview-select`), this
+  fork lifts the prompt even when it ends without a question mark
+  ([ADR 9012](./.adr/9012-a-chip-anchored-select-lifts-without-a-question-mark.md); upstream 1.23.1
+  `9ac77b3e` requires `hasQuestionMark`).
 - **The phone parses what the phone draws; the bridge parses only what it must act on alone.** Every
   pane grammar is client-side, under `web/src/lib/harness/`. The bridge holds one,
   `extractClaudeSessionName`, and only because the bridge itself consumes it, for a label that must

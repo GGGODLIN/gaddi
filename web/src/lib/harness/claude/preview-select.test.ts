@@ -496,9 +496,26 @@ describe("detectPreviewSelect — chip-anchored and fullwidth-question prompts (
     expect(detectPreviewSelectRegion(previewScreen({ questionRows: ["   "] }))).toBeNull();
   });
 
-  it("splits CJK option labels from the preview column by display width, not UTF-16 length", () => {
+  it("does not mistake a '✅ ' question line for the header chip", () => {
+    const text = fixtureText("claude--select-preview.txt").replaceAll(
+      "Which widget design should we use?",
+      "✅ Which widget design should we use?",
+    );
+    const model = detectPreviewSelect(splitLines(parseAnsi(text)));
+    expect(model).not.toBeNull();
+    expect(model!.question).toBe("✅ Which widget design should we use?");
+    expect(model!.options.map((o) => o.label)).toEqual(["Boxy", "Rounded", "Minimal"]);
+
+    const noQuestionMark = detectPreviewSelect(
+      previewScreen({ questionRows: ["✅ 已完成前置檢查", "請選擇要採用的版型："] }),
+    );
+    expect(noQuestionMark).not.toBeNull();
+    expect(noQuestionMark!.question).toBe("✅ 已完成前置檢查 請選擇要採用的版型：");
+  });
+
+  it("splits CJK and combining-mark option labels from the preview column by display width, not UTF-16 length", () => {
     // "❯ 1. 方案一" is 8 UTF-16 code units but 11 display columns (3 CJK chars × 2 cols).
-    // With Notes: at column 30, 19 spaces pad the row to column 30 where the preview box starts.
+    // "  2. Café" is 10 UTF-16 code units but 9 display columns (combining acute = 0 cols).
     const col = 30;
     const text = [
       "─".repeat(50),
@@ -507,7 +524,7 @@ describe("detectPreviewSelect — chip-anchored and fullwidth-question prompts (
       "請選擇接下來要採用的版型：",
       "",
       "❯ 1. 方案一" + " ".repeat(col - 11) + "┌──────┐",
-      "  2. 方案二" + " ".repeat(col - 11) + "│ ┌──┐ │",
+      "  2. Café" + " ".repeat(col - 9) + "│ ┌──┐ │",
       " ".repeat(col) + "│ │A1│ │",
       " ".repeat(col) + "└──────┘",
       "",
@@ -520,8 +537,21 @@ describe("detectPreviewSelect — chip-anchored and fullwidth-question prompts (
     ].join("\n");
     const region = detectPreviewSelectRegion(splitLines(parseAnsi(text)));
     expect(region).not.toBeNull();
-    expect(region!.model.options.map((o) => o.label)).toEqual(["方案一", "方案二"]);
+    expect(region!.model.options.map((o) => o.label)).toEqual(["方案一", "Café"]);
     expect(region!.model.preview).toEqual(["┌──────┐", "│ ┌──┐ │", "│ │A1│ │", "└──────┘"]);
   });
 });
 
+// Issue 543: the preview variant finds its question by the same question-mark test, so a question that
+// ends in a fullwidth "？" must still be read there too.
+describe("detectPreviewSelect: a question that ends in a fullwidth question mark", () => {
+  it("reads the question and the options of the single-question preview dialog", () => {
+    const text = fixtureText("claude--select-preview.txt");
+    expect(text).toContain("Which widget design should we use?");
+    const wide = text.replaceAll("Which widget design should we use?", "どのウィジェットのデザインにしますか？");
+    const model = detectPreviewSelect(splitLines(parseAnsi(wide)));
+    expect(model).not.toBeNull();
+    expect(model!.question).toBe("どのウィジェットのデザインにしますか？");
+    expect(model!.options.map((o) => o.label)).toEqual(["Boxy", "Rounded", "Minimal"]);
+  });
+});

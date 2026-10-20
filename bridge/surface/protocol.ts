@@ -2791,7 +2791,7 @@ export class SendProtocol {
     const framed = readCuesFor(rows, frame, idle);
     // The frameless reads never see a row the profile names as a footer row (the frame found it), nor
     // the typed command's own list over or under the box (ownCommandList): Enter there picks that command.
-    const ownList = ownCommandList(texts, frame, idle);
+    const ownList = ownCommandList(texts, frame, idle, rows);
     const bare = withoutNamedRows(withoutCommandList(rows, ownList), frame);
     // A notice over the box (`idle.notices`) is left out of every read as well: its keys act only on a
     // box holding one of its digits, so its key row is no prompt that holds the keys.
@@ -2824,7 +2824,7 @@ export class SendProtocol {
       notice,
       below: countBelow(texts, frame, (idle?.volatile.below.hints ?? []).map((source) => new RegExp(source, "u"))),
       otherScreen: otherScreenOf(texts, frame, idle?.volatile.below.otherScreens ?? []),
-      commandList: frame === null ? null : commandListAt(texts, frame, idle?.volatile.below.commandList),
+      commandList: frame === null ? null : commandListAt(texts, frame, idle?.volatile.below.commandList, rows),
       ownList,
       hash: shortHash(texts.join("\n")),
       // A running row's timer is masked (steadyRow): a ticking timer is not a screen the person did not see.
@@ -2860,11 +2860,13 @@ export class SendProtocol {
     if (first === null || second === null) throw new Ended("refused", "pane_gone", { detail: "The pane could not be read." });
     if (belowMovedAlone(first, second)) state.belowMoved = true;
     // With a frame only the box is compared: the volatile rows around it (a spinner, a timer, a token
-    // count, a statusline) move on their own while a turn runs. The box is compared with its faint
-    // runs dropped: a placeholder that changes on an empty box (Claude Code's "Press up to edit
-    // queued messages" going as the queue is taken) is not a moved box. With no frame the bottom
-    // window is compared with its running rows masked, for the same reason.
+    // count, a statusline) move on their own while a turn runs. A box that holds no draft compares
+    // by its two edges alone: its placeholder may appear, go or change between the reads (Claude
+    // Code's "Press up to edit queued messages" going as the queue is taken, a prompt suggestion
+    // painted in the placeholder's own colour) without the box having moved. With no frame the
+    // bottom window is compared with its running rows masked, for the same reason.
     const key = (snap: Snap): string => {
+      if (snap.frame !== null && boxText(snap.frame) === "") return `${snap.plain[snap.frame.top] ?? ""}\n${snap.plain[snap.frame.bottom] ?? ""}`;
       if (snap.frame !== null) return snap.plain.slice(snap.frame.top, snap.frame.bottom + 1).join("\n");
       const win = bottomWindow(snap.plain);
       return snap.plain.slice(win.first, win.end).join("\n");

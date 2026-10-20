@@ -130,7 +130,10 @@ export interface CommandListRows {
    * is the command as typed.
    */
   readonly lead?: string;
-  /** The sides of the box the harness draws the list on. Optional: both, under first. */
+  /**
+   * Where the harness draws the list at the box: under its bottom edge, over its top edge, or
+   * inside it, between the prompt row and the bottom edge. Optional: under and above, under first.
+   */
   readonly sides?: readonly CommandListSide[];
   /**
    * The harness's own rows that stay on screen under a list drawn under the box (a folder row and a
@@ -147,10 +150,24 @@ export interface CommandListRows {
    * only when no command of that name exists, so both spellings run the same entry. Optional.
    */
   readonly namespaces?: readonly string[];
+  /**
+   * The highlighted entry carries no pointer glyph: it is the entry-shaped row whose command run
+   * is painted bold, and `pointer` then names the same shape as `entry`. A read with no styled
+   * rows at hand finds no pointer on such a list, never a guessed one. Optional.
+   */
+  readonly pointerBold?: boolean;
+  /**
+   * The harness paints a bracketed argument hint (` [<model-id>]`) after a complete command in
+   * the box, in the bottom rule's colour, and takes it away the moment an argument is typed: it
+   * is no draft text, so the frame leaves it out of the draft it reads. Only a trailing bracketed
+   * run in that colour after one of the inside list's own entries is left out; a bracketed run
+   * typed in the draft's own colour stays. Optional.
+   */
+  readonly argumentHint?: boolean;
 }
 
 /** A side of the box a command list stands on. */
-export type CommandListSide = "under" | "above";
+export type CommandListSide = "under" | "above" | "inside";
 
 /** The rows that stay under a command list drawn under the box ({@link CommandListRows.footer}). */
 export interface CommandListFooter {
@@ -265,6 +282,13 @@ export interface Profile {
       readonly prefixes?: readonly string[];
       /** The SGR attribute the placeholder renders with (2 is faint). */
       readonly sgr: number;
+      /**
+       * The foreground colours the placeholder renders in, each as `rgb(r,g,b)`, for a harness that
+       * paints the text of an empty box (a tip, a prompt suggestion) in a grey of its own and no
+       * faint attribute. A hole whose every visible run wears one of these colours is a placeholder
+       * too; one run in any other colour is typed text. Optional.
+       */
+      readonly fg?: readonly string[];
     };
     readonly volatile: {
       readonly above: {
@@ -686,7 +710,11 @@ function commandList(value: JsonValue | undefined): CommandListRows {
   const withLead = node.lead === undefined ? base : { ...base, lead: commandListLead(node.lead, `${path}.lead`) };
   const withSides = node.sides === undefined ? withLead : { ...withLead, sides: commandListSides(node.sides, `${path}.sides`) };
   const withFooter = node.footer === undefined ? withSides : { ...withSides, footer: commandListFooter(node.footer, `${path}.footer`) };
-  return node.namespaces === undefined ? withFooter : { ...withFooter, namespaces: commandListNamespaces(node.namespaces, `${path}.namespaces`) };
+  const withNamespaces = node.namespaces === undefined ? withFooter : { ...withFooter, namespaces: commandListNamespaces(node.namespaces, `${path}.namespaces`) };
+  if (node.pointerBold !== undefined && node.pointerBold !== true && node.pointerBold !== false) fail(`${path}.pointerBold`, "must be true or false");
+  if (node.argumentHint !== undefined && node.argumentHint !== true && node.argumentHint !== false) fail(`${path}.argumentHint`, "must be true or false");
+  const withPointerBold = node.pointerBold === true ? { ...withNamespaces, pointerBold: true } : withNamespaces;
+  return node.argumentHint === true ? { ...withPointerBold, argumentHint: true } : withPointerBold;
 }
 
 /** `commandList.namespaces`: unique words with no space in them. */
@@ -707,12 +735,12 @@ function commandListLead(value: JsonValue, path: string): string {
 
 function commandListSides(value: JsonValue, path: string): CommandListSide[] {
   const sides = textList(value, path, 1);
-  const known: ReadonlySet<string> = new Set(["under", "above"]);
+  const known: ReadonlySet<string> = new Set(["under", "above", "inside"]);
   sides.forEach((side, i) => {
-    if (!known.has(side)) fail(`${path}[${String(i)}]`, 'must be "under" or "above"');
+    if (!known.has(side)) fail(`${path}[${String(i)}]`, 'must be "under", "above" or "inside"');
     if (sides.indexOf(side) !== i) fail(`${path}[${String(i)}]`, "is named twice");
   });
-  return sides.filter((side): side is CommandListSide => side === "under" || side === "above");
+  return sides.filter((side): side is CommandListSide => side === "under" || side === "above" || side === "inside");
 }
 
 function commandListFooter(value: JsonValue, path: string): CommandListFooter {
@@ -758,28 +786,34 @@ function parseNoticeGaps(value: JsonValue | undefined): string[] {
   });
 }
 
-/** `idle.inlineHint`: at least one foreground colour, each written `rgb(r,g,b)` as the ANSI reader gives it, none twice. */
-function parseInlineHint(value: JsonValue): InlineHint {
-  const path = "idle.inlineHint";
-  const node = object(value, path);
-  const fg = textList(field(node, "fg", path), `${path}.fg`, 1);
+/** A list of foreground colours: at least one, each written `rgb(r,g,b)` as the ANSI reader gives it, none twice. */
+function colourList(value: JsonValue, path: string): string[] {
+  const fg = textList(value, path, 1);
   fg.forEach((colour, i) => {
-    const at = `${path}.fg[${String(i)}]`;
+    const at = `${path}[${String(i)}]`;
     const parts = /^rgb\((\d{1,3}),(\d{1,3}),(\d{1,3})\)$/u.exec(colour);
     if (parts === null || parts.slice(1).some((part) => Number(part) > 255)) fail(at, "must read rgb(r,g,b) with each part 0 to 255");
     if (fg.indexOf(colour) !== i) fail(at, "is named twice");
   });
-  return { fg };
+  return fg;
 }
 
-/** `idle.placeholders`: the texts and the SGR attribute, and the prefixes only when the profile names them. */
+/** `idle.inlineHint`: the ghost text's foreground colours. */
+function parseInlineHint(value: JsonValue): InlineHint {
+  const path = "idle.inlineHint";
+  const node = object(value, path);
+  return { fg: colourList(field(node, "fg", path), `${path}.fg`) };
+}
+
+/** `idle.placeholders`: the texts and the SGR attribute, and the prefixes and colours only when the profile names them. */
 function parsePlaceholders(node: JsonObject): Profile["idle"]["placeholders"] {
   const base = {
     texts: textList(field(node, "texts", "idle.placeholders"), "idle.placeholders.texts", 0),
     sgr: whole(field(node, "sgr", "idle.placeholders"), "idle.placeholders.sgr", 0),
   };
-  if (node.prefixes === undefined) return base;
-  return { ...base, prefixes: textList(node.prefixes, "idle.placeholders.prefixes", 1) };
+  const withPrefixes = node.prefixes === undefined ? base : { ...base, prefixes: textList(node.prefixes, "idle.placeholders.prefixes", 1) };
+  if (node.fg === undefined) return withPrefixes;
+  return { ...withPrefixes, fg: colourList(node.fg, "idle.placeholders.fg") };
 }
 
 /** `idle.frame.trailer`: the last row inside the box, and the padding rows under it. */

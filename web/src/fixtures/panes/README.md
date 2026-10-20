@@ -746,6 +746,10 @@ is why a composer send used to be typed straight into it. Claimed by the last-re
 | `claude--menu-resume-picker--w60-first.txt` | 60 × 40, pointer on the first session: the footer wraps onto three rows and still reads whole. The weekly-limit banner above the dialog is kept |
 | `claude--menu-resume-picker--w80-second.txt` | 80 × 40, pointer on the second session |
 | `claude--menu-resume-picker--w120-all-sanitized.txt` | **Sanitized.** The Ctrl+A all-projects view at 120 × 40: title `Resume session (1 of 50)`, a `now` age on the first row, a project path on every meta row, and a `↓` scroll marker in the pointer column of the last visible row, which is still a session. The capture listed real paths and session titles from other repositories; each one outside `/tmp/resume-lab` was replaced by an invented string of the same length, so every row keeps its width |
+| `claude--v2303-menu-resume-picker--w119-first.txt` | **Sanitized.** The in-session `/resume` picker on Claude Code 2.1.303 at 119 × 40, captured 2026-10-19 with `herdr pane read --format ansi` from a throwaway lab tab (no client shows it, so Herdr kept it at 119 columns). The project has more sessions than fit, so the title counts the pointer, `Resume session (1 of 50)`, and the last visible row carries the `↓` marker. Pointer on the first of eight sessions. The project name, two issue references and two session titles were replaced by strings of the same length (`sample-workspace`, `sample/forge1#…`) |
+| `claude--v2303-menu-resume-picker--w119-second.txt` | The same picker after one Down: the pointer on the second session and the title `Resume session (2 of 50)`. Before 2026-10-19 the title was the card's question, so the verify read of a walked tap refused this screen `ask_mismatch`; `coreSignature` now blanks the pointer's place and keeps the total, and the card's title drops the counter. With `w119-first` it is a walk pair (`harness/walk-pairs.ts`) |
+| `claude--v2303-menu-resume-picker--w160-first.txt` | The same picker at 160 × 45, the incident's pane width, captured from a detached tmux session (`tmux new-session -x 160 -y 45`, `capture-pane -e -p`: 256-colour SGR, LF, one trailing blank row). It lists the lab's own cancelled session (`cd89bf4c`, untitled) first, and ten sessions fit. Same sanitization |
+| `claude--v2303-menu-resume-picker--w160-second.txt` | The 160-column picker after one Down: `Resume session (2 of 50)`, the pointer on the second session. A walk pair with `w160-first`, and the screen of the bridge's `ask.test.ts` incident case |
 
 ## Slash-autocomplete corpus (captured 2026-09-01, Claude Code v2.1.257, live pane)
 
@@ -1144,6 +1148,54 @@ which fails the day agy stops claiming it.
 | Fixture | State / what's in it | Grammar state |
 |---|---|---|
 | `claude--v2291-permission-bash-subagent.txt` | A subagent's Bash permission, pointer on `1. Yes`. Lifts `prompt-select` (`permission`, `Do you want to proceed?`, Yes `1`, No `2`) from the `─` edge, with the header, the description, the three command rows and the warning as its subject, no `╌` row and no `│` gutter | `blocked` |
+
+## Claude Code 2.1.303 background agent permission with a tall command (reconstructed 2026-10-19)
+
+**Not a capture.** The incident of 2026-10-19 on the dev lane (instance `next`, 8788, a 160 x 45
+Herdr pane): a background general-purpose agent ran a Bash command that tripped Claude Code's
+dangerous-rm prompt. The phone showed `PERMISSION REQUIRED / Do you want to proceed? / 1 Yes / 2 No`
+with no subject, and both taps were refused `no_plan` with no key sent. The dialog was gone from
+the pane before anyone read it, so the screen is rebuilt: the command and its description are the
+agent transcript's own, byte for byte; the layout (the header, the `╌` fence around the command, the
+`│` gutter, the warning row, the bare `1. Yes` / `2. No` rows and the background-agents footer) and
+its ANSI are those of the 2.1.291 capture above, checked against the phone's screenshot of the live
+screen. The command is word-wrapped at the pane width minus four; at 160 columns the one long `sed`
+row breaks after `python3`, as on the screenshot. The transcript rows above the dialog are a neutral
+stand-in. One sanitization pass, length-preserving: `/var/home/<user>/projects/collie-workspace` to
+`/var/home/devel/projects/sample-workspace`.
+
+The command is 26 rows at 160 columns, so the dialog's `─` edge sits 33 rows above its question,
+past the 30-row bound (REGION_SCAN_WINDOW) the subject scan took. The rows inside the `╌` fence now
+count as one row against it. The 80-column file is the same screen re-wrapped; the dialog is then 47
+rows tall and fits only a pane of 50 rows or more, so on a real 80 x 45 pane its edge scrolls off and
+the ask stays refused, which is correct.
+
+Both name Claude nowhere, so agy's grammar claims them, the same named exception as the 2.1.291
+file (`KNOWN_FOREIGN_CLAIMS` in `harness/agy/agy.test.ts`).
+
+| Fixture | State / what's in it | Grammar state |
+|---|---|---|
+| `claude--v2303-permission-bash-bg-agent-rm--w160.txt` | A background agent's Bash permission, pointer on `1. Yes`, a 26-row command and the warning `Dangerous rm operation on possibly-empty variable path: $D/*.wav in ...`. Lifts `prompt-select` (`permission`, `Do you want to proceed?`, Yes `1`, No `2`) from the `─` edge, with the header, the description, the command and the warning as its subject; the ask has a region, so a tap sends its digit | `blocked` |
+| `claude--v2303-permission-bash-bg-agent-rm--w80.txt` | The same screen at 80 columns: a 33-row command and a three-row warning. Lifts the same way | `blocked` |
+
+## Claude Code 2.1.296 question that ends in a fullwidth question mark (reporter's capture, issue 543, 2026-10-20)
+
+A Japanese AskUserQuestion on Claude Code 2.1.296 (Herdr 0.9.0, macOS), captured by the reporter with
+`--source visible --format ansi` while the dialog was on screen and attached to the issue. The
+reporter replaced the conversation text with neutral text and kept the dialog layout: the stepper chip,
+a two-line question that ends in `？` (U+FF1F), four numbered options with their descriptions, the
+`5. Type something.` row, a rule, `6. Chat about this` and the footer. The file is the attachment
+byte for byte (150 columns, the width of its rules). It names no personal path or name, so nothing
+was changed.
+
+The reader looked for an ASCII `?` only, so the question was never found and the dialog stayed a raw
+block. It now tests with `hasQuestionMark` (`lib/blocks.ts`), which also takes `？` and the Arabic `؟`.
+agy's grammar claims the file too (its fallback takes the row nearest the options as the question),
+the same named exception as the 2.1.291 file (`KNOWN_FOREIGN_CLAIMS` in `harness/agy/agy.test.ts`).
+
+| Fixture | State / what's in it | Grammar state |
+|---|---|---|
+| `claude--v2296-question-fullwidth--w150.txt` | A Japanese one-question AskUserQuestion, pointer on `1.`, the question `...どこを中心にレビューしますか？` on the second of two `│` rows. Lifts `prompt-select` (`select`, five options with Enter after the digit, `5. Type something.` dropped, `Chat about this` keeping `6`) | `blocked` |
 
 ## Claude Code 2.1.296 closing rule (captured 2026-10-12, herdr 0.9.3, throwaway Herdr session)
 
@@ -1981,6 +2033,9 @@ signature.
 | `muse--done.txt` | Completed turn: `◆ Ran command …`, `◆` summary, `◆ Worked for 1m 06s`, idle composer holding the `Start a message with ! to run a shell command yourself` placeholder (grey, not a draft) | `idle` |
 | `muse--tip-loop.txt` | The same idle composer holding the rotated `/loop 10m <prompt> schedules a recurring prompt` placeholder tip — the tip rotates, and an unlisted one reads as a ghost draft (#274) | `idle` |
 | `muse--tip-paste.txt` | The same idle composer holding the `Paste an image with Ctrl+V — file paths and URLs work too` placeholder tip — the tip rotates per context (#278) | `idle` |
+| `muse--prompt-hint.txt` | Derived from `muse--tip-loop.txt`: the tip text is replaced by a model's prompt suggestion (`Run the test suite and fix any failures`), in the same placeholder colour and no other byte changed (issue 510, derived, not a capture). No text list names a suggestion, so the box reads free by its colour alone (`idle.placeholders.fg`) | `idle` |
+| `muse--prompt-hint-1410.txt` | Live Muse 1.4.10 capture with `tui.prompt_hint_enabled`: the empty composer holds `Press ? on an empty composer to see keyboard shortcuts` in truecolour `175,177,179` with no faint attribute. This confirms the colour inferred for the derived capture | `idle` |
+| `muse--prompt-hint-typed-1410.txt` | The same live box after typing `hel`: the hint disappears entirely and the typed run is truecolour `31,35,40`, so it reads as a draft | `idle` |
 | `muse--quoted-dialogs-bare.txt` | Model-printed facsimiles (approval + single-select + review) as the last reply above a bare box — the model paraphrased the review pointer (`│`), so no detector matches; nothing lifts and the reply stays allowed (#260) | `idle` |
 | `muse--approval-ls.txt` | `Would you like to run the following command?`, `$` + `Stage 1/1` + `Current argv:` subject, `› 1. Allow this stage once (y)` / `2. Always allow … (p)` / `3. Abort … (esc)`. No footer row. Digit `1` live-probed: approves alone | `blocked` |
 | `muse--approval-ls-moved.txt` | Same dialog after one `Down` (`›` on option 2) | `blocked` |
@@ -2014,6 +2069,7 @@ signature.
 | `muse--palette-hint-moved.txt` | Same, after Down: the bold has moved to `/resume-claude`, so the read must not verify `/resume` | `idle` |
 | `muse--palette-typed-arg.txt` | `/model x` typed: the hint is gone and `x` wears the typed-text colour. The read is `/model x` | `idle` |
 | `muse--palette-skill.txt` | `/plan` typed: its one suggestion is a built-in skill row, `  /plan · built-in · default skill  On an explicit…`, tags between the command and the gap. The read is `/plan`. Visible-screen read 2026-10-15, cwd swapped for the sandbox path and model label renamed `mini` | `idle` |
+| `muse--slash-palette-1410.txt` | Bare `/` on Muse Code 1.4.10 (byte-faithful live capture, 2026-10-18, #519): seven command rows (`/bug` pointed, bold) and `↓ 72 more` painted inside the box between the prompt row and the bottom rule. The profile's inside `commandList` reads the palette pointing at `/bug`, so a bare `/` is no own list and the screen stays not-free; with the pointed command typed in full it reads as the typed command's own list (MUSE-03) | `idle` |
 
 **Nothing was approved blindly.** The one approved command was `ls -la` on the
 empty sandbox (output verified); the trust prompt covered a throwaway `/tmp`

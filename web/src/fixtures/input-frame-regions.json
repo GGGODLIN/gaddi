@@ -838,6 +838,10 @@
   "frame": null
  },
  {
+  "fixture": "claude--v2296-question-fullwidth--w150.txt",
+  "frame": null
+ },
+ {
   "fixture": "claude--v2299-ask-under-long-task-list.txt",
   "frame": null
  },
@@ -1388,6 +1392,30 @@
    },
    "footer": null
   }
+ },
+ {
+  "fixture": "claude--v2303-menu-resume-picker--w119-first.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2303-menu-resume-picker--w119-second.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2303-menu-resume-picker--w160-first.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2303-menu-resume-picker--w160-second.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2303-permission-bash-bg-agent-rm--w160.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2303-permission-bash-bg-agent-rm--w80.txt",
+  "frame": null
  },
  {
   "fixture": "claude--v2303-titled-edge-draft--w160.txt",

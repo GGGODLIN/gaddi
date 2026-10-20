@@ -936,6 +936,41 @@
    "version": "2.1.302",
    "state": "running"
   },
+  "claude--v2303-menu-resume-picker--w119-first.txt": {
+   "harness": "claude",
+   "version": "2.1.303",
+   "state": "dialog"
+  },
+  "claude--v2303-menu-resume-picker--w119-second.txt": {
+   "harness": "claude",
+   "version": "2.1.303",
+   "state": "dialog"
+  },
+  "claude--v2303-menu-resume-picker--w160-first.txt": {
+   "harness": "claude",
+   "version": "2.1.303",
+   "state": "dialog"
+  },
+  "claude--v2303-menu-resume-picker--w160-second.txt": {
+   "harness": "claude",
+   "version": "2.1.303",
+   "state": "dialog"
+  },
+  "claude--v2303-permission-bash-bg-agent-rm--w160.txt": {
+   "harness": "claude",
+   "version": "2.1.303",
+   "state": "dialog"
+  },
+  "claude--v2303-permission-bash-bg-agent-rm--w80.txt": {
+   "harness": "claude",
+   "version": "2.1.303",
+   "state": "dialog"
+  },
+  "claude--v2296-question-fullwidth--w150.txt": {
+   "harness": "claude",
+   "version": "2.1.296",
+   "state": "dialog"
+  },
   "claude--v2302-heads-up-above-box--w142.txt": {
    "harness": "claude",
    "version": "2.1.302",
@@ -2606,6 +2641,21 @@
    "version": "1.4.8",
    "state": "popup"
   },
+  "muse--prompt-hint-1410.txt": {
+   "harness": "muse",
+   "version": "1.4.10",
+   "state": "idle"
+  },
+  "muse--prompt-hint-typed-1410.txt": {
+   "harness": "muse",
+   "version": "1.4.10",
+   "state": "draft"
+  },
+  "muse--prompt-hint.txt": {
+   "harness": "muse",
+   "version": "unversioned",
+   "state": "idle"
+  },
   "muse--quoted-dialogs-bare.txt": {
    "harness": "muse",
    "version": "unversioned",
@@ -2620,6 +2670,11 @@
    "harness": "muse",
    "version": "1.4.8",
    "state": "dialog"
+  },
+  "muse--slash-palette-1410.txt": {
+   "harness": "muse",
+   "version": "1.4.10",
+   "state": "popup"
   },
   "muse--tasks-popup-approval.txt": {
    "harness": "muse",
@@ -2639,12 +2694,12 @@
   "muse--tip-loop.txt": {
    "harness": "muse",
    "version": "unversioned",
-   "state": "other"
+   "state": "idle"
   },
   "muse--tip-paste.txt": {
    "harness": "muse",
    "version": "unversioned",
-   "state": "draft"
+   "state": "idle"
   },
   "muse--trust-prompt-147.txt": {
    "harness": "muse",
