@@ -7,6 +7,8 @@ import { splitLines, type StyledLine } from "../../blocks";
 import { detectPromptSelect, detectPromptSelectRegion, type PromptFamily } from "./prompt-select";
 import { lineText } from "./markers";
 import { promptsEqual, promptsSameIdentity } from "../prompt-model";
+import { DIALOG_CONTRACT } from "../dialog-contract";
+import { verifyPromptBinding } from "../../../../../bridge/prompt-binding.ts";
 
 // Anchored on this file's own directory (NOT `new URL(..., import.meta.url)`, which Vite statically
 // rewrites into a root-relative asset path) so the fixtures resolve regardless of the run cwd.
@@ -669,3 +671,129 @@ describe("detectPromptSelect — the unnumbered folder-trust prompt", () => {
     expect(promptsEqual(here, here)).toBe(true);
   });
 });
+
+describe("detectPromptSelect — chip-anchored and fullwidth-question prompts (#543)", () => {
+  function selectRaw(opts: {
+    chip?: string | null;
+    questionRows: string[];
+    firstOption?: string;
+    footer?: string;
+  }): string {
+    const lines = [
+      "❯ 変更をレビューしたい",
+      "",
+      "─".repeat(80),
+      ...(opts.chip === null ? [] : [opts.chip ?? " \u001b[38;2;0;0;0m\u001b[48;2;177;185;249m ☐ レビュー対象 \u001b[0m"]),
+      "",
+      ...opts.questionRows,
+      "",
+      opts.firstOption ?? "❯ 1. アプリコード (推奨)",
+      "     サーバー側の変更とテストをレビューします。",
+      "  2. インフラスクリプト",
+      "     デプロイ用スクリプトと設定を見ます。",
+      "  3. Type something.",
+      "─".repeat(80),
+      "  4. Chat about this",
+      "",
+      opts.footer ?? "Enter to select · ↑/↓ to navigate · Esc to cancel",
+    ];
+    return lines.join("\n");
+  }
+
+  function selectScreen(opts: {
+    chip?: string | null;
+    questionRows: string[];
+    firstOption?: string;
+    footer?: string;
+  }): StyledLine[] {
+    return splitLines(parseAnsi(selectRaw(opts)));
+  }
+
+  it("lifts a question ending in a fullwidth '？' (U+FF1F) and binds its raw region", () => {
+    const raw = selectRaw({
+      questionRows: [
+        " │ 共有された変更 (12 ファイル、+340/-15) は 2026-10-13 にマージ済みで、本番にもデプロイ済みです。",
+        " │ どこを中心にレビューしますか？",
+      ],
+    });
+    const region = detectPromptSelectRegion(splitLines(parseAnsi(raw)));
+    expect(region).not.toBeNull();
+    expect(region!.model.family).toBe("select");
+    expect(region!.model.question).toBe(
+      "共有された変更 (12 ファイル、+340/-15) は 2026-10-13 にマージ済みで、本番にもデプロイ済みです。 どこを中心にレビューしますか？",
+    );
+    expect(region!.model.options.map((o) => o.label)).toEqual([
+      "アプリコード (推奨)",
+      "インフラスクリプト",
+      "Chat about this",
+    ]);
+    expect(verifyPromptBinding(raw, DIALOG_CONTRACT["prompt-select"].region(region!.model))).toEqual({ ok: true });
+  });
+
+  it("lifts a chip-headed select question that ends in a colon or period without any question mark", () => {
+    const raw = selectRaw({
+      chip: " ☐ 接下來的方向 ",
+      questionRows: [" │ 請選擇接下來想做的項目："],
+    });
+    const region = detectPromptSelectRegion(splitLines(parseAnsi(raw)));
+    expect(region).not.toBeNull();
+    expect(region!.model.question).toBe("請選擇接下來想做的項目：");
+    expect(verifyPromptBinding(raw, DIALOG_CONTRACT["prompt-select"].region(region!.model))).toEqual({ ok: true });
+  });
+
+  it("keeps the full chip-bounded question across >6 wrapped rows and URLs with '?'", () => {
+    const makeNineLine = (envLabel: string) =>
+      selectScreen({
+        chip: " ☐ Scope ",
+        questionRows: [
+          ` │ Target environment: ${envLabel}`,
+          " │ Reference URL: https://example.com/review?mode=full&tab=1",
+          "",
+          " │ Line 3 of the context paragraph",
+          " │ Line 4 of the context paragraph",
+          " │ Line 5 of the context paragraph",
+          " │ Line 6 of the context paragraph",
+          " │ Line 7 of the context paragraph",
+          " │ どの範囲をレビューしますか？",
+        ],
+      });
+    const prod = detectPromptSelect(makeNineLine("production"));
+    const staging = detectPromptSelect(makeNineLine("staging"));
+    expect(prod).not.toBeNull();
+    expect(prod!.question).toContain("Target environment: production");
+    expect(prod!.question).toContain("https://example.com/review?mode=full&tab=1");
+    expect(prod!.question).toContain("どの範囲をレビューしますか？");
+    expect(prod!.coreSignature).not.toBe(staging!.coreSignature);
+  });
+
+  it("lifts a chip-less dialog when its question carries a fullwidth '？'", () => {
+    const model = detectPromptSelect(
+      selectScreen({
+        chip: null,
+        questionRows: ["請問要套用哪一個設定？"],
+      }),
+    );
+    expect(model).not.toBeNull();
+    expect(model!.question).toBe("請問要套用哪一個設定？");
+  });
+
+  it("declines a chip-headed block with an empty question or with no question mark and no live pointer", () => {
+    expect(
+      detectPromptSelect(
+        selectScreen({
+          questionRows: ["   ", " │   "],
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      detectPromptSelect(
+        selectScreen({
+          questionRows: ["請選擇步驟："],
+          firstOption: "  1. Back up",
+          footer: "Example: Enter to select",
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
