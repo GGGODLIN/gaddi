@@ -903,4 +903,15 @@ describe("detectPromptSelect: a question that ends in a fullwidth question mark"
     const withoutChip = withChip.replaceAll("☐", " ");
     expect(detectPromptSelect(splitLines(parseAnsi(withoutChip)))).toBeNull();
   });
+
+  it("a chip header that ends in a question mark is not read as the question", () => {
+    const text = fixtureText(NAME)
+      .replace(" ☐ レビュー対象 ", " ☐ レビュー対象？ ")
+      .replaceAll("どこを中心にレビューしますか？", "どこを中心にレビューするか選んでください。");
+    const model = detectPromptSelect(splitLines(parseAnsi(text)));
+    expect(model).not.toBeNull();
+    expect(model!.question).toBe(
+      "共有された変更 (12 ファイル、+340/-15) は 2026-10-13 にマージ済みで、本番にもデプロイ済みです。 どこを中心にレビューするか選んでください。",
+    );
+  });
 });

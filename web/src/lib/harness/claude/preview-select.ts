@@ -62,9 +62,11 @@ function indentOf(text: string): number {
 }
 
 /**
- * Split `text` at terminal display column `col` (`left` occupies columns `< col`, `right` starts at
- * `>= col`). A double-width CJK/emoji cluster on the left takes two display columns for one UTF-16
- * character, so `.slice(0, col)` would reach into the preview box on the right.
+ * Split `text` at terminal display column `col` (`left` occupies up to `col` display columns, `right`
+ * holds the remainder). Claude Code aligns the preview box at a fixed display column (`noteCol`);
+ * slicing by UTF-16 code units (`text.slice(0, noteCol)`) misaligns the split whenever the left option
+ * label contains double-width CJK characters (cutting right into the preview box) or zero-width
+ * combining marks (cutting left and leaving leading spaces on `right`).
  */
 function splitAtDisplayColumn(text: string, col: number) {
   let left = "";
@@ -243,28 +245,24 @@ export function detectPreviewSelectRegion(lines: StyledLine[]): PreviewSelectReg
   while (preview.length > 0 && preview[0]!.length === 0) preview.shift();
   while (preview.length > 0 && preview[preview.length - 1]!.length === 0) preview.pop();
 
-  // 5. The question above the options (every dialog's prompt carries a "?"), bounded, stopping at
-  //    a rule so the search can't cross out of the dialog.
-  let questionIdx = -1;
-  for (let i = firstOpt - 1, seen = 0; i >= 0 && seen < DIALOG_SCAN_LIMIT; i--, seen++) {
-    const t = texts[i]!;
-    if (isRuleRow(texts, i)) break;
-    if (hasQuestionMark(t)) {
-      questionIdx = i;
-      break;
+  // 5. The question head above the options: when the dialog's top rule is within reach and its first
+  //    non-blank row is a wizard stepper or a single-question `☐` chip, that header tops the question
+  //    directly (with or without a "?" in the prompt, and without reading a "?"-ending chip into the
+  //    question). Otherwise fall back to the two-stage `questionIdx` + `readQuestionHead` scan.
+  let head = readRuleAnchoredPreviewHead(lines, texts, firstOpt);
+  if (!head) {
+    let questionIdx = -1;
+    for (let i = firstOpt - 1, seen = 0; i >= 0 && seen < DIALOG_SCAN_LIMIT; i--, seen++) {
+      const t = texts[i]!;
+      if (isRuleRow(texts, i)) break;
+      if (hasQuestionMark(t)) {
+        questionIdx = i;
+        break;
+      }
     }
+    if (questionIdx < 0) return null;
+    head = readQuestionHead(lines, texts, questionIdx);
   }
-
-  // 6. The question paragraph, and a wizard stepper above it, which makes this a wizard step
-  //    (Left/Right navigation applies and the question joins the block region, as in the standard
-  //    wizard grammar). A lone chip line (" ☐ Design") never parses as a stepper, so single-question
-  //    dialogs get steps: null. Fork-only (ADR 9012): when the prompt ends without a question mark,
-  //    accept a stepper or unanswered `☐` chip that sits directly below the dialog's top rule.
-  const head =
-    questionIdx >= 0
-      ? readQuestionHead(lines, texts, questionIdx)
-      : readRuleAnchoredPreviewHead(lines, texts, firstOpt);
-  if (!head) return null;
   const { steps } = head;
   const startLine = head.stepperIdx >= 0 ? head.stepperIdx : firstOpt;
   const question = joinQuestionRows(texts, head.top + 1, firstOpt);
@@ -357,7 +355,9 @@ function readRuleAnchoredPreviewHead(
 function joinQuestionRows(texts: string[], from: number, to: number): string {
   const parts: string[] = [];
   for (let i = from; i < to; i++) {
-    if (!isBlank(texts[i]!)) parts.push(questionRowText(texts[i]!));
+    if (isBlank(texts[i]!)) continue;
+    const text = questionRowText(texts[i]!);
+    if (text !== "") parts.push(text);
   }
   return parts.join(" ");
 }
@@ -365,9 +365,10 @@ function joinQuestionRows(texts: string[], from: number, to: number): string {
 /**
  * The dialog's pointer/note-independent CORE SIGNATURE (see `PreviewSelectModel.coreSignature`): the
  * head lines [firstOpt − LOOKBACK … firstOpt) — the stepper/chip header, the question, and any
- * subject/preamble above the options — joined with each option row's LEFT column (`slice(0, noteCol)`,
- * `❯` normalised to a space so our own pointer move doesn't perturb it). Pure of the buffer's absolute
- * offset, so the frozen model and a fresh re-derivation of the SAME dialog produce byte-equal strings.
+ * subject/preamble above the options — joined with each option row's LEFT display column
+ * (`splitAtDisplayColumn(row, noteCol).left`, `❯` normalised to a space so our own pointer move
+ * doesn't perturb it). Pure of the buffer's absolute offset, so the frozen model and a fresh
+ * re-derivation of the SAME dialog produce byte-equal strings.
  */
 function computeCoreSignature(
   texts: string[],
