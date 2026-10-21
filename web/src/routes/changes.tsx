@@ -25,7 +25,6 @@ import {
   ChangesListSkeleton,
   ChangesNoMatch,
   ChangesTree,
-  diffRowKeys,
   DiffView,
   folderKey,
   StatusLetter,
@@ -39,7 +38,7 @@ import { STRIP_TAP_TARGET } from "@/components/ui/labelled-strip";
 import { Notice } from "@/components/ui/notice";
 import { SectionLabel } from "@/components/ui/section-label";
 import { Segmented } from "@/components/ui/segmented";
-import { BottomSheet } from "@/components/ui/sheet";
+import { BottomSheet, TALL_SHEET_CLEARANCE } from "@/components/ui/sheet";
 import { useDashPrefs } from "@/hooks/use-dash-prefs";
 import { handOf, useDisplayPrefs, type Hand } from "@/hooks/use-display-prefs";
 import { useKeyboardOpen } from "@/hooks/use-keyboard";
@@ -74,6 +73,8 @@ import { keepChangesList, keptChangesList } from "@/lib/changes-list-cache";
 import { unavailableKey } from "@/lib/changes-reason";
 import {
   captureDiffLines,
+  diffCommentRowKey,
+  displayDiffPath,
   formatDiffLineLabel,
   stageDiffCommentsToDraft,
   type DiffCodeRow,
@@ -92,10 +93,13 @@ import {
   changesCommitPath,
   changesPath,
   changesSettingsPath,
+  decodedPath,
   filesParent,
   filesPath,
+  historyIdx,
   pairedDevicesPath,
   panePath,
+  pathOnly,
   readFrom,
   readPreviewAsked,
   readViaLink,
@@ -108,6 +112,9 @@ import {
   type TreeUpLanding,
   type FilesAt,
 } from "@/lib/nav";
+import { markInAppBack } from "@/lib/nav-entry";
+import { navTrail } from "@/lib/nav-trail";
+import { useHoldReload } from "@/lib/reload-guard";
 import { useRootData } from "@/lib/route-data";
 import { useScope } from "@/lib/session";
 import { shareEqual } from "@/lib/share-equal";
@@ -1017,58 +1024,106 @@ function ChangesScreen() {
     </span>
   );
 
-  // ── Batch diff comments (1a + 2a + 3.1) ──────────────────────────────────
-  const [selection, setSelection] = useState<{ fileKey: string; keys: string[] }>({
+  // ── Batch diff comments ──────────────────────────────────────────────────
+  const [selection, setSelection] = useState<{ fileKey: string; diffText: string; keys: string[] }>({
     fileKey: "",
+    diffText: "",
     keys: [],
   });
   const [comments, setComments] = useState<DiffComment[]>([]);
   const nextCommentId = useRef(1);
-  const [commentSheet, setCommentSheet] = useState<{ mode: "new" } | { mode: "edit"; id: number } | null>(null);
+  const [commentSheet, setCommentSheet] = useState<
+    | {
+        mode: "new";
+        fileKey: string;
+        repo: string;
+        path: string;
+        rowKeys: readonly string[];
+        lineLabel: string;
+        linesText: readonly string[];
+      }
+    | { mode: "edit"; id: number }
+    | null
+  >(null);
   const [commentText, setCommentText] = useState("");
   const [basketOpen, setBasketOpen] = useState(false);
   const [chosenPaneId, setChosenPaneId] = useState<string>("");
 
-  const canComment = target.kind === "pane" || headPanes.length > 0;
+  useHoldReload("changes-comments", comments.length > 0 || commentSheet !== null);
+
+  const askingAgentPane =
+    target.kind === "pane" ? root.agents.find((a) => a.paneId === paneId) : undefined;
+  const spaceAgentPanes = useMemo(
+    () =>
+      root.agents.filter(
+        (p) => p.workspaceId === headWorkspace && p.host === (space?.host ?? pane?.host),
+      ),
+    [root.agents, headWorkspace, space?.host, pane?.host],
+  );
+  const canComment = target.kind === "pane" ? askingAgentPane !== undefined : spaceAgentPanes.length > 0;
   const targetPane =
     target.kind === "pane"
-      ? (pane ?? { paneId })
-      : (headPanes.find((p) => p.paneId === chosenPaneId) ?? headPanes[0]);
+      ? askingAgentPane
+      : chosenPaneId !== ""
+        ? spaceAgentPanes.find((p) => p.paneId === chosenPaneId)
+        : spaceAgentPanes[0];
   const targetAgentName =
-    targetPane && "agent" in targetPane && targetPane.agent
-      ? targetPane.agent
-      : (targetPane && "paneLabel" in targetPane && targetPane.paneLabel
-          ? targetPane.paneLabel
-          : (targetPane?.paneId ?? paneId));
+    targetPane?.agent ?? targetPane?.paneLabel ?? targetPane?.paneId ?? (chosenPaneId || paneId);
 
+  const currentDiffText = shownDiff && !shownDiff.binary && !shownDiff.directory ? shownDiff.diff : "";
   const currentParsed = useMemo(
-    () => (shownDiff && !shownDiff.binary && !shownDiff.directory ? parseUnifiedDiff(shownDiff.diff) : null),
-    [shownDiff],
+    () => (currentDiffText !== "" ? parseUnifiedDiff(currentDiffText) : null),
+    [currentDiffText],
   );
-  const currentRowKeys = useMemo(
-    () => (currentParsed ? diffRowKeys(currentParsed.rows) : []),
+  const currentCommentKeys = useMemo(
+    () =>
+      currentParsed
+        ? currentParsed.rows.map((row) =>
+            row.kind === "context" || row.kind === "add" || row.kind === "del"
+              ? diffCommentRowKey(row)
+              : null,
+          )
+        : [],
     [currentParsed],
   );
+  const currentCommentKeyOrder = useMemo(
+    () => currentCommentKeys.filter((k): k is string => k !== null),
+    [currentCommentKeys],
+  );
+  const currentCommentKeySet = useMemo(
+    () => new Set(currentCommentKeyOrder),
+    [currentCommentKeyOrder],
+  );
   const activeSelectedKeys = useMemo(
-    () => (openKey !== null && selection.fileKey === openKey ? new Set(selection.keys) : new Set<string>()),
-    [openKey, selection],
+    () =>
+      openKey !== null && selection.fileKey === openKey && selection.diffText === currentDiffText
+        ? new Set(selection.keys.filter((k) => currentCommentKeySet.has(k)))
+        : new Set<string>(),
+    [openKey, selection, currentDiffText, currentCommentKeySet],
   );
   const selectedCodeRows = useMemo<DiffCodeRow[]>(() => {
     if (!currentParsed || activeSelectedKeys.size === 0) return [];
-    return currentParsed.rows.flatMap((row, idx) =>
-      (row.kind === "context" || row.kind === "add" || row.kind === "del") &&
-      activeSelectedKeys.has(currentRowKeys[idx]!)
+    return currentParsed.rows.flatMap((row, idx) => {
+      const key = currentCommentKeys[idx];
+      return (row.kind === "context" || row.kind === "add" || row.kind === "del") &&
+        key !== null &&
+        key !== undefined &&
+        activeSelectedKeys.has(key)
         ? [row]
-        : [],
-    );
-  }, [currentParsed, currentRowKeys, activeSelectedKeys]);
+        : [];
+    });
+  }, [currentParsed, currentCommentKeys, activeSelectedKeys]);
 
   const fileComments = useMemo(
     () =>
-      diffRef === null
+      diffRef === null || openKey === null
         ? []
-        : comments.filter((c) => c.repo === diffRef.repo && c.path === diffRef.path),
-    [comments, diffRef],
+        : comments.filter((c) =>
+            c.fileKey !== undefined
+              ? c.fileKey === openKey
+              : c.repo === diffRef.repo && c.path === diffRef.path,
+          ),
+    [comments, diffRef, openKey],
   );
 
   const commenting = useMemo<DiffViewCommentProps | undefined>(() => {
@@ -1077,13 +1132,16 @@ function ChangesScreen() {
       selectedKeys: activeSelectedKeys,
       onToggleRow: (rowKey: string) => {
         setSelection((currentSel) => {
-          const base = currentSel.fileKey === openKey ? currentSel.keys : [];
+          const base =
+            currentSel.fileKey === openKey && currentSel.diffText === currentDiffText
+              ? currentSel.keys.filter((k) => currentCommentKeySet.has(k))
+              : [];
           const updatedKeys = base.includes(rowKey)
             ? base.filter((k) => k !== rowKey)
             : [...base, rowKey].toSorted(
-                (a, b) => currentRowKeys.indexOf(a) - currentRowKeys.indexOf(b),
+                (a, b) => currentCommentKeyOrder.indexOf(a) - currentCommentKeyOrder.indexOf(b),
               );
-          return { fileKey: openKey, keys: updatedKeys };
+          return { fileKey: openKey, diffText: currentDiffText, keys: updatedKeys };
         });
       },
       comments: fileComments,
@@ -1092,15 +1150,30 @@ function ChangesScreen() {
         setCommentSheet({ mode: "edit", id: comment.id });
       },
     };
-  }, [canComment, openKey, activeSelectedKeys, currentRowKeys, fileComments]);
+  }, [canComment, openKey, currentDiffText, activeSelectedKeys, currentCommentKeySet, currentCommentKeyOrder, fileComments]);
 
   const editingComment =
     commentSheet?.mode === "edit" ? comments.find((c) => c.id === commentSheet.id) : undefined;
 
+  const openNewCommentSheet = () => {
+    if (diffRef === null || openKey === null || selectedCodeRows.length === 0) return;
+    const orderedKeys = currentCommentKeyOrder.filter((k) => activeSelectedKeys.has(k));
+    setCommentText("");
+    setCommentSheet({
+      mode: "new",
+      fileKey: openKey,
+      repo: diffRef.repo,
+      path: diffRef.path,
+      rowKeys: orderedKeys,
+      lineLabel: formatDiffLineLabel(selectedCodeRows),
+      linesText: captureDiffLines(selectedCodeRows),
+    });
+  };
+
   const saveComment = () => {
     const trimmed = commentText.trim();
-    if (trimmed === "") return;
-    if (commentSheet?.mode === "edit") {
+    if (trimmed === "" || commentSheet === null) return;
+    if (commentSheet.mode === "edit") {
       setComments((currentList) =>
         currentList.map((c) => (c.id === commentSheet.id ? { ...c, note: trimmed } : c)),
       );
@@ -1108,19 +1181,22 @@ function ChangesScreen() {
       setCommentText("");
       return;
     }
-    if (diffRef === null || selectedCodeRows.length === 0 || openKey === null) return;
-    const orderedKeys = currentRowKeys.filter((k) => activeSelectedKeys.has(k));
     const entry: DiffComment = {
       id: nextCommentId.current++,
-      repo: diffRef.repo,
-      path: diffRef.path,
-      rowKeys: orderedKeys,
-      lineLabel: formatDiffLineLabel(selectedCodeRows),
-      linesText: captureDiffLines(selectedCodeRows),
+      fileKey: commentSheet.fileKey,
+      repo: commentSheet.repo,
+      path: commentSheet.path,
+      rowKeys: commentSheet.rowKeys,
+      lineLabel: commentSheet.lineLabel,
+      linesText: commentSheet.linesText,
       note: trimmed,
     };
     setComments((currentList) => [...currentList, entry]);
-    setSelection({ fileKey: openKey, keys: [] });
+    setSelection((currentSel) =>
+      currentSel.fileKey === commentSheet.fileKey
+        ? { fileKey: commentSheet.fileKey, diffText: currentDiffText, keys: [] }
+        : currentSel,
+    );
     setCommentSheet(null);
     setCommentText("");
   };
@@ -1135,10 +1211,32 @@ function ChangesScreen() {
 
   const bringCommentsToAgent = () => {
     if (!targetPane || comments.length === 0) return;
+    const dest = panePath(targetPane.paneId, scope);
     stageDiffCommentsToDraft(scope, targetPane.paneId, comments);
     setComments([]);
     setBasketOpen(false);
-    navigate(panePath(targetPane.paneId, scope));
+    if (target.kind === "pane") {
+      const idx = historyIdx();
+      const entries = navTrail.entries();
+      const destPath = decodedPath(pathOnly(dest));
+      const changesPrefix = `${destPath}/changes`;
+      if (idx !== undefined) {
+        for (let stepIdx = idx - 1; stepIdx >= 0; stepIdx--) {
+          const href = entries.get(stepIdx);
+          if (href === undefined) break;
+          const p = decodedPath(pathOnly(href));
+          if (p === destPath) {
+            markInAppBack(pathOnly(dest));
+            void navigate(-(idx - stepIdx));
+            return;
+          }
+          if (p !== changesPrefix && !p.startsWith(`${changesPrefix}/`)) break;
+        }
+      }
+      nav.upTo(dest);
+      return;
+    }
+    void navigate(dest, { replace: true, state: { from: spacePath(spaceId, scope) } });
   };
 
   return (
@@ -1366,7 +1464,9 @@ function ChangesScreen() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => openKey !== null && setSelection({ fileKey: openKey, keys: [] })}
+                onClick={() =>
+                  openKey !== null && setSelection({ fileKey: openKey, diffText: currentDiffText, keys: [] })
+                }
               >
                 {t("changes.comment.clearSelection", { count: selectedCodeRows.length })}
               </Button>
@@ -1374,10 +1474,7 @@ function ChangesScreen() {
                 type="button"
                 size="sm"
                 className="flex-1"
-                onClick={() => {
-                  setCommentText("");
-                  setCommentSheet({ mode: "new" });
-                }}
+                onClick={openNewCommentSheet}
               >
                 {t("changes.comment.selectedButton", { count: selectedCodeRows.length })}
               </Button>
@@ -1401,14 +1498,24 @@ function ChangesScreen() {
         <BottomSheet
           open
           onClose={() => setCommentSheet(null)}
+          className={TALL_SHEET_CLEARANCE}
           title={t("changes.comment.sheetTitle", {
-            path: editingComment ? baseName(editingComment.path) : baseName(diffRef?.path ?? ""),
-            lines: editingComment ? editingComment.lineLabel : formatDiffLineLabel(selectedCodeRows),
+            path:
+              commentSheet.mode === "edit"
+                ? baseName(editingComment?.path ?? "")
+                : baseName(commentSheet.path),
+            lines:
+              commentSheet.mode === "edit"
+                ? (editingComment?.lineLabel ?? "")
+                : commentSheet.lineLabel,
           })}
         >
           <div className="flex flex-col gap-3">
-            <pre className="max-h-32 overflow-y-auto rounded-md border border-border bg-background p-2.5 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
-              {(editingComment ? editingComment.linesText : captureDiffLines(selectedCodeRows)).join("\n")}
+            <pre className="rounded-md border border-border bg-background p-2.5 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+              {(commentSheet.mode === "edit"
+                ? (editingComment?.linesText ?? [])
+                : commentSheet.linesText
+              ).join("\n")}
             </pre>
             <textarea
               value={commentText}
@@ -1439,18 +1546,19 @@ function ChangesScreen() {
         <BottomSheet
           open
           onClose={() => setBasketOpen(false)}
+          className={TALL_SHEET_CLEARANCE}
           title={t("changes.comment.basketTitle", { count: comments.length })}
         >
           <div className="flex flex-col gap-3">
-            {target.kind === "space" && headPanes.length > 1 && (
+            {target.kind === "space" && (spaceAgentPanes.length > 1 || targetPane === undefined) && (
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">
                   {t("changes.comment.pickAgent")}
                 </span>
                 <div className="flex flex-col gap-1.5">
-                  {headPanes.map((p) => {
+                  {spaceAgentPanes.map((p) => {
                     const sub = p.paneLabel ?? p.sessionName ?? p.paneId;
-                    const label = "agent" in p && p.agent ? `${p.agent} · ${sub}` : sub;
+                    const label = p.agent ? `${p.agent} · ${sub}` : sub;
                     const active = p.paneId === targetPane?.paneId;
                     return (
                       <button
@@ -1472,7 +1580,7 @@ function ChangesScreen() {
                 </div>
               </div>
             )}
-            <ul className="flex max-h-[45dvh] flex-col gap-2 overflow-y-auto">
+            <ul className="flex flex-col gap-2">
               {comments.map((c) => (
                 <li
                   key={c.id}
@@ -1480,7 +1588,7 @@ function ChangesScreen() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate font-mono font-medium text-primary">
-                      {c.path} ({c.lineLabel})
+                      {displayDiffPath(c.repo, c.path)} ({c.lineLabel})
                     </span>
                     <button
                       type="button"

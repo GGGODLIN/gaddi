@@ -7,11 +7,13 @@ export type DiffCodeRow = Extract<DiffRow, { kind: "context" | "add" | "del" }>;
 
 export interface DiffComment {
   id: number;
+  /** The open diff key (`changes\n<repo>\n<path>` or `commit\n<repo>\n<path>`) where this comment was created. */
+  fileKey?: string;
   repo: string;
   path: string;
-  /** Stable row keys from diffRowKeys(rows) that this comment covers, in file order. */
+  /** Stable coordinate keys (`diffCommentRowKey`) that this comment covers, in file order. */
   rowKeys: readonly string[];
-  /** Human-readable line range, e.g. "+12" or "+12–15" or "-8". */
+  /** Human-readable line range, e.g. "+12", "+12–15", "-3, +3–4", or "+2, +10". */
   lineLabel: string;
   /** The quoted diff lines with their +/-/space prefix captured at selection time. */
   linesText: readonly string[];
@@ -19,17 +21,34 @@ export interface DiffComment {
   note: string;
 }
 
-function singleLineLabel(row: DiffCodeRow): string {
-  return row.newNo !== null ? `+${row.newNo}` : `-${row.oldNo ?? 1}`;
+/**
+ * A row key anchored to the line's coordinates (`kind`, `oldNo`, `newNo`) and text, so a 5-second
+ * diff poll that inserts identical lines (such as `}`) earlier in the file never shifts a selection
+ * or an inline comment onto a different line.
+ */
+export function diffCommentRowKey(row: DiffCodeRow): string {
+  return `${row.kind}:${row.oldNo ?? ""}:${row.newNo ?? ""}:${row.text}`;
+}
+
+export function displayDiffPath(repo: string, path: string): string {
+  return repo !== "" && repo !== "." ? `${repo.replace(/\/+$/, "")}/${path}` : path;
 }
 
 export function formatDiffLineLabel(rows: readonly DiffCodeRow[]): string {
-  const first = rows[0];
-  if (first === undefined) return "";
-  if (rows.length === 1) return singleLineLabel(first);
-  const last = rows.at(-1)!;
-  const endNo = last.newNo ?? last.oldNo ?? 1;
-  return `${singleLineLabel(first)}–${endNo}`;
+  const ranges: { sign: "+" | "-"; start: number; end: number }[] = [];
+  for (const row of rows) {
+    const sign: "+" | "-" = row.newNo !== null ? "+" : "-";
+    const no = row.newNo ?? row.oldNo ?? 1;
+    const prev = ranges.at(-1);
+    if (prev !== undefined && prev.sign === sign && no === prev.end + 1) {
+      prev.end = no;
+    } else {
+      ranges.push({ sign, start: no, end: no });
+    }
+  }
+  return ranges
+    .map((r) => (r.start === r.end ? `${r.sign}${r.start}` : `${r.sign}${r.start}–${r.end}`))
+    .join(", ");
 }
 
 export function captureDiffLines(rows: readonly DiffCodeRow[]): string[] {
@@ -42,10 +61,7 @@ export function captureDiffLines(rows: readonly DiffCodeRow[]): string[] {
 export function formatDiffComment(
   comment: Pick<DiffComment, "repo" | "path" | "lineLabel" | "linesText" | "note">,
 ): string {
-  const displayPath =
-    comment.repo !== "" && comment.repo !== "."
-      ? `${comment.repo.replace(/\/+$/, "")}/${comment.path}`
-      : comment.path;
+  const displayPath = displayDiffPath(comment.repo, comment.path);
   const codeQuote = comment.linesText
     .map((line) => (line === "" ? ">" : `> ${line}`))
     .join("\n");

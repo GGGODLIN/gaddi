@@ -639,36 +639,72 @@ describe("ChangesRoute — re-reading while open", () => {
 });
 
 describe("ChangesRoute — batch diff comments", () => {
-  it("accumulates comments across files and stages the formatted batch into the asking pane's draft", async () => {
+  it("accumulates comments across two files in two repos (including on a crew lead pane), keeps the open sheet snapshot across a diff poll, and stages the batch into the asking pane's draft", async () => {
     const user = userEvent.setup();
-    const router = renderAt("/pane/w1%3Ap1/changes?repo=.&path=src%2Flib%2Fcart.ts");
-    const expectedRow = "export function cartTotal(items: { price: number }[]): number {";
-    await vi.waitFor(() =>
-      expect(document.querySelector('[data-slot="diff"]')?.textContent ?? "").toContain(expectedRow),
+    loaderAgents = [{ ...fixtureAgents[0]!, host: "bluefin" }, ...fixtureAgents.slice(1)];
+    let mutatedCart = false;
+    server.use(
+      http.get(/\/api\/pane\/[^/]+\/changes/, ({ request }) => {
+        const q = new URL(request.url).searchParams;
+        const repo = q.get("repo");
+        const path = q.get("path");
+        if (repo === null || path === null) return HttpResponse.json(fixtureChanges);
+        const base = fixtureChangeDiff(repo, path);
+        if (mutatedCart && repo === "." && path === "src/lib/cart.ts" && base.available) {
+          return HttpResponse.json({
+            ...base,
+            diff: "@@ -0,0 +1,2 @@\n+// header inserted by agent during poll\n+export function cartTotal() { return 0; }\n",
+          });
+        }
+        return HttpResponse.json(base);
+      }),
     );
-
-    const rows = document.querySelectorAll<HTMLElement>('[data-slot="diff"] button');
-    expect(rows.length).toBeGreaterThan(0);
-    await user.click(rows[0]!);
+    const router = renderAt("/pane/w1%3Ap1/changes?repo=.&path=src%2Flib%2Fcart.ts");
+    const firstRow = await screen.findByRole("button", { name: /^\+1 export function cartTotal/ });
+    await user.click(firstRow);
 
     await user.click(screen.getByRole("button", { name: "Comment on selected (1)" }));
+    mutatedCart = true;
+    await user.click(screen.getByRole("button", { name: "Refresh changes" }));
+
     const commentBox = screen.getByPlaceholderText("Write your comment for these lines…");
     await user.type(commentBox, "Handle empty items array explicitly.");
     await user.click(screen.getByRole("button", { name: "Add comment" }));
 
     expect(screen.getByText(/Handle empty items array explicitly\./)).toBeInTheDocument();
-    const pendingBtn = screen.getByRole("button", { name: "Pending comments (1) · Bring to agent" });
-    expect(pendingBtn).toBeInTheDocument();
 
+    await act(async () => {
+      await router.navigate("/pane/w1%3Ap1/changes?repo=packages%2Fapi&path=server%2Fhandlers%2Forders.ts");
+    });
+    const apiDelRow = await screen.findByRole("button", { name: /^-1 import \{ db \} from "\.\/db";/ });
+    const apiAddRow = screen.getByRole("button", { name: /^\+1 import \{ db \} from "\.\.\/db";/ });
+    await user.click(apiDelRow);
+    await user.click(apiAddRow);
+    await user.click(screen.getByRole("button", { name: "Comment on selected (2)" }));
+    await user.type(
+      screen.getByPlaceholderText("Write your comment for these lines…"),
+      "Use a path alias here.",
+    );
+    await user.click(screen.getByRole("button", { name: "Add comment" }));
+
+    const pendingBtn = screen.getByRole("button", { name: "Pending comments (2) · Bring to agent" });
     await user.click(pendingBtn);
-    await user.click(screen.getByRole("button", { name: "Bring to claude draft (1)" }));
+    expect(screen.getByText("src/lib/cart.ts (+1)")).toBeInTheDocument();
+    expect(screen.getByText("packages/api/server/handlers/orders.ts (-1, +1)")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Bring to claude draft (2)" }));
 
     expect(router.state.location.pathname).toBe("/pane/w1%3Ap1");
-    expect(loadDraft(undefined, "w1:p1")).toContain("> `src/lib/cart.ts`");
-    expect(loadDraft(undefined, "w1:p1")).toContain("Handle empty items array explicitly.");
+    expect(router.state.historyAction).toBe("REPLACE");
+    const staged = loadDraft(undefined, "w1:p1");
+    expect(staged).toContain("> `src/lib/cart.ts` (+1)");
+    expect(staged).toContain("> +export function cartTotal(items: { price: number }[]): number {");
+    expect(staged).not.toContain("header inserted by agent during poll");
+    expect(staged).toContain("Handle empty items array explicitly.");
+    expect(staged).toContain("> `packages/api/server/handlers/orders.ts` (-1, +1)");
+    expect(staged).toContain("Use a path alias here.");
   });
 
-  it("lets a workspace Changes view pick which agent in the workspace receives the batch", async () => {
+  it("lets a workspace Changes view pick an agent, keeps the picker visible if the chosen agent exits, and replaces onto the pane with the space as its parent", async () => {
     const user = userEvent.setup();
     const wsId = fixtureAgents[0]!.workspaceId;
     loaderAgents = [
@@ -676,13 +712,8 @@ describe("ChangesRoute — batch diff comments", () => {
       { ...fixtureAgents[0]!, paneId: "w1:p9", agent: "codex", paneLabel: "codex-worker" },
     ];
     const router = renderAt(`/space/${encodeURIComponent(wsId)}/changes?repo=.&path=src%2Flib%2Fcart.ts`);
-    const expectedRow = "export function cartTotal(items: { price: number }[]): number {";
-    await vi.waitFor(() =>
-      expect(document.querySelector('[data-slot="diff"]')?.textContent ?? "").toContain(expectedRow),
-    );
-
-    const rows = document.querySelectorAll<HTMLElement>('[data-slot="diff"] button');
-    await user.click(rows[0]!);
+    const firstRow = await screen.findByRole("button", { name: /^\+1 export function cartTotal/ });
+    await user.click(firstRow);
     await user.click(screen.getByRole("button", { name: "Comment on selected (1)" }));
     await user.type(
       screen.getByPlaceholderText("Write your comment for these lines…"),
@@ -692,10 +723,19 @@ describe("ChangesRoute — batch diff comments", () => {
 
     await user.click(screen.getByRole("button", { name: "Pending comments (1) · Bring to agent" }));
     await user.click(screen.getByRole("button", { name: /codex · codex-worker/i }));
-    await user.click(screen.getByRole("button", { name: "Bring to codex draft (1)" }));
 
-    expect(router.state.location.pathname).toBe("/pane/w1%3Ap9");
-    expect(loadDraft(undefined, "w1:p9")).toContain("Route this to codex.");
+    loaderAgents = [fixtureAgents[0]!];
+    await act(async () => {
+      await router.revalidate();
+    });
+    expect(screen.getByRole("button", { name: "Bring to w1:p9 draft (1)" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /claude ·/i }));
+    await user.click(screen.getByRole("button", { name: "Bring to claude draft (1)" }));
+
+    expect(router.state.location.pathname).toBe("/pane/w1%3Ap1");
+    expect(router.state.historyAction).toBe("REPLACE");
+    expect(router.state.location.state).toEqual({ from: `/space/${encodeURIComponent(wsId)}` });
+    expect(loadDraft(undefined, "w1:p1")).toContain("Route this to codex.");
   });
 });
 

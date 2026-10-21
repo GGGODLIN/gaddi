@@ -5,7 +5,7 @@ import { LIST_ROW_CORNERS, ListGroup } from "@/components/ui/list-group";
 import { SectionLabel } from "@/components/ui/section-label";
 import { ToggleButton } from "@/components/ui/toggle-button";
 import { useLocale } from "@/hooks/use-locale";
-import type { DiffComment } from "@/lib/diff-comments";
+import { diffCommentRowKey, formatDiffLineLabel, type DiffComment } from "@/lib/diff-comments";
 import {
   buildChangeTree,
   FILTER_STATUSES,
@@ -846,6 +846,28 @@ export function DiffView({
 }) {
   const parsed = useMemo(() => parseUnifiedDiff(diff), [diff]);
   const keys = useMemo(() => diffRowKeys(parsed.rows), [parsed]);
+  const commentKeys = useMemo(
+    () =>
+      parsed.rows.map((row) =>
+        row.kind === "context" || row.kind === "add" || row.kind === "del"
+          ? diffCommentRowKey(row)
+          : null,
+      ),
+    [parsed],
+  );
+  const activeCommentKeySet = useMemo(
+    () => new Set(commentKeys.filter((k): k is string => k !== null)),
+    [commentKeys],
+  );
+  const unanchoredComments = useMemo(
+    () =>
+      commenting
+        ? commenting.comments.filter(
+            (c) => c.rowKeys.length === 0 || !c.rowKeys.every((k) => activeCommentKeySet.has(k)),
+          )
+        : [],
+    [commenting, activeCommentKeySet],
+  );
   const syntax = useSyntaxTokens(parsed.rows, path);
   // Both gutters sized once, by the widest number, so no row's text starts at a different x.
   const gutter = { width: `calc(${Math.max(String(parsed.maxLineNo).length, 2)}ch + 0.5rem)` };
@@ -901,11 +923,17 @@ export function DiffView({
             </div>
           );
         }
-        const selected = commenting.selectedKeys.has(rowKey);
+        const commentKey = commentKeys[i]!;
+        const selected = commenting.selectedKeys.has(commentKey);
         const pinned =
           commenting.comments.length > 0
-            ? commenting.comments.filter((c) => c.rowKeys.at(-1) === rowKey)
+            ? commenting.comments.filter(
+                (c) =>
+                  c.rowKeys.at(-1) === commentKey &&
+                  c.rowKeys.every((k) => activeCommentKeySet.has(k)),
+              )
             : [];
+        const lineAria = `${formatDiffLineLabel([row])} ${row.text}`.trim();
         const lineEl = (
           <div
             key={rowKey}
@@ -918,8 +946,9 @@ export function DiffView({
             <button
               type="button"
               aria-pressed={selected}
-              onClick={() => commenting.onToggleRow(rowKey)}
-              className="flex min-w-0 flex-1 cursor-pointer text-left font-mono text-xs leading-5"
+              aria-label={lineAria}
+              onClick={() => commenting.onToggleRow(commentKey)}
+              className="flex min-h-7 min-w-0 flex-1 cursor-pointer items-baseline py-0.5 text-left font-mono text-xs leading-5"
             >
               {rowCells}
             </button>
@@ -934,7 +963,7 @@ export function DiffView({
                 key={`comment-${c.id}`}
                 type="button"
                 onClick={() => commenting?.onEditComment(c)}
-                className="my-1 mr-3 ml-12 flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 font-sans text-xs text-foreground transition-colors hover:border-primary"
+                className="my-1 mr-3 ml-12 flex max-w-[calc(100%-3.75rem)] items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 font-sans text-xs text-foreground transition-colors hover:border-primary"
               >
                 <span className="min-w-0 flex-1 truncate text-left">
                   <span className="font-mono font-semibold text-primary">💬 {c.lineLabel}: </span>
@@ -946,6 +975,20 @@ export function DiffView({
           </Fragment>
         );
       })}
+      {unanchoredComments.map((c) => (
+        <button
+          key={`comment-${c.id}`}
+          type="button"
+          onClick={() => commenting?.onEditComment(c)}
+          className="my-1 mr-3 ml-3 flex max-w-[calc(100%-1.5rem)] items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 font-sans text-xs text-foreground transition-colors hover:border-primary"
+        >
+          <span className="min-w-0 flex-1 truncate text-left">
+            <span className="font-mono font-semibold text-primary">💬 {c.lineLabel}: </span>
+            {c.note}
+          </span>
+          <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      ))}
     </div>
   );
 }

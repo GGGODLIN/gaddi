@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   captureDiffLines,
+  diffCommentRowKey,
+  displayDiffPath,
   formatDiffComment,
   formatDiffCommentBatch,
   formatDiffLineLabel,
@@ -29,10 +31,19 @@ describe("diff-comments helpers", () => {
     (r): r is CodeRow => r.kind === "context" || r.kind === "add" || r.kind === "del",
   );
 
-  it("formats single and multi-row line labels", () => {
+  it("formats single, contiguous, mixed old/new, and non-contiguous line labels", () => {
     expect(formatDiffLineLabel([codeRows[0]!])).toBe("-3");
     expect(formatDiffLineLabel([codeRows[1]!])).toBe("+3");
     expect(formatDiffLineLabel([codeRows[1]!, codeRows[2]!])).toBe("+3–4");
+    expect(formatDiffLineLabel([codeRows[0]!, codeRows[1]!, codeRows[2]!])).toBe("-3, +3–4");
+    expect(formatDiffLineLabel([codeRows[1]!, codeRows[3]!])).toBe("+3, +5");
+  });
+
+  it("anchors diffCommentRowKey to kind, oldNo, newNo, and text", () => {
+    expect(diffCommentRowKey(codeRows[0]!)).toBe("del:3::const oldVal = 1;");
+    expect(diffCommentRowKey(codeRows[1]!)).toBe("add::3:const newVal = 2;");
+    expect(displayDiffPath(".", "src/calc.ts")).toBe("src/calc.ts");
+    expect(displayDiffPath("api/", "server/orders.ts")).toBe("api/server/orders.ts");
   });
 
   it("captures selected diff lines with their signs intact", () => {
