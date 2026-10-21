@@ -554,4 +554,13 @@ describe("detectPreviewSelect: a question that ends in a fullwidth question mark
     expect(model!.question).toBe("どのウィジェットのデザインにしますか？");
     expect(model!.options.map((o) => o.label)).toEqual(["Boxy", "Rounded", "Minimal"]);
   });
+
+  it("a chip header that ends in a question mark is not read into the question", () => {
+    const text = fixtureText("claude--select-preview.txt")
+      .replace(" ☐ Design ", " ☐ Design? ")
+      .replaceAll("Which widget design should we use?", "Pick a widget design below.");
+    const model = detectPreviewSelect(splitLines(parseAnsi(text)));
+    expect(model).not.toBeNull();
+    expect(model!.question).toBe("Pick a widget design below.");
+  });
 });
