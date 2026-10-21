@@ -1060,12 +1060,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     setPendingUnknown(null);
     setProtocolOffer(null);
     setSendRefusal(null);
-    if (pendingUnknown.isDraft && inputValueRef.current === pendingUnknown.draftText) clearComposedDraftRef.current();
+    if (
+      pendingUnknown.isDraft &&
+      inputValueRef.current === pendingUnknown.draftText &&
+      composeLine(inputValueRef.current, attachmentsRef.current, isShell) === pendingUnknown.sentText
+    ) {
+      clearComposedDraftRef.current();
+    }
     if (effectiveRaw !== null && normalizeDraft(effectiveRaw) === normalizeDraft(pendingUnknown.sentText)) {
       setHandledKey(normalizeDraft(effectiveRaw));
       setPreviewLatched(false);
     }
-  }, [pendingUnknown, chatEntries, effectiveRaw]);
+  }, [pendingUnknown, chatEntries, effectiveRaw, isShell]);
 
   // Show the preview while it's latched, the host line still carries a (non-echo) draft, and the user
   // hasn't already handled this exact text. Its displayed text is the LIVE raw line — host typing
