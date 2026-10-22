@@ -3,7 +3,7 @@ name: Windows
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "release-*"]
   # Fork-only (FORK.md → *Windows VM rehearsal is permanently waived*): this fork has no Windows
   # VM, so the same Windows CI can be started by hand on a `dev` commit before a release. Do not
   # add `dev` under `push`. This comment does not record that a dispatch was run.
