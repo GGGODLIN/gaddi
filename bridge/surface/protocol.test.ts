@@ -2596,6 +2596,33 @@ describe("the offers as new requests", () => {
     neverEscape(pane);
   });
 
+  test("replace with a slash command (the belt's Model onto a draft): Replace and Cancel only, then the box is emptied and the command sent", async () => {
+    const { pane, send } = rig();
+    pane.box = "old draft";
+    pane.afterInput = (p, what) => {
+      if (what.startsWith("paste:/")) p.popup = ["  /model       Set the AI model for Claude Code", "  /mcp         Manage MCP servers"];
+      if (what.endsWith("Enter")) p.popup = null;
+    };
+    const refused = await send("/model", { mode: "command" });
+    expect(refused.receipt).toMatchObject({ outcome: "refused", reason: "draft_present", keys: [] });
+    // Add would send "old draft /model", a message nobody means: a command is offered Replace and Cancel only.
+    expect(refused.offers).toEqual(["replace", "cancel"]);
+    // The same request id again is a replay of the stored receipt, with the same two offers.
+    const replayed = await send("/model", { id: refused.receipt!.requestId, mode: "command" });
+    expect(replayed).toMatchObject({ replayed: true, receipt: { reason: "draft_present" }, offers: ["replace", "cancel"] });
+    // A plain message onto the same draft keeps all three, and so does its replay.
+    const plain = await send("a plain thought");
+    expect(plain.offers).toEqual(["append", "replace", "cancel"]);
+    expect((await send("a plain thought", { id: plain.receipt!.requestId })).offers).toEqual(["append", "replace", "cancel"]);
+    const answer = await send("/model", { mode: "replace" });
+    expect(answer.receipt).toMatchObject({ outcome: "sent" });
+    expect(answer.receipt?.keys.at(-1)).toBe("Enter");
+    expect(pane.calls).toEqual(["paste:/model"]);
+    expect(pane.transcript.at(-1)).toBe("> /model");
+    expect(pane.keysSeen.filter((k) => k === "Backspace").length).toBeGreaterThanOrEqual("old draft".length);
+    neverEscape(pane);
+  });
+
   test("replace: the clear is its own step, so S0 keeps its two reads and its own gap", async () => {
     const r = rig();
     r.pane.box = "old draft";
@@ -4980,7 +5007,7 @@ describe("a send at a box that is not free is held, not refused (2026-10-17 fiel
     r.pane.box = "half a thought";
     r.pane.dialog = DIALOG;
     const answer = await r.send("/compact", { id: "box-0000008", mode: "replace" });
-    expect(answer.receipt?.outcome).toBe("refused");
+    expect(answer.receipt).toMatchObject({ outcome: "refused", reason: "not_free" });
     expect(r.holds.list()).toEqual([]);
     // The same Replace with a plain text is held.
     const plain = await r.send("a plain thought", { id: "box-0000009", mode: "replace" });

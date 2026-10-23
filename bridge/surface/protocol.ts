@@ -1703,7 +1703,9 @@ export class SendProtocol {
     if (accepted.kind === "replay") {
       const stored = accepted.record.receipt;
       if (stored !== undefined) {
-        const replay: SendAnswer = { receipt: stored, offers: offersFor(stored.outcome, stored.reason, stored.profileId !== null), replayed: true };
+        // A command's draft refusal offers no Add on a replay either: the same rule, read from the same request.
+        const command = stored.reason === "draft_present" && draftCommand(request, await this.deps.profile(target.harness));
+        const replay: SendAnswer = { receipt: stored, offers: offersFor(stored.outcome, stored.reason, stored.profileId !== null, command), replayed: true };
         // A send a crash cut short: read the pane now and report it beside the stored receipt.
         if (stored.outcome !== "unknown" || stored.reason !== "crash") return replay;
         return withLook(replay, await this.lookAfterCrash(request, accepted.record, target));
@@ -2340,7 +2342,8 @@ export class SendProtocol {
       if (refusal !== null) throw refusal;
     }
     // Submit and Discard name the text the box holds: a command's text may stand there with its lead read as a mode marker.
-    if ((request.mode === "submit" || request.mode === "discard") && reservedLead(lines[0] ?? "", leads) !== null) state.command = true;
+    // A Replace whose text starts with a reserved lead empties the box and then sends a command, so it is one from here on.
+    if ((request.mode === "submit" || request.mode === "discard" || request.mode === "replace") && reservedLead(lines[0] ?? "", leads) !== null) state.command = true;
     const holds = (box: string): boolean => (state.command ? commandBoxMatches : boxMatches)(box, "", lines, collapseOf(match));
 
     if (match === null && (request.mode === "send" || request.mode === "command")) {
@@ -2530,7 +2533,7 @@ export class SendProtocol {
       this.gateTurn(state, s0, s0.frame);
       if (surface.composer === "draft") {
         state.queued = false;
-        throw new Ended("refused", "draft_present", { surface, framed: true, detail: "The box already holds a draft." });
+        throw draftRefusal(state, s0);
       }
       // In a turn the key would answer the notice before the harness queues it, so no commit is offered.
       if (this.answersNotice(state, s0)) {
@@ -2540,7 +2543,7 @@ export class SendProtocol {
       return;
     }
     if (surface.turn === "idle" && surface.modal === "none" && surface.composer === "draft") {
-      throw new Ended("refused", "draft_present", { surface, framed: s0.frame !== null, detail: "The box already holds a draft." });
+      throw draftRefusal(state, s0);
     }
     if (takesManualSend(surface)) {
       this.gateManual(state, s0, "Collie cannot read this screen. Check the pane, then tap Type here.");
@@ -3377,13 +3380,35 @@ export class SendProtocol {
 }
 
 /**
+ * Whether a request is a command for the draft offers: mode `command`, or a submit whose first line
+ * carries a reserved lead. One rule for a fresh refusal ({@link draftRefusal}) and a replayed one.
+ */
+function draftCommand(request: SendRequest, match: ProfileMatch | null): boolean {
+  const leads = match?.profile.reservedLeads ?? GENERIC_LEADS;
+  return request.mode === "command" || (request.mode === "submit" && reservedLead(sendLines(request.text)[0] ?? "", leads) !== null);
+}
+
+/**
+ * The `draft_present` refusal of a send or a command at a box that holds a draft. A framed draft is
+ * offered Add, Replace and Cancel, but a command only Replace and Cancel: Add would put the command
+ * after the draft's words, and "old draft /model" is a message nobody means.
+ */
+function draftRefusal(state: RunState, s0: Snap): Ended {
+  const framed = s0.frame !== null;
+  const offers = offersFor("refused", "draft_present", framed, draftCommand(state.request, state.match));
+  return new Ended("refused", "draft_present", { surface: s0.surface, framed, offers, detail: "The box already holds a draft." });
+}
+
+/**
  * The rules a text meets before any read: a plain send may not start with a reserved lead (it has the
  * command route), and a text of more than one line needs a profile's newline key. Null when it passes.
+ * A Replace may start with one: it is the draft offer's answer to a command refused `draft_present`
+ * (a typed `/model`, the belt's Model), the box is emptied first, and the text goes out as a command.
  */
 function textRefusal(request: SendRequest, match: ProfileMatch | null): Ended | null {
   const lines = sendLines(request.text);
   const leads = match?.profile.reservedLeads ?? GENERIC_LEADS;
-  const lead = request.mode === "command" ? null : reservedLead(lines[0] ?? "", leads);
+  const lead = request.mode === "command" || request.mode === "replace" ? null : reservedLead(lines[0] ?? "", leads);
   if (lead !== null) return new Ended("refused", "reserved_lead", { detail: LEAD_ROUTES.get(lead) ?? `A text that starts with ${lead} has its own route.` });
   if (lines.length > 1 && match === null) return new Ended("refused", "multiline", { detail: "This harness has no profile, so its newline key is unknown; send one line at a time." });
   return null;
