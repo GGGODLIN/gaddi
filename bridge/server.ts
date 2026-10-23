@@ -2102,9 +2102,9 @@ export function startServer(opts: {
       let commands: ClaudeCommand[] = [];
       try {
         if (canonicalAgent(pane.agent?.toLowerCase().trim() ?? "") !== "claude") {
-          const rawAgent = pane.agent?.toLowerCase().trim() ?? "";
+          const family = canonicalAgent(pane.agent?.toLowerCase().trim() ?? "");
           // Herdr reports agy under two names; the loader is filed under one.
-          const skillAgent = rawAgent === "antigravity" ? "agy" : rawAgent;
+          const skillAgent = family === "antigravity" ? "agy" : family;
           if (isSkillAgent(skillAgent)) {
             commands = await discoverAgentSkills(skillAgent, { home, cwd, env: process.env });
           }

@@ -1,11 +1,11 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 
 import { discoverAgentSkills, isSkillAgent, type SkillAgent } from "./agent-skills.ts";
-import type { DiscoveryIo } from "./claude-commands.ts";
+import { MAX_COMMANDS, MAX_SCAN_OPS, MAX_SETTINGS_BYTES, type DiscoveryIo } from "./claude-commands.ts";
 
 interface FakeTree {
   readonly [path: string]: string;
@@ -19,6 +19,21 @@ const repo = { "/h/code/app/.git/HEAD": "ref" };
 function fakeIo(spelled: FakeTree): DiscoveryIo {
   const files = new Map(Object.entries(spelled).map(([path, text]) => [native(path), text] as const));
   return {
+    async realDir(dir) {
+      const prefix = dir.endsWith(sep) ? dir : `${dir}${sep}`;
+      for (const path of files.keys()) {
+        if (path === dir || path.startsWith(prefix)) return dir;
+      }
+      return null;
+    },
+    async hasGit(dir) {
+      const gitExact = join(dir, ".git");
+      const gitPrefix = `${gitExact}${sep}`;
+      for (const path of files.keys()) {
+        if (path === gitExact || path.startsWith(gitPrefix)) return true;
+      }
+      return false;
+    },
     async list(dir) {
       const prefix = dir.endsWith(sep) ? dir : `${dir}${sep}`;
       const seen = new Map<string, boolean>();
@@ -29,8 +44,15 @@ function fakeIo(spelled: FakeTree): DiscoveryIo {
       }
       return seen.size === 0 ? null : [...seen].map(([name, isDir]) => ({ name, dir: isDir }));
     },
-    async read(path) {
-      return files.get(path) ?? null;
+    async read(path, _roots, opts) {
+      const raw = files.get(path);
+      if (raw === undefined) return null;
+      const maxBytes = opts?.maxBytes ?? 64 * 1024;
+      const truncate = opts?.truncate ?? true;
+      if (Buffer.byteLength(raw, "utf8") > maxBytes) {
+        return truncate ? raw.slice(0, maxBytes) : raw.slice(0, maxBytes + 1);
+      }
+      return raw;
     },
   };
 }
@@ -132,13 +154,37 @@ describe("agent skill discovery", () => {
     expect(rows.map((row) => [row.command, row.description])).toEqual([["/check", "user command"], ["/ship", "shared"]]);
   });
 
-  test("opencode honours XDG_CONFIG_HOME and skips malformed skills without inventing a hiding flag", async () => {
+  test("opencode honours XDG_CONFIG_HOME, OPENCODE_CONFIG_DIR and disable flags", async () => {
     const rows = await run("opencode", {
       "/xdg/opencode/skill/yes/SKILL.md": skill("yes", "name: yes\nuser-invocable: false\n"),
       "/xdg/opencode/skills/broken/SKILL.md": "---\nname: [broken\n---\n",
       "/h/.config/opencode/skills/no/SKILL.md": skill("no", "name: no\n"),
     }, null, { XDG_CONFIG_HOME: native("/xdg") });
     expect(rows.map((row) => row.command)).toEqual(["/yes"]);
+
+    const envTree = {
+      ...repo,
+      "/h/code/app/.claude/skills/c/SKILL.md": skill("proj claude", "name: proj-claude\n"),
+      "/h/code/app/.agents/skills/a/SKILL.md": skill("proj agents", "name: proj-agents\n"),
+      "/h/code/app/.opencode/skills/o/SKILL.md": skill("proj opencode", "name: proj-opencode\n"),
+      "/h/code/app/.opencode/commands/p-cmd.md": skill("proj cmd"),
+      "/h/.claude/skills/uc/SKILL.md": skill("user claude", "name: user-claude\n"),
+      "/h/.agents/skills/ua/SKILL.md": skill("user agents", "name: user-agents\n"),
+      "/custom-oc/skills/co/SKILL.md": skill("custom skill", "name: custom-skill\n"),
+      "/custom-oc/commands/c-cmd.md": skill("custom cmd"),
+    };
+    expect(
+      (await run("opencode", envTree, "/h/code/app", {
+        OPENCODE_CONFIG_DIR: native("/custom-oc"),
+        OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: "1",
+      })).map((r) => r.command),
+    ).toEqual(["/c-cmd", "/custom-skill", "/p-cmd", "/proj-agents", "/proj-opencode", "/user-agents"]);
+    expect(
+      (await run("opencode", envTree, "/h/code/app", {
+        OPENCODE_DISABLE_EXTERNAL_SKILLS: "true",
+        OPENCODE_DISABLE_PROJECT_CONFIG: "1",
+      })).map((r) => r.command),
+    ).toEqual([]);
   });
 
   test("pi spells skills separately from prompts, stops at skill roots, and prefers trusted projects", async () => {
@@ -151,12 +197,13 @@ describe("agent skill discovery", () => {
       "/h/code/app/.pi/skills/above/SKILL.md": skill("above the cwd"),
       "/h/.pi/agent/skills/ship/SKILL.md": skill("user"),
       "/h/.agents/skills/ship/SKILL.md": skill("shared"),
+      "/h/code/app/src/.pi/prompts/ship.md": "\nProject prompt line\nsecond",
       "/h/.pi/agent/prompts/ship.md": "\nFirst body line\nsecond",
       "/h/.pi/agent/prompts/explicit.md": skill("explicit", "argument-hint: '[file]'\n"),
     });
     expect(rows).toEqual([
       { command: "/explicit", description: "explicit", argHint: "[file]" },
-      { command: "/ship", description: "First body line", argHint: "" },
+      { command: "/ship", description: "Project prompt line", argHint: "" },
       { command: "/skill:ship", description: "project", argHint: "" },
     ]);
   });
@@ -195,10 +242,16 @@ describe("agent skill discovery", () => {
     const rows = await run("pi", files, "/h/code/app/src", { PI_CODING_AGENT_DIR: native("/custom") });
     expect(rows.map((row) => row.command)).toEqual(["/skill:project", "/skill:renamed"]);
     expect(await names("pi", {
-      "/h/.pi/agent/settings.json": JSON.stringify({ skills: ["-~/.pi/agent/skills/blocked"] }),
+      "/h/.pi/agent/settings.json": JSON.stringify({ skills: ["-~/.pi/agent/skills/blocked", "-skills/rel-blocked"] }),
       "/h/.pi/agent/skills/blocked/nested/SKILL.md": skill(),
+      "/h/.pi/agent/skills/rel-blocked/SKILL.md": skill(),
       "/h/.pi/agent/skills/blocked-other/SKILL.md": skill(),
     })).toEqual(["/skill:blocked-other"]);
+    expect(await names("pi", {
+      "/h/.pi/agent/settings.json": JSON.stringify({ enableSkillCommands: false }),
+      "/h/.pi/agent/skills/kept/SKILL.md": skill(),
+      "/h/.pi/agent/prompts/prompt-only.md": "hello",
+    })).toEqual(["/prompt-only"]);
   });
 
   test("pi prompt fallback uses the first body line capped at sixty characters", async () => {
@@ -413,25 +466,36 @@ describe("agent skill discovery", () => {
     const many = Object.fromEntries(
       Array.from({ length: 1002 }, (_, i) => [`/h/.agents/skills/s${String(1001 - i).padStart(4, "0")}/SKILL.md`, skill()]),
     );
-    const rows = await run("muse", { ...files, ...many }, null);
-    expect(rows).toHaveLength(1000);
+    const manyIo = fakeIo({ ...files, ...many });
+    let reads = 0;
+    const countingIo: DiscoveryIo = {
+      ...manyIo,
+      read: (path, roots, opts) => {
+        reads += 1;
+        return manyIo.read(path, roots, opts);
+      },
+    };
+    const rows = await discoverAgentSkills("muse", { home: native("/h"), cwd: null, env: {} }, countingIo);
+    expect(reads).toBeLessThanOrEqual(MAX_SCAN_OPS);
+    expect(rows.length).toBeLessThanOrEqual(MAX_COMMANDS);
     expect(rows.map((row) => row.command)).toEqual(rows.map((row) => row.command).toSorted());
   });
 
-  test("codex bounds recursive folder visits to two thousand", async () => {
+  test("shares MAX_SCAN_OPS across all roots in one discovery call", async () => {
     const io = fakeIo({});
-    let visits = 0;
+    let lists = 0;
     const bounded: DiscoveryIo = {
+      realDir: async (dir) => dir,
+      hasGit: async () => false,
       read: io.read,
       async list(dir) {
-        if (!dir.startsWith(native("/h/.codex/skills"))) return null;
-        visits++;
+        if (!dir.startsWith(native("/h/.codex/skills")) && !dir.startsWith(native("/h/.agents/skills"))) return null;
+        lists++;
         return Array.from({ length: 10 }, (_, i) => ({ name: `d${i}`, dir: true }));
       },
     };
     expect(await discoverAgentSkills("codex", { home: native("/h"), cwd: null, env: {} }, bounded)).toEqual([]);
-    expect(visits).toBeLessThanOrEqual(2000);
-    expect(visits).toBeGreaterThan(1000);
+    expect(lists).toBeLessThanOrEqual(MAX_SCAN_OPS);
   });
 });
 
@@ -451,12 +515,12 @@ describe("a trust store keyed by the real path", () => {
   const trustKey = () => realpath(real);
 
   const rowsAt = (agent: SkillAgent, files: FakeTree) =>
-    discoverAgentSkills(agent, { home: native("/h"), cwd: link, env: {} }, fakeIo(files));
+    discoverAgentSkills(agent, { home: base, cwd: link, env: {} }, fakeIo(files));
 
   test("grok loads a trusted project reached through a link", async () => {
     const key = await trustKey();
     const rows = await rowsAt("grok", {
-      "/h/.grok/trusted_folders.toml": `[folders.${JSON.stringify(key)}]\ntrusted = true\n`,
+      [join(base, ".grok", "trusted_folders.toml")]: `[folders.${JSON.stringify(key)}]\ntrusted = true\n`,
       [join(link, ".git", "HEAD")]: "ref",
       [join(link, ".grok", "skills", "probe", "SKILL.md")]: skill(),
     });
@@ -466,10 +530,86 @@ describe("a trust store keyed by the real path", () => {
   test("pi loads a trusted project reached through a link", async () => {
     const key = await trustKey();
     const rows = await rowsAt("pi", {
-      "/h/.pi/agent/trust.json": JSON.stringify({ [key]: true }),
+      [join(base, ".pi", "agent", "trust.json")]: JSON.stringify({ [key]: true }),
       [join(link, ".git", "HEAD")]: "ref",
       [join(link, ".pi", "skills", "probe", "SKILL.md")]: skill(),
     });
     expect(rows.map((row) => row.command)).toContain("/skill:probe");
   });
+});
+
+describe("discoverAgentSkills: real-disk containment and size bounds", () => {
+  test("oversized settings files are rejected rather than parsed from a truncated prefix", async () => {
+    // A 300 KiB TOML where the prefix sets `/h` to trusted and the tail after 256 KiB sets `/h/code/app`
+    // to false must be rejected as oversized, never parsed from its prefix to grant trust.
+    const padding = `# ${"x".repeat(1024)}\n`.repeat(270);
+    const oversized = `[folders.${JSON.stringify(native("/h"))}]\ntrusted = true\n${padding}[folders.${JSON.stringify(native("/h/code/app"))}]\ntrusted = false\n`;
+    expect(Buffer.byteLength(oversized, "utf8")).toBeGreaterThan(MAX_SETTINGS_BYTES);
+    const rows = await run("grok", {
+      ...repo,
+      "/h/.grok/trusted_folders.toml": oversized,
+      "/h/code/app/src/.grok/skills/secret-project/SKILL.md": skill("should stay hidden"),
+      "/h/.grok/skills/personal/SKILL.md": skill("personal"),
+    });
+    expect(rows.map((r) => r.command)).toEqual(["/personal"]);
+  });
+
+  test.skipIf(process.platform === "win32")(
+    "real disk: symlinks escaping personal roots, project roots, or an Antigravity plugin root are refused while inside skills load",
+    async () => {
+      const sandbox = mkdtempSync(join(tmpdir(), "collie-agent-bounds-"));
+      try {
+        const home = join(sandbox, "home");
+        const outside = join(sandbox, "outside");
+        const repoA = join(home, "code", "repo-a");
+        const repoB = join(home, "code", "repo-b");
+
+        // Outside sentinel with valid frontmatter for every agent (`name` + `description`).
+        const outsideSkillDir = join(outside, "escaped-skill");
+        mkdirSync(outsideSkillDir, { recursive: true });
+        writeFileSync(join(outsideSkillDir, "SKILL.md"), skill("OUTSIDE-SENTINEL", "name: escaped\n"));
+
+        // Sibling repo sentinel inside home, to prove project scans are bound to repoA and not all of home.
+        const repoBSkillDir = join(repoB, "sibling-skill");
+        mkdirSync(join(repoB, ".git"), { recursive: true });
+        mkdirSync(repoBSkillDir, { recursive: true });
+        writeFileSync(join(repoBSkillDir, "SKILL.md"), skill("SIBLING-REPO-SENTINEL", "name: sibling\n"));
+
+        // Inside personal skill + escaping personal symlink for Codex.
+        const codexInside = join(home, ".codex", "skills", "inside-codex");
+        mkdirSync(codexInside, { recursive: true });
+        writeFileSync(join(codexInside, "SKILL.md"), skill("inside codex", "name: inside_codex\n"));
+        symlinkSync(outsideSkillDir, join(home, ".codex", "skills", "escaped"));
+
+        // Inside project skill + cross-repo symlink inside repoA.
+        const repoASkills = join(repoA, ".agents", "skills");
+        const repoAInside = join(repoASkills, "inside-project");
+        mkdirSync(join(repoA, ".git"), { recursive: true });
+        mkdirSync(repoAInside, { recursive: true });
+        writeFileSync(join(repoAInside, "SKILL.md"), skill("inside project", "name: inside_project\n"));
+        symlinkSync(repoBSkillDir, join(repoASkills, "sibling"));
+
+        const codexRows = await discoverAgentSkills("codex", { home, cwd: repoA, env: {} });
+        expect(codexRows.map((r) => r.command)).toEqual(["$inside_codex", "$inside_project"]);
+        expect(JSON.stringify(codexRows)).not.toContain("SENTINEL");
+
+        // Antigravity plugin containment: a symlink inside plugin-a pointing to a valid skill in `~/.gemini/skills`
+        // (inside home, but outside plugin-a's own root) is refused while plugin-a's own skill loads.
+        const geminiUserSkill = join(home, ".gemini", "skills", "user-gemini");
+        mkdirSync(geminiUserSkill, { recursive: true });
+        writeFileSync(join(geminiUserSkill, "SKILL.md"), skill("user gemini", "name: user_gemini\n"));
+
+        const pluginASkills = join(home, ".gemini", "antigravity-cli", "plugins", "plugin-a", "skills");
+        const pluginAInside = join(pluginASkills, "own");
+        mkdirSync(pluginAInside, { recursive: true });
+        writeFileSync(join(pluginAInside, "SKILL.md"), skill("own plugin skill", "name: own\n"));
+        symlinkSync(geminiUserSkill, join(pluginASkills, "leaked-from-user"));
+
+        const agyRows = await discoverAgentSkills("agy", { home, cwd: null, env: {} });
+        expect(agyRows.map((r) => r.command)).toEqual(["/plugin-a:own", "/user_gemini"]);
+      } finally {
+        rmSync(sandbox, { recursive: true, force: true });
+      }
+    },
+  );
 });
