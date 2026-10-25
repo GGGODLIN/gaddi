@@ -1851,6 +1851,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       setStatus(translate("composer.upload.badType", { name: file.name }), "error");
       return;
     }
+    // Batch `uploading = true` into the same commit that clears `editSession` so `useHoldReload`
+    // never drops to false during the Promise microtask between `finishEdit` and `uploadFile`.
+    setUploading(true);
     finishEdit(file);
   }
 
@@ -2122,9 +2125,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           continue;
         }
         const edited = await requestEdit(file);
-        if (!mountedRef.current || epoch !== editEpoch.current) return;
+        if (!mountedRef.current || epoch !== editEpoch.current) {
+          if (mountedRef.current) setUploading(false);
+          return;
+        }
         if (edited === "cancel") continue;
-        if (lockedRef.current || offlineRef.current) return;
+        if (lockedRef.current || offlineRef.current) {
+          setUploading(false);
+          return;
+        }
         const target = draftPaneRef.current;
         await uploadFile(edited, target.paneId, target.scope);
         continue;

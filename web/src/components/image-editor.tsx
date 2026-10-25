@@ -18,6 +18,7 @@ import {
   clampUnit,
   commitAnnotation,
   commitCropChange,
+  cropCornerHandleBoxes,
   drawAnnotation,
   exportEditedCanvas,
   hitCropHandle,
@@ -264,7 +265,7 @@ function paintEditorStage(
   crop: CropBox,
   annotations: readonly EditorAnnotation[],
   showHandles: boolean,
-): void {
+): boolean {
   const scale = Math.min(
     1,
     MAX_PREVIEW_DIMENSION / Math.max(1, loadedImage.naturalWidth, loadedImage.naturalHeight),
@@ -275,7 +276,7 @@ function paintEditorStage(
   if (canvas.height !== targetH) canvas.height = targetH;
 
   const ctx = canvas.getContext("2d");
-  if (ctx === null || !("drawImage" in ctx)) return;
+  if (ctx === null || !("drawImage" in ctx)) return false;
 
   ctx.clearRect?.(0, 0, targetW, targetH);
   ctx.drawImage(loadedImage.element, 0, 0, targetW, targetH);
@@ -301,25 +302,17 @@ function paintEditorStage(
   ctx.strokeRect?.(cx, cy, cw, ch);
 
   if (showHandles) {
-    const hSize = Math.max(12, Math.round(Math.min(targetW, targetH) * 0.035));
-    const half = Math.round(hSize / 2);
-    const corners: readonly [number, number][] = [
-      [cx, cy],
-      [cx + cw, cy],
-      [cx, cy + ch],
-      [cx + cw, cy + ch],
-    ];
+    const handles = cropCornerHandleBoxes(crop, targetW, targetH);
     ctx.fillStyle = "#ffffff";
     ctx.strokeStyle = "#0a0a0a";
     ctx.lineWidth = 1.5;
-    for (const [hx, hy] of corners) {
-      const rx = Math.max(1, Math.min(targetW - hSize - 1, hx - half));
-      const ry = Math.max(1, Math.min(targetH - hSize - 1, hy - half));
-      ctx.fillRect?.(rx, ry, hSize, hSize);
-      ctx.strokeRect?.(rx, ry, hSize, hSize);
+    for (const box of handles) {
+      ctx.fillRect?.(box.x, box.y, box.size, box.size);
+      ctx.strokeRect?.(box.x, box.y, box.size, box.size);
     }
   }
   ctx.restore?.();
+  return true;
 }
 
 export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: ImageEditorProps) {
@@ -368,13 +361,17 @@ export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: Ima
         ? [...session.history.annotations, session.gesture.draft]
         : session.history.annotations;
     try {
-      paintEditorStage(
+      const painted = paintEditorStage(
         canvas,
         session.loadedImage,
         activeCrop,
         activeAnnotations,
         session.tool === EDITOR_TOOLS.crop,
       );
+      if (!painted) {
+        dispatch({ type: "imageFailed" });
+        onFailRef.current("failed");
+      }
     } catch {
       dispatch({ type: "imageFailed" });
       onFailRef.current("failed");

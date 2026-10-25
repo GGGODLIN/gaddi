@@ -31,12 +31,35 @@ function loadEditorImage(dialog: HTMLElement, width = 200, height = 100) {
   fireEvent.load(img);
 }
 
+function makeMock2dContext(): CanvasRenderingContext2D {
+  const partial: Partial<CanvasRenderingContext2D> = {
+    clearRect: vi.fn(),
+    drawImage: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    ellipse: vi.fn(),
+    stroke: vi.fn(),
+    translate: vi.fn(),
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
+    lineCap: "butt",
+    lineJoin: "miter",
+  };
+  // SAFETY: test double implements every 2D context method paintEditorStage, drawAnnotation, and exportEditedCanvas call.
+  return partial as CanvasRenderingContext2D;
+}
+
 describe("ImageEditor sheet shell and native canvas tools", () => {
   beforeEach(() => {
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:editor");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-    // SAFETY: test stub provides a non-null 2D context for canvasAvailable and optional drawing calls.
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({} as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => makeMock2dContext());
   });
 
   afterEach(() => {
@@ -137,7 +160,7 @@ describe("ImageEditor sheet shell and native canvas tools", () => {
     expect(exportedFile?.size).toBe("cropped-annotated-png".length);
   });
 
-  it("reports a missing canvas on the first commit, and Cancel uses the latest callback", () => {
+  it("reports a missing canvas on the first commit, fails when the preview canvas returns null context, and Cancel uses the latest callback", () => {
     const onFail = vi.fn();
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     const failed = render(
@@ -146,8 +169,24 @@ describe("ImageEditor sheet shell and native canvas tools", () => {
     expect(onFail).toHaveBeenCalledWith("unavailable");
     failed.unmount();
 
-    // SAFETY: canvasAvailable only checks non-null. This value is never drawn on.
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({} as CanvasRenderingContext2D);
+    // If canvasAvailable() succeeds on the probe canvas but the preview canvas returns null on paint,
+    // the session marks itself broken, disables Confirm, and notifies onFail("failed").
+    const onStageFail = vi.fn();
+    let getContextCalls = 0;
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => {
+      getContextCalls += 1;
+      return getContextCalls === 1 ? makeMock2dContext() : null;
+    });
+    const stageFailed = render(
+      <ImageEditor file={new File(["x"], "shot.png", { type: "image/png" })} onConfirm={vi.fn()} onCancel={vi.fn()} onFail={onStageFail} onReject={vi.fn()} />,
+    );
+    const stageDialog = screen.getByRole("dialog", { name: "Edit image" });
+    loadEditorImage(stageDialog, 200, 100);
+    expect(onStageFail).toHaveBeenCalledWith("failed");
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeDisabled();
+    stageFailed.unmount();
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => makeMock2dContext());
     const first = vi.fn();
     const second = vi.fn();
     const file = new File(["x"], "shot.png", { type: "image/png" });

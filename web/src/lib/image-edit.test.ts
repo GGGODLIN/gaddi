@@ -13,6 +13,7 @@ import {
   clampCropBox,
   commitAnnotation,
   commitCropChange,
+  cropCornerHandleBoxes,
   drawAnnotation,
   exportEditedCanvas,
   extensionForMime,
@@ -68,6 +69,39 @@ describe("native canvas editor geometry and history", () => {
     expect(hitCropHandle(narrow, { x: 0.25, y: 0.2 }, rx, ry)).toBe("ne");
     expect(hitCropHandle(narrow, { x: 0.25, y: 0.4 }, rx, ry)).toBe("e");
     expect(hitCropHandle(narrow, { x: 0.225, y: 0.4 }, rx, ry)).toBe("move");
+
+    // Narrow crop box touching the left edge (`x: 0, width: 0.05`) on a 1200x1200 preview bitmap
+    // displayed at 320x320 CSS px: the visual center of every drawn corner handle must hit its own
+    // corner (`nw`, `ne`, `sw`, `se`), while the top edge midpoint hits `n` and the box center hits `move`.
+    const edgeNarrow = { x: 0, y: 0.25, width: 0.05, height: 0.5 };
+    const squareRadius = 22 / 320;
+    for (const boxHandle of cropCornerHandleBoxes(edgeNarrow, 1200, 1200)) {
+      expect(hitCropHandle(edgeNarrow, boxHandle.center, squareRadius, squareRadius)).toBe(
+        boxHandle.handle,
+      );
+    }
+    expect(hitCropHandle(edgeNarrow, { x: 0.025, y: 0.25 }, squareRadius, squareRadius)).toBe("n");
+    expect(hitCropHandle(edgeNarrow, { x: 0.025, y: 0.5 }, squareRadius, squareRadius)).toBe("move");
+
+    // Minimum 2% span crop boxes at both canvas corners:
+    for (const minBox of [
+      { x: 0, y: 0, width: MIN_CROP_SPAN, height: MIN_CROP_SPAN },
+      { x: 1 - MIN_CROP_SPAN, y: 1 - MIN_CROP_SPAN, width: MIN_CROP_SPAN, height: MIN_CROP_SPAN },
+    ]) {
+      for (const boxHandle of cropCornerHandleBoxes(minBox, 1200, 1200)) {
+        expect(hitCropHandle(minBox, boxHandle.center, squareRadius, squareRadius)).toBe(
+          boxHandle.handle,
+        );
+      }
+      expect(
+        hitCropHandle(
+          minBox,
+          { x: minBox.x + minBox.width / 2, y: minBox.y + minBox.height / 2 },
+          squareRadius,
+          squareRadius,
+        ),
+      ).toBe("move");
+    }
   });
 
   it("resizes, moves, and draws new crop boxes within bounds", () => {
@@ -211,7 +245,14 @@ describe("native canvas editor geometry and history", () => {
       1000,
       10000,
       FULL_CROP,
-      [],
+      [
+        {
+          kind: "arrow",
+          start: { x: 0.1, y: 0.1 },
+          end: { x: 0.5, y: 0.2 },
+          color: DEFAULT_ANNOTATION_COLOR,
+        },
+      ],
       () => {
         const c = document.createElement("canvas");
         vi.spyOn(c, "getContext").mockReturnValue(fakeCtx);
@@ -220,6 +261,44 @@ describe("native canvas editor geometry and history", () => {
     );
     expect(tallExport?.height).toBe(MAX_EXPORT_DIMENSION);
     expect(tallExport?.width).toBe(Math.round(1000 * (MAX_EXPORT_DIMENSION / 10000)));
+
+    // A tall stitched screenshot (1170x20000) cropped to a small slice (1170x400) keeps a normal
+    // ~7 px stroke width scaled to its shorter 1170 px axis, matching the 70x1200 preview ratio.
+    drawAnnotation(
+      fakeCtx,
+      {
+        kind: "arrow",
+        start: { x: 0.2, y: 0.105 },
+        end: { x: 0.8, y: 0.115 },
+        color: DEFAULT_ANNOTATION_COLOR,
+      },
+      70,
+      1200,
+    );
+    const previewStrokeWidth = fakeCtx.lineWidth;
+    expect(previewStrokeWidth).toBeCloseTo(70 * 0.006, 5);
+
+    exportEditedCanvas(
+      img,
+      1170,
+      20000,
+      { x: 0, y: 0.1, width: 1, height: 0.02 },
+      [
+        {
+          kind: "arrow",
+          start: { x: 0.2, y: 0.105 },
+          end: { x: 0.8, y: 0.115 },
+          color: DEFAULT_ANNOTATION_COLOR,
+        },
+      ],
+      () => {
+        const c = document.createElement("canvas");
+        vi.spyOn(c, "getContext").mockReturnValue(fakeCtx);
+        return c;
+      },
+    );
+    expect(fakeCtx.lineWidth).toBeCloseTo(1170 * 0.006, 5);
+    expect(fakeCtx.lineWidth / previewStrokeWidth).toBeCloseTo(1170 / 70, 5);
   });
 });
 

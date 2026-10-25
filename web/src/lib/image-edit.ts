@@ -156,6 +156,58 @@ export function hitCropHandle(
   return "new";
 }
 
+export interface CornerHandleBox {
+  handle: "nw" | "ne" | "sw" | "se";
+  x: number;
+  y: number;
+  size: number;
+  center: NormalizedPoint;
+}
+
+export function cropCornerHandleBoxes(
+  crop: CropBox,
+  width: number,
+  height: number,
+): readonly CornerHandleBox[] {
+  const targetW = Math.max(1, width);
+  const targetH = Math.max(1, height);
+  const clamped = clampCropBox(crop);
+  const cx = clamped.x * targetW;
+  const cy = clamped.y * targetH;
+  const cw = clamped.width * targetW;
+  const ch = clamped.height * targetH;
+
+  // Cap handle size to 30% of the narrower crop axis so edge-clamped handles stay inside
+  // `hitCropHandle`'s `crop.width * 0.3` / `crop.height * 0.3` corner zones and never intrude into
+  // the central 40% `move` region.
+  const baseSize = Math.min(targetW, targetH) * 0.035;
+  const maxByCrop = Math.min(cw, ch) * 0.3;
+  const size = Math.max(0.5, Math.min(baseSize, maxByCrop));
+  const half = size / 2;
+
+  const corners: readonly { handle: "nw" | "ne" | "sw" | "se"; hx: number; hy: number }[] = [
+    { handle: "nw", hx: cx, hy: cy },
+    { handle: "ne", hx: cx + cw, hy: cy },
+    { handle: "sw", hx: cx, hy: cy + ch },
+    { handle: "se", hx: cx + cw, hy: cy + ch },
+  ];
+
+  return corners.map(({ handle, hx, hy }) => {
+    const x = Math.max(0, Math.min(targetW - size, hx - half));
+    const y = Math.max(0, Math.min(targetH - size, hy - half));
+    return {
+      handle,
+      x,
+      y,
+      size,
+      center: {
+        x: clampUnit((x + half) / targetW),
+        y: clampUnit((y + half) / targetH),
+      },
+    };
+  });
+}
+
 export function applyCropDrag(
   handle: CropHandle,
   startCrop: CropBox,
@@ -286,9 +338,11 @@ export function drawAnnotation(
   height: number,
 ): void {
   if (!("beginPath" in ctx) || width <= 0 || height <= 0) return;
-  // Scale stroke width and arrow wings to the longer image axis so tall screenshots keep the same
-  // visual weight between the 1200 px preview and the exported image.
-  const strokeWidth = Math.max(1.5, Math.max(width, height) * 0.005);
+  // Scale stroke width and arrow wings to the shorter image axis without a high pixel floor: both
+  // axes scale by the same factor between the 1200 px preview and full export, while a tall
+  // stitched screenshot (e.g. 1170×20000) keeps a normal ~7 px stroke instead of scaling to its
+  // 20000 px height.
+  const strokeWidth = Math.max(0.25, Math.min(width, height) * 0.006);
   ctx.save?.();
   ctx.strokeStyle = annotation.color;
   ctx.fillStyle = annotation.color;

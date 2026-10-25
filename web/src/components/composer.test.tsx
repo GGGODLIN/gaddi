@@ -8,7 +8,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import * as api from "@/lib/api";
 import { setLocale, whenLocaleReady } from "@/lib/i18n";
 import { clearStatus, useStatus } from "@/lib/status";
-import { isReloadHeld, __resetReloadGuard } from "@/lib/reload-guard";
+import { isReloadHeld, subscribeReloadHeld, __resetReloadGuard } from "@/lib/reload-guard";
 import { loadDraft, loadDraftEntry, saveDraft } from "@/lib/drafts";
 import { __resetOperatorCommands } from "@/lib/operator-config";
 import { server } from "@/test/setup";
@@ -4474,6 +4474,86 @@ describe("Composer — an image is edited before it uploads", () => {
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(/Reconnect to send/));
     expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument();
     expect(uploads).toBe(0);
+  });
+
+  it("holds reload continuously from opening the editor through upload completion, survives transient offline blips, and remounts for identical file metadata", async () => {
+    const user = userEvent.setup();
+    __resetReloadGuard();
+    const holdStates: boolean[] = [];
+    const unsubscribe = subscribeReloadHeld(() => {
+      holdStates.push(isReloadHeld());
+    });
+    let setStaleProp: ((stale: boolean) => void) | null = null;
+    function OfflineHarness() {
+      const [stale, setStale] = useState(false);
+      setStaleProp = setStale;
+      return (
+        <>
+          <StatusSentinel />
+          <Composer
+            paneId="w1:p1"
+            agent="claude"
+            isShell={false}
+            gone={false}
+            readOnly={false}
+            stale={stale}
+            surface={FREE}
+            text="pane output"
+            terminalDraft={null}
+            rawTerminalDraft={null}
+            prefs={{ wrap: true, fontSize: 11, draftFontSize: 14, chatFontSize: 14, fontFamily: "system", rawTerminal: false, tapToFocus: true, expandClippedReply: true, stretchText: false }}
+            display={{ open: false, onToggle: vi.fn() }}
+            onSent={vi.fn()}
+          />
+        </>
+      );
+    }
+
+    let uploads = 0;
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/upload$/, () => {
+        uploads += 1;
+        return HttpResponse.json({ ok: true, path: `/tmp/shot-${uploads}.png` });
+      }),
+    );
+
+    try {
+      render(
+        <RouterProvider router={createMemoryRouter([{ path: "/", element: <OfflineHarness /> }])} />,
+      );
+      expect(isReloadHeld()).toBe(false);
+
+      const firstFile = new File(["same-bytes"], "clipboard.png", { type: "image/png", lastModified: 1700000000000 });
+      pick(firstFile);
+      const firstDialog = await screen.findByRole("dialog", { name: "Edit image" });
+      expect(isReloadHeld()).toBe(true);
+
+      // Transient offline blip while editing must not close the local editor; confirming while offline
+      // reports Reconnect and keeps the editor open until online returns.
+      act(() => setStaleProp?.(true));
+      expect(screen.getByRole("dialog", { name: "Edit image" })).toBe(firstDialog);
+      await user.click(screen.getByRole("button", { name: "Use this image" }));
+      await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(/Reconnect to send/));
+      expect(uploads).toBe(0);
+      expect(screen.getByRole("dialog", { name: "Edit image" })).toBe(firstDialog);
+
+      act(() => setStaleProp?.(false));
+      holdStates.length = 0;
+      await user.click(screen.getByRole("button", { name: "Use this image" }));
+      await waitFor(() => expect(uploads).toBe(1));
+      // Hold never dropped to false between confirmEdit and uploadFile:
+      expect(holdStates).not.toContain(false);
+      expect(isReloadHeld()).toBe(true);
+
+      // Picking a new File with identical name, size, and lastModified opens a fresh session.
+      const secondFile = new File(["same-bytes"], "clipboard.png", { type: "image/png", lastModified: 1700000000000 });
+      pick(secondFile);
+      expect(await screen.findByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Cancel edit" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument());
+    } finally {
+      unsubscribe();
+    }
   });
 });
 
