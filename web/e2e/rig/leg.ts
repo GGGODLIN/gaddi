@@ -322,7 +322,7 @@ export interface TapLog {
 }
 
 // `update/line` is the Release line control's one write (crew case 15): its receipt says `ok`.
-const WATCHED = /\/api\/(ask\/|send$|walky$|update\/line$|pane\/[^/]+\/(keys|reply)$)/;
+const WATCHED = /\/api\/(ask\/|send$|walky$|update\/line$|pane\/[^/]+\/(keys|reply|abort|clear)$)/;
 
 /** Records the bridge's answer to every write the page makes, and the ask ids its snapshots carried. */
 export class TapRecorder {
@@ -409,15 +409,19 @@ const WALKY_TAKEN: ReadonlySet<string> = new Set(["accepted", "delivered", "inbo
 /** True when the bridge took the write: an ask or send that went in, a key press it pressed. */
 export function accepted(answer: Answer): boolean {
   if (answer.status !== 200) return false;
-  if (answer.path.startsWith("/api/send")) return answer.outcome === "sent" || answer.outcome === "effective" || answer.outcome === "held";
+  if (answer.path.startsWith("/api/send")) return answer.outcome === "sent" || answer.outcome === "effective" || answer.outcome === "held" || answer.outcome === "steered";
   if (answer.path.startsWith("/api/ask/")) return answer.outcome === "sent" || answer.outcome === "effective";
   // A walky talky message the bridge took: logged, typed, or kept in the inbox (lib/walky.ts wasTaken).
   if (answer.path === "/api/walky") return answer.outcome !== null && WALKY_TAKEN.has(answer.outcome);
+  // A Stop (ADR 0116) is taken when its receipt says `stopped`: `pressed` and every refusal are not a stop.
+  if (answer.path.endsWith("/abort")) return answer.outcome === "stopped";
+  // A Clear (ADR 0116) is taken when its receipt says `cleared`: every refusal leaves the box as it was.
+  if (answer.path.endsWith("/clear")) return answer.outcome === "cleared";
   return answer.outcome === "ok";
 }
 
 export function answerWords(answer: Answer): string {
-  const where = answer.path.startsWith("/api/ask/") ? "ask" : answer.path.startsWith("/api/send") ? "send" : answer.path === "/api/walky" ? "walky" : answer.path.endsWith("/keys") ? "keys" : "reply";
+  const where = answer.path.startsWith("/api/ask/") ? "ask" : answer.path.startsWith("/api/send") ? "send" : answer.path === "/api/walky" ? "walky" : answer.path.endsWith("/keys") ? "keys" : answer.path.endsWith("/abort") ? "stop" : answer.path.endsWith("/clear") ? "clear" : "reply";
   return `${where} ${String(answer.status)} ${answer.outcome ?? "-"}${answer.reason === null ? "" : ` (${answer.reason})`}`;
 }
 
@@ -637,9 +641,17 @@ export async function sendFromComposer(page: Page, recorder: TapRecorder, text: 
   return tap(recorder, page.getByRole("button", { name: message("composer.send.sendAria"), exact: true }), label);
 }
 
+/** The most ctrl+u presses {@link resetBox} spends on one draft: one per line of the box. */
+const RESET_LINES = 6;
+
 /**
  * Leave the input box empty before a scenario: close an open menu or dialog with Escape and clear a
  * draft with ctrl+u. Clean-up outside the phone, so it is noted and never counted as a tap.
+ *
+ * ctrl+u clears one line of the box, so a draft of several lines (a walky talky header and its body,
+ * typed and not submitted) takes one press per line. It presses again while the box reads a draft, at
+ * most {@link RESET_LINES} times. Field case 2026-10-21: one press left a message header in Claude's
+ * box, and the next case's broadcast was held behind it.
  */
 export async function resetBox(rig: Rig, paneId: string, host?: Host): Promise<string | null> {
   const pane = await rig.pane(paneId, host).catch(() => null);
@@ -652,11 +664,15 @@ export async function resetBox(rig: Rig, paneId: string, host?: Host): Promise<s
     steps.push("Escape");
     await sleep(600);
   }
-  const after = await rig.pane(paneId, host).catch(() => null);
-  if (after?.surface?.composer === "draft") {
+  let presses = 0;
+  let after = await rig.pane(paneId, host).catch(() => null);
+  while (after?.surface?.composer === "draft" && presses < RESET_LINES) {
     await rig.keys(paneId, ["ctrl+u"], host);
-    steps.push("ctrl+u");
+    presses += 1;
+    await sleep(400);
+    after = await rig.pane(paneId, host).catch(() => null);
   }
+  if (presses > 0) steps.push(presses === 1 ? "ctrl+u" : `ctrl+u x${String(presses)}`);
   await rig.until(() => rig.pane(paneId, host), freeSurface, 5000);
   return steps.length === 0 ? null : `box reset outside the phone (${steps.join(", ")})`;
 }

@@ -17,7 +17,7 @@
 import type { StyledLine } from "../../blocks";
 import { displayWidth, widePieces } from "../../text-width";
 import { classifyFooter, hasQuestionMark, isBlank, isRuleRow, lineText, questionRowText } from "./markers";
-import { parseOptionRow } from "./prompt-select";
+import { parseOptionRow, SINGLE_SELECT_CHIP } from "./prompt-select";
 import { parseStepperLine } from "./wizard";
 import type { PreviewNote, PreviewOption, PreviewSelectModel } from "../preview-model";
 import type { WizardStepChip } from "../wizard-model";
@@ -294,7 +294,6 @@ export function detectPreviewSelectRegion(lines: StyledLine[]): PreviewSelectReg
 // A single-question dialog's chip row (" ☐ Design"): the first row of the dialog under its rule, which
 // tops the question the way a wizard's stepper does.
 const CHIP_ROW = /^[←→\s]*[☐☒☑✔✅]\s/u;
-const SINGLE_SELECT_CHIP = /^\s*☐\s+\S/u;
 
 /** What sits above a preview dialog's question paragraph. */
 interface QuestionHead {
@@ -321,10 +320,9 @@ function readQuestionHead(lines: StyledLine[], texts: string[], questionIdx: num
 }
 
 /**
- * Fork-only (ADR 9012): when a preview dialog's question carries no question mark at all, locate its
- * top rule within `DIALOG_SCAN_LIMIT` and accept a wizard stepper or unanswered `☐ <label>` chip only
- * when it is the very first non-blank row under that rule (so a `✅` line inside the question body is
- * never mistaken for the header chip).
+ * When the dialog's top rule is within `DIALOG_SCAN_LIMIT` and its first non-blank row is a wizard
+ * stepper or a single-question `☐ <label>` chip, return that header as `QuestionHead` so the question
+ * is read by position (matching `questionUnderChip` in `prompt-select.ts`).
  */
 function readRuleAnchoredPreviewHead(
   lines: StyledLine[],

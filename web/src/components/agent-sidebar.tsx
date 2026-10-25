@@ -3,6 +3,7 @@ import { Loader2, Play, TerminalSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentIcon } from "@/components/agent-icon";
 import { PaneMeta } from "@/components/pane-meta";
+import { HostChip } from "@/components/host-chip";
 import { PaneOrderToggle } from "@/components/pane-order-toggle";
 import { SectionHeader } from "@/components/section-header";
 import { StatusCounts, StatusSummaryLine } from "@/components/status-counts";
@@ -86,6 +87,12 @@ interface ThreadSidebarProps {
   onOrderChange?: (order: PaneOrder) => void;
   /** Override the list container padding (e.g. flush inside a bottom sheet). */
   className?: string;
+  /**
+   * The large screen's standing sidebar (ADR 0120), not the switcher sheet: rows on a 16px inset with
+   * more air, the space headings in the quiet voice (muted, the name's own case), and badges in the
+   * muted ink, so the pane's name is the one thing in full ink.
+   */
+  roomy?: boolean;
 }
 
 // The pane switcher supports place order for callers that need fixed workspace groups (ADR 0063).
@@ -152,6 +159,7 @@ export function ThreadSidebar({
   order = "place",
   onOrderChange,
   className,
+  roomy = false,
 }: ThreadSidebarProps) {
   useLocale();
   // THE ORDER, AND WHY IT IS READ ONCE: see `useFrozenRanks` and the long note below. Called here, above
@@ -225,7 +233,7 @@ export function ThreadSidebar({
   };
 
   return (
-    <div className={cn("flex flex-col gap-4 px-2 py-3", className)}>
+    <div className={cn("flex flex-col px-2 py-3", roomy ? "gap-6" : "gap-4", className)}>
       {noPanes && (
         <p className="px-2 py-2 text-sm text-muted-foreground">{t("home.empty.noAgents")}</p>
       )}
@@ -234,7 +242,7 @@ export function ThreadSidebar({
         <>
           {/* Pinned leads here too (ADR 0070): a pinned pane leaves its attention bucket, listed once. */}
           {pinned.length > 0 && (
-            <Section id="switch-pinned" headingId="switch-pinned-heading" label={t("home.pinned.title")}>
+            <Section roomy={roomy} id="switch-pinned" headingId="switch-pinned-heading" label={t("home.pinned.title")}>
               {pinned.map((a) => (
                 <PaneRow
                   key={paneRowKey(a)}
@@ -242,6 +250,7 @@ export function ThreadSidebar({
                   pane={a}
                   active={paneRowKey(a) === currentPaneKey}
                   onSelect={onSelect}
+                  roomy={roomy}
                 />
               ))}
             </Section>
@@ -253,6 +262,7 @@ export function ThreadSidebar({
               if (members.length === 0) return null;
               return (
                 <Section
+                  roomy={roomy}
                   key={g.key}
                   id={`switch-${g.key}`}
                   label={g.label}
@@ -267,6 +277,7 @@ export function ThreadSidebar({
                       pane={a}
                       active={paneRowKey(a) === currentPaneKey}
                       onSelect={onSelect}
+                      roomy={roomy}
                     />
                   ))}
                 </Section>
@@ -274,6 +285,7 @@ export function ThreadSidebar({
             })}
           {shellRows.length > 0 && (
             <Section
+              roomy={roomy}
               id="switch-shells"
               label={t("home.sidebar.shells")}
               count={shellRows.length}
@@ -285,7 +297,9 @@ export function ThreadSidebar({
                   key={paneRowKey(pane)}
                   pane={pane}
                   active={paneRowKey(pane) === currentPaneKey}
+                  id={rowDomId(pane)}
                   onSelect={onSelect}
+                  roomy={roomy}
                 />
               ))}
             </Section>
@@ -296,7 +310,7 @@ export function ThreadSidebar({
           {/* ONE CHROME ROW, not two. The summary line is the alarm and keeps the left, where ADR 0063
               point 3 puts urgency; the order control takes the right as glyphs. */}
           {(agents.length > 0 || (onOrderChange && !noPanes)) && (
-            <div className="flex items-center justify-between gap-2 px-2">
+            <div className={cn("flex items-center justify-between gap-2 px-2", roomy && "min-h-11")}>
               {agents.length > 0 ? (
                 <StatusSummaryLine
                   panes={urgent}
@@ -315,13 +329,14 @@ export function ThreadSidebar({
                     onOrderChange(next);
                   }}
                   compact
+                  {...(roomy ? { iconClassName: "size-5" } : {})}
                 />
               )}
             </div>
           )}
 
           {pinned.length > 0 && (
-            <Section id="switch-pinned" headingId="switch-pinned-heading" label={t("home.pinned.title")}>
+            <Section roomy={roomy} id="switch-pinned" headingId="switch-pinned-heading" label={t("home.pinned.title")}>
               {pinnedShown.map((a) => (
                 <PaneRow
                   key={paneRowKey(a)}
@@ -329,6 +344,7 @@ export function ThreadSidebar({
                   pane={a}
                   active={paneRowKey(a) === currentPaneKey}
                   onSelect={onSelect}
+                  roomy={roomy}
                 />
               ))}
             </Section>
@@ -337,10 +353,11 @@ export function ThreadSidebar({
           {ranked ? (
             rankedRows.length > 0 && (
               <Section
+                roomy={roomy}
                 id="switch-activity"
                 label={t(order === "cache" ? "paneOrder.coldest" : "paneOrder.recent")}
                 count={rankedRows.length}
-                tone="strong"
+                tone={roomy ? "quiet" : "strong"}
               >
                 {rankedRows.map((a) => (
                   <PaneRow
@@ -349,6 +366,7 @@ export function ThreadSidebar({
                     pane={a}
                     active={paneRowKey(a) === currentPaneKey}
                     onSelect={onSelect}
+                    roomy={roomy}
                   />
                 ))}
               </Section>
@@ -357,10 +375,11 @@ export function ThreadSidebar({
             <>
               {sections.map(({ group: g, rows }) => (
                 <Section
+                  roomy={roomy}
                   key={g.key}
                   id={`switch-ws-${g.key.replace(/[^A-Za-z0-9_-]/gu, "_")}`}
                   label={g.label}
-                  tone="strong"
+                  tone={roomy ? "quiet" : "strong"}
                   mark={worstTriage(g.panes) === "needs" ? "blocked" : undefined}
                   trailing={<StatusCounts panes={g.panes} className="shrink-0 text-[11px] text-muted-foreground" />}
                 >
@@ -371,12 +390,14 @@ export function ThreadSidebar({
                       pane={a}
                       active={paneRowKey(a) === currentPaneKey}
                       onSelect={onSelect}
+                      roomy={roomy}
                     />
                   ))}
                 </Section>
               ))}
               {shellRows.length > 0 && (
                 <Section
+                  roomy={roomy}
                   id="switch-shells"
                   label={t("home.sidebar.shells")}
                   count={shellRows.length}
@@ -389,6 +410,7 @@ export function ThreadSidebar({
                       pane={pane}
                       active={paneRowKey(pane) === currentPaneKey}
                       onSelect={onSelect}
+                      roomy={roomy}
                     />
                   ))}
                 </Section>
@@ -400,6 +422,7 @@ export function ThreadSidebar({
 
       {launchers.length > 0 && onLaunch && (
         <Section
+          roomy={roomy}
           id="switch-launch"
           label="Launch"
           count={launchers.length}
@@ -437,6 +460,7 @@ function Section({
   trailing,
   open,
   onToggle,
+  roomy = false,
   children,
 }: {
   id: string;
@@ -450,10 +474,12 @@ function Section({
   mark?: AgentStatus | undefined;
   /** A plain status-palette bullet, for a section that is a kind of thing (Shells, Launch). */
   dot?: string | undefined;
-  tone?: "muted" | "strong";
+  tone?: "muted" | "strong" | "quiet";
   trailing?: React.ReactNode;
   open?: boolean;
   onToggle?: (open: boolean) => void;
+  /** The large screen's sidebar: a hairline between rows. */
+  roomy?: boolean;
   children: React.ReactNode;
 }) {
   const foldable = open !== undefined && onToggle !== undefined;
@@ -472,22 +498,35 @@ function Section({
         {...(trailing !== undefined ? { trailing } : {})}
         {...(foldable ? { open, onToggle, controls: id } : {})}
       />
-      {(!foldable || open) && <div id={id}>{children}</div>}
+      {(!foldable || open) && (
+        <div id={id} className={roomy ? ROW_RULES : undefined}>
+          {children}
+        </div>
+      )}
     </section>
   );
 }
+
+// THE HAIRLINE BETWEEN ROWS (DESIGN.md §4: a boundary is drawn once). Each row after the first draws
+// it on its own top edge, inside the 1px its transparent border already reserves, so it costs no
+// height and never meets the alarm edge's colour. Inset to the rows' 16px text line.
+const ROW_RULES =
+  "[&>*+*]:relative [&>*+*]:before:pointer-events-none [&>*+*]:before:absolute [&>*+*]:before:inset-x-2 [&>*+*]:before:-top-px [&>*+*]:before:h-px [&>*+*]:before:bg-rule";
 
 function PaneRow({
   id,
   pane,
   active,
   onSelect,
+  roomy = false,
 }: {
-  /** The row's DOM id, for the summary line's jump. Shell rows need none. */
+  /** The row's DOM id, for the summary line's jump. Every row has one, shells too. */
   id?: string;
   pane: AgentView;
   active: boolean;
   onSelect: (pane: AgentView) => void;
+  /** The large screen's sidebar ({@link ThreadSidebarProps.roomy}). */
+  roomy?: boolean;
 }) {
   const isShell = pane.kind === "shell";
   // ONE NAME, ONE PLACE (lib/pane-name.ts), the same way round as every other row in the app: the
@@ -507,6 +546,10 @@ function PaneRow({
     <button
       id={id}
       type="button"
+      // The row's full identity (paneRowKey), read back by a large screen's row gestures (a hold
+      // opens "Open here" and "Open beside", a drag carries the row into the strip, ADR 0120). The
+      // gestures sit on a host around this list, so the list itself takes only the tap.
+      data-pane-key={paneRowKey(pane)}
       onClick={() => onSelect(pane)}
       aria-current={active ? "page" : undefined}
       className={cn(
@@ -514,7 +557,9 @@ function PaneRow({
         // changes the paint. Added by state it would pull the text 1px in and grow the row 2px,
         // which is the zig-zag every switcher row above and below it would then sit out of line
         // with. This is a gap list, not a divide-y one, so a four-sided edge is the right mark.
-        "flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors",
+        "flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-transparent text-left transition-colors",
+        // The sidebar's 16px inset is the list's 8 plus the row's 8, and its 44px floor a little more air.
+        roomy ? "min-h-11 px-2 py-2.5" : "px-2.5 py-2",
         active ? "bg-accent text-accent-foreground" : "hover:bg-muted/60 active:bg-muted",
         // The switcher is exactly where you jump TO the thing that needs you, so it must be able to
         // SHOW that — it renders every pane identically otherwise. Staying denser than the dashboard
@@ -536,16 +581,16 @@ function PaneRow({
       )}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-1">
-          <span className="min-w-0 truncate text-sm font-medium">{name}</span>
+          <span className={cn("min-w-0 truncate text-sm font-medium", roomy && "leading-5", roomy && !active && "text-foreground")}>{name}</span>
           <PaneBadge pane={pane} className="shrink-0 self-center" />
           <PaneMeta
-            host={pane.host}
+            host={undefined}
             cache={pane.cache}
             session={pane.session}
             className="ml-auto"
           />
         </div>
-        <div className="flex min-w-0 items-baseline gap-1 text-[11px] text-muted-foreground">
+        <div className={cn("flex min-w-0 items-baseline gap-1 text-[11px] text-muted-foreground", roomy && "leading-4")}>
           {described !== undefined ? (
             <span className="min-w-0 flex-1 truncate">{described}</span>
           ) : (
@@ -569,6 +614,13 @@ function PaneRow({
               </span>
             </>
           )}
+          {/* WHICH MACHINE, as its tint and its glyph alone (Altan, 2026-10-21): on a crew this sheet
+              lists every machine's panes, and in activity order there is no heading to say whose. A
+              word would be a third thing on a line that already carries the place, so the machine is
+              the one mark the dashboard row and the pane header already use for it, with the name in
+              the label. Hidden on a one-machine install by HostChip's own rule, so a solo row is
+              byte-identical. `self-center`: a glyph has no baseline to stand on. */}
+          <HostChip host={pane.host} variant="glyph" className="ml-auto self-center" />
         </div>
         {/* A durable program's own line, when it set one (WIRE.md 7.11). A third line only for such a pane. */}
         {subtitle !== null && (

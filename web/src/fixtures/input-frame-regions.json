@@ -490,6 +490,86 @@
   "frame": null
  },
  {
+  "fixture": "claude--v2-1-309-interrupted--w120.txt",
+  "frame": {
+   "top": 20,
+   "prompt": 21,
+   "bottom": 22,
+   "label": null,
+   "text": "",
+   "placeholder": false,
+   "status": {
+    "first": 23,
+    "last": 25
+   },
+   "footer": null
+  }
+ },
+ {
+  "fixture": "claude--v2-1-309-interrupted-fresh-session--w120.txt",
+  "frame": {
+   "top": 34,
+   "prompt": 35,
+   "bottom": 36,
+   "label": null,
+   "text": "",
+   "placeholder": false,
+   "status": {
+    "first": 37,
+    "last": 39
+   },
+   "footer": null
+  }
+ },
+ {
+  "fixture": "claude--v2-1-309-permission-denied--w120.txt",
+  "frame": {
+   "top": 15,
+   "prompt": 16,
+   "bottom": 17,
+   "label": null,
+   "text": "",
+   "placeholder": false,
+   "status": {
+    "first": 18,
+    "last": 20
+   },
+   "footer": null
+  }
+ },
+ {
+  "fixture": "claude--v2-1-309-permission-denied-fresh-session--w120.txt",
+  "frame": {
+   "top": 34,
+   "prompt": 35,
+   "bottom": 36,
+   "label": null,
+   "text": "",
+   "placeholder": false,
+   "status": {
+    "first": 37,
+    "last": 39
+   },
+   "footer": null
+  }
+ },
+ {
+  "fixture": "claude--v2-1-309-stopped-prompt-restored--w120.txt",
+  "frame": {
+   "top": 34,
+   "prompt": 35,
+   "bottom": 36,
+   "label": null,
+   "text": "Write 700 numbered lines, one short fact about apples per line. No tools, no preamble, do not stop early.",
+   "placeholder": false,
+   "status": {
+    "first": 37,
+    "last": 39
+   },
+   "footer": null
+  }
+ },
+ {
   "fixture": "claude--v2283-ask-long-question--w50.txt",
   "frame": null
  },
@@ -839,6 +919,82 @@
  },
  {
   "fixture": "claude--v2296-question-fullwidth--w150.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-multi-focused-cleared.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-multi-focused-typed.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-multi-focused-unticked.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-multi-pointer-submit.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-multi-ticked-empty.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-single-focused-empty.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-single-focused-three-lines.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-single-focused-typed.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-single-focused-wrapped.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-single-typed-off-row.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizard-focused-empty.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizard-focused-typed.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizard-review-typed.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizard-revisit-cleared.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizard-revisit-focused.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizard-revisit-typed.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizmulti-focused-empty.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizmulti-focused-typed.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2299-ask-field-wizmulti-focused-unticked.txt",
   "frame": null
  },
  {
@@ -1494,11 +1650,19 @@
   }
  },
  {
+  "fixture": "claude--v2304-ask-chip-question-mark.txt",
+  "frame": null
+ },
+ {
   "fixture": "claude--v2304-ask-no-question-mark--w135.txt",
   "frame": null
  },
  {
   "fixture": "claude--v2304-ask-no-question-mark-plain--w135.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2304-ask-two-paragraph--w80.txt",
   "frame": null
  },
  {
@@ -1580,6 +1744,14 @@
    },
    "footer": null
   }
+ },
+ {
+  "fixture": "claude--v2304-select-preview-cjk-moved.txt",
+  "frame": null
+ },
+ {
+  "fixture": "claude--v2304-select-preview-cjk.txt",
+  "frame": null
  },
  {
   "fixture": "claude--v2306-transcript-survey--w153.txt",

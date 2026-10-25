@@ -818,17 +818,17 @@ describe("Composer: password prompt", () => {
     const box = screen.getByPlaceholderText(/shell command/i);
 
     await user.type(box, "hunter2hunter2");
-    expect(localStorage.getItem("collie:draft:default:w1:p1")).toContain("hunter2hunter2");
+    expect(localStorage.getItem("collie:draft:v2:default:w1:p1")).toContain("hunter2hunter2");
 
     await user.click(screen.getByRole("button", { name: "Send" }));
     await screen.findByRole("button", { name: /use type/i });
-    expect(localStorage.getItem("collie:draft:default:w1:p1")).toBeNull();
+    expect(localStorage.getItem("collie:draft:v2:default:w1:p1")).toBeNull();
     // Through the store's own reader: the draft store has an in-memory tier too (lib/drafts.ts).
     expect(loadDraft(undefined, "w1:p1")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /dismiss password-prompt notice/i }));
     expect(box).toHaveValue("hunter2hunter2");
-    expect(localStorage.getItem("collie:draft:default:w1:p1")).toBeNull();
+    expect(localStorage.getItem("collie:draft:v2:default:w1:p1")).toBeNull();
   });
 
   it("the handoff clears the draft before arming Type", async () => {
@@ -842,7 +842,7 @@ describe("Composer: password prompt", () => {
     await user.click(await screen.findByRole("button", { name: /use type/i }));
 
     await waitFor(() => expect(screen.getByPlaceholderText(/type into the terminal/i)).toHaveValue(""));
-    expect(localStorage.getItem("collie:draft:default:w1:p1")).toBeNull();
+    expect(localStorage.getItem("collie:draft:v2:default:w1:p1")).toBeNull();
     expectLeaving(screen.queryByRole("button", { name: /use type/i }));
   });
 
@@ -4647,7 +4647,7 @@ describe("outcome at the thumb", () => {
   // Send drill 2 (Codex on Herdr, 2026-10-16): a typed_not_submitted on a pane with no frame showed the
   // typed sentence with only Take over and Open Keys. Submit and Discard show for every reason, and each
   // carries the rows hash of the answer, so the bridge acts only on the screen the person saw.
-  it.each(["mismatch", "changed", "modal_cue", "stale_token", "submit_failed"] as const)(
+  it.each(["mismatch", "changed", "modal_cue", "stale_token", "submit_failed", "dialog_open", "unreadable"] as const)(
     "typed_not_submitted %s with no frame: Submit and Discard show, and Submit carries the rows hash it was offered with",
     async (reason) => {
       const user = await send(() => sendAnswer("x", "typed_not_submitted", reason, { offers: offersFor("typed_not_submitted", reason, false), rowsHash: "0f00ba", surface: SURFACES.noMatch }));
@@ -4796,7 +4796,7 @@ describe("outcome at the thumb", () => {
 
   it("every closed outcome and reason lands at the thumb, and none of them puts an action in the header", async () => {
     const outcomeOf = (reason: SendReason): string =>
-      ["mismatch", "changed", "modal_cue", "stale_token", "submit_failed"].includes(reason)
+      ["mismatch", "changed", "modal_cue", "stale_token", "submit_failed", "dialog_open", "unreadable"].includes(reason)
         ? "typed_not_submitted"
         : ["crash", "lost_lock", "no_evidence"].includes(reason)
           ? "unknown"

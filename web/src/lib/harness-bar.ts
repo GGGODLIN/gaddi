@@ -1,6 +1,6 @@
 import { commandsFor } from "@/lib/agent-commands";
 import { canonicalAgent, rowsFor } from "@/lib/operator-scope";
-import type { MuxCapability, OperatorCommand, PaneAction } from "@/lib/types";
+import type { AgentView, MuxCapability, OperatorCommand, PaneAction } from "@/lib/types";
 
 // The harness bar's table: which of the running agent's own slash commands get a 44px button above
 // the key rail. One row per harness, four or five buttons, and nothing derived from the screen.
@@ -57,7 +57,7 @@ export interface HarnessBarItem {
  * section states the rule). Every bar row for one of these must name a capture, because there is no
  * published page to check it against.
  */
-export const CAPTURE_SOURCED: readonly string[] = ["omp"];
+export const CAPTURE_SOURCED: readonly string[] = ["omp", "muse"];
 
 // ── Claude Code ──────────────────────────────────────────────────────────────
 // Model, Effort, Compact, Resume — the four Altan drives Claude Code with from the phone. Each one
@@ -134,10 +134,39 @@ const OMP: readonly HarnessBarItem[] = [
   },
 ];
 
-// The four below were driven on live panes on 2026-10-15 (opencode 1.18.34, Grok Build 1.0.52,
-// Muse Code 1.4.8, agy 1.3.5): every Model, Effort and Resume button opened its harness's own
-// picker on Enter, and every Compact was in the harness's own `/` completion. opencode lists
-// /compact only once its session holds a turn, which is the only time it has anything to compact.
+// ── Muse ─────────────────────────────────────────────────────────────────────
+// Capture-sourced like omp (the catalog section states the rule), so every row names the capture
+// that proves it. Model, Effort, Compact, Resume in Claude's order: `/model` reaches Muse's model
+// picker, `/effort` its effort picker (minimal–xhigh), `/compact` its context compaction, and
+// `/resume` its session picker — each one bare, with Muse's own picker taking the screen, exactly
+// as Claude's bar does. `/hud` and `/loop` stay off the bar: the HUD picker is toggles, not a
+// destination, and a recurring prompt is not a thumb-reach frequent command.
+const MUSE: readonly HarnessBarItem[] = [
+  {
+    id: "model",
+    label: "harnessBar.model",
+    command: "/model",
+    evidence: `${PANES}/muse--palette-hint.txt`,
+  },
+  {
+    id: "effort",
+    label: "harnessBar.effort",
+    command: "/effort",
+    evidence: `${PANES}/muse--filter-effort.txt`,
+  },
+  {
+    id: "compact",
+    label: "harnessBar.compact",
+    command: "/compact",
+    evidence: `${PANES}/muse--slash-palette-1410.txt`,
+  },
+  {
+    id: "resume",
+    label: "harnessBar.resume",
+    command: "/resume",
+    evidence: `${PANES}/muse--resume-picker.txt`,
+  },
+];
 
 // ── opencode ─────────────────────────────────────────────────────────────────
 // Its own spellings: /models for the model picker, /sessions for the session picker. No Effort
@@ -157,16 +186,6 @@ const GROK: readonly HarnessBarItem[] = [
   { id: "resume", label: "harnessBar.resume", command: "/resume" },
 ];
 
-// ── Muse Code ────────────────────────────────────────────────────────────────
-// Claude's four. Muse's /model picker sets the model only, and a bare /effort opens a picker of its
-// own, so Effort has a dial to reach that Model does not.
-const MUSE: readonly HarnessBarItem[] = [
-  { id: "model", label: "harnessBar.model", command: "/model" },
-  { id: "effort", label: "harnessBar.effort", command: "/effort" },
-  { id: "compact", label: "harnessBar.compact", command: "/compact" },
-  { id: "resume", label: "harnessBar.resume", command: "/resume" },
-];
-
 // ── agy (Antigravity) ────────────────────────────────────────────────────────
 // No Effort button, for Codex's reason: agy's /model picker carries the effort slider beside the
 // model list, so the one button reaches both.
@@ -175,6 +194,7 @@ const AGY: readonly HarnessBarItem[] = [
   { id: "compact", label: "harnessBar.compact", command: "/compact" },
   { id: "resume", label: "harnessBar.resume", command: "/resume" },
 ];
+
 // ── durable ──────────────────────────────────────────────────────────────────
 // A durable program has no screen and no slash commands, so its section is not made of text the
 // phone types. Its two buttons are ACTIONS the program declared, and each row is gated by the
@@ -214,6 +234,17 @@ export function durableBarFor(declared: (cap: MuxCapability) => boolean, actions
   const fixed = DURABLE_BAR.filter((item) => declared(item.cap));
   if (!declared("programActions")) return fixed;
   return [...fixed, ...actions.map((action): DurableBarItem => ({ id: "action", cap: "programActions", action }))];
+}
+
+/**
+ * Whether the belt draws Stop for a pane with a screen (M68 spec 02): the bridge says a Stop has a key to
+ * press (`canStop`, set from the profile's `keys.interrupt`). No harness name is asked here, and a durable
+ * pane never carries `canStop`, so it keeps `DurableBar` and nothing else. The turn does not decide whether
+ * the button is DRAWN, only whether it is live: Stop stands dimmed while nothing runs, so the belt never
+ * reflows when a turn starts or ends (DESIGN.md §2). `ScreenStop` takes `running` for that.
+ */
+export function stopFor(pane: Pick<AgentView, "canStop"> | undefined | null): boolean {
+  return pane?.canStop === true;
 }
 
 // A Map for the same reason the command catalog uses one: the key tested against it is Herdr's

@@ -186,7 +186,7 @@ release. 1.14.2 was cut this way on 2026-09-28.
    set: `bunx playwright test -c e2e/rig/playwright.config.ts` (*Browser tests*; the prerequisites are
    in `web/e2e/rig/README.md`). It starts a scratch bridge and Herdr with real Claude Code, pi and omp,
    and takes about 5 minutes. Then run the crew leg, `bunx playwright test -c e2e/rig/crew.config.ts`:
-   a lead and a member, about 4 minutes. All thirty-four cases (twenty-seven solo, seven on the crew leg)
+   a lead and a member, about 4 minutes. All forty cases (thirty-three solo, seven on the crew leg)
    must pass on the first tap. A failed case holds the tag, and so does a case that was not reached.
 
 **A PR from a fork is the exception: leave all four files alone.** Bump nothing, add no CHANGELOG
@@ -482,7 +482,7 @@ component, not a spec. On 2026-10-17 the specs that did not pass that test moved
   crew leg** (`-c e2e/rig/crew.config.ts`): the same phone against a lead and a member, for the walky
   talky cases that need a crew. It is **the gate before
   every release tag**, and **the proof for a change to a harness reader, the Surface, the Send
-  Protocol or the ask code**: run it on the branch, and all thirty-four cases (twenty-seven solo, seven
+  Protocol or the ask code**: run it on the branch, and all forty cases (thirty-three solo, seven
   on the crew leg) pass on the first tap. A
   unit test cannot show that a tap works on a real screen. `web/e2e/rig/nightly.ts` also runs it every
   night on `origin/main`, once for each main commit and set of agent versions. The README beside it
@@ -676,7 +676,7 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   and the length, not the line ([ADR 0095](./.adr/0095-one-off-commands-and-their-history.md)).
 - **Every user-facing string goes through `t()`/`tn()` from `@/lib/i18n`**, and a component that
   calls them subscribes via `useLocale()` so it re-renders on a locale (or lazy-dictionary) change.
-  `messages/en.ts` is the source of truth; all six dictionary files change together, enforced by
+  `messages/en.ts` is the source of truth; all twelve dictionary files change together, enforced by
   `tsc`. Not translated: terminal/agent output, quick replies, menu/dialog labels the screen printed,
   key caps, crew role names, push notification bodies, service-worker strings, crew-link errors, and
   the slash-command descriptions in `web/src/lib/agent-commands.ts` (another tool's vocabulary —
@@ -736,14 +736,20 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   may read that row as one line, and no mid-flight identity may reach above the question.
   Feedback is sent as a verified sequence, never a keystroke — the ground truth for every state is
   [`PLAN_FEEDBACK_NOTES.md`](./web/src/lib/grammar/PLAN_FEEDBACK_NOTES.md); re-walk it before touching
-  `harness/claude/prompt-select.ts` or `lib/prompt-action.ts`. AskUserQuestion's "Type something."
-  row and a permission dialog's amend note are the same kind of field, found by position, modelled
-  with the `free-text` purpose, and never typed into (same notes file, 2026-09-26 section). On a
-  single-question `select` or `preview-select` dialog whose first non-blank row under the top `─` rule
-  is `☐ <label>` (plus a live `❯` pointer on `select`, or a wizard stepper on `preview-select`), this
-  fork lifts the prompt even when it ends without a question mark
-  ([ADR 9012](./.adr/9012-a-chip-anchored-select-lifts-without-a-question-mark.md); upstream 1.23.1
-  `9ac77b3e` requires `hasQuestionMark`).
+  `harness/claude/prompt-select.ts` or `lib/prompt-action.ts`. A permission dialog's amend note is
+  the same kind of field, found by position, modelled with the `free-text` purpose, and never typed
+  into (same notes file, 2026-09-26 section).
+- **AskUserQuestion's "Type something." field IS typed into, by one recipe** (`lib/answer-field.ts`,
+  [ADR 0113](./.adr/0113-an-askuserquestion-answer-is-typed-into-its-field.md)), on a single
+  question, a wizard step and a multi-select question. Its digit is sent only while the field is
+  EMPTY: on a filled field it submits the held text. A filled field is reached by a verified
+  `Up`/`Down` walk and cleared with `ctrl+u ctrl+k` rounds only while it holds exactly what the
+  person saw. The ground truth is
+  [`ASK_FIELD_NOTES.md`](./web/src/lib/grammar/ASK_FIELD_NOTES.md); re-walk it before touching the
+  recipe. Other harnesses' free-text rows (Grok, pi, opencode) stay `free-text` and untyped.
+- **A chip-anchored question needs no question mark** on a single-question `select` or
+  `preview-select` (ADR 9012). Keep the fork’s live-pointer and top-rule checks when merging
+  the upstream positional reader.
 - **The phone parses what the phone draws; the bridge parses only what it must act on alone.** Every
   pane grammar is client-side, under `web/src/lib/harness/`. The bridge holds one,
   `extractClaudeSessionName`, and only because the bridge itself consumes it, for a label that must

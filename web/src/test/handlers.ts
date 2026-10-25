@@ -15,6 +15,7 @@ import type {
   PaneChatResponse,
   PaneChangeDiffResponse,
   PaneChangesResponse,
+  PaneHistoryResponse,
   ServerSummary,
   SessionSummary,
   SnapshotResponse,
@@ -26,6 +27,8 @@ import type {
 } from "@/lib/types";
 import { asJsonObject, asJsonString, parseJsonObject, type JsonObject } from "@/lib/json";
 import type { Surface } from "@/lib/surface/surface";
+// The import attribute is what lets Playwright's Node loader read this JSON too.
+import kiroJournalEntries from "@/fixtures/kiro-journal-entries.json" with { type: "json" };
 
 import { censusFor, fixtureMachinesSolo, historyFor } from "./machine-fixtures";
 import type { WalkyReceipt, WalkyRow, WalkySendBody } from "@/lib/walky";
@@ -391,6 +394,50 @@ export const fixtureOmpAskBatchChat = ompAskChat("Where should the note go?", [
   },
 ]);
 
+/** The same pane used by the default API fixture, with Kiro's journal availability. */
+export const KIRO_PANE_ID = fixtureAgents[0]!.paneId;
+
+/** A Kiro pane can draw Chat without exposing its session ID or foreground process. */
+export const fixtureKiroSnapshot: SnapshotResponse = {
+  ...fixtureSnapshot,
+  agents: [{ ...fixtureAgents[0]!, agent: "kiro", hasSession: true }],
+  shellPanes: [],
+};
+
+/**
+ * The bridge's Kiro journal parse of the session kiro-cli 2.32.0 saved in
+ * `bridge/journal/fixtures/kiro/messages.jsonl`. The JSON is committed
+ * because the browser runner cannot load the bridge's parser; `bridge/journal/kiro-journal-golden.test.ts`
+ * fails when the parser stops producing it.
+ */
+export const fixtureKiroEntries: TranscriptEntry[] =
+  // SAFETY: `bridge/journal/kiro-journal-golden.test.ts` checks this file equals the Kiro journal's
+  // `parse` output, which is a TranscriptEntry[].
+  kiroJournalEntries as TranscriptEntry[];
+
+/** Kiro's read-only History: every saved entry, on one page. */
+export const fixtureKiroHistory: Extract<PaneHistoryResponse, { available: true }> = {
+  paneId: KIRO_PANE_ID,
+  available: true,
+  entries: fixtureKiroEntries,
+  hasMore: false,
+  total: fixtureKiroEntries.length,
+  fileTruncated: false,
+};
+
+/** Kiro's live Chat window: the same entries, numbered as the default Chat fixture numbers its own. */
+export const fixtureKiroChat: Extract<PaneChatResponse, { available: true }> = {
+  paneId: KIRO_PANE_ID,
+  available: true,
+  page: "live",
+  gen: FIXTURE_CHAT_GEN,
+  rev: 1,
+  head: FIXTURE_SEQ_BASE + fixtureKiroEntries.length - 1,
+  oldest: FIXTURE_SEQ_BASE,
+  hasOlder: false,
+  upserts: fixtureKiroEntries.map((entry, index) => Object.assign({}, entry, { seq: FIXTURE_SEQ_BASE + index })),
+};
+
 /**
  * A journal image reference in the ONE shape `imageSrc` accepts: a blob path on the owning collie,
  * `/api/blobs/<64 hex>` (`lib/api.ts` § BLOB_REF). Anything else is refused there and renders as no
@@ -610,6 +657,11 @@ let walkyPosts: WalkySendBody[] = [];
 export function setWalkyRows(rows: readonly WalkyRow[]): void {
   walkyRows = [...rows];
 }
+let walkyTakeBacks: string[] = [];
+/** The take-back routes the fake bridge took in this test (M62 spec 03): `cancel <id>` and `drop <pane> <id>`, oldest first. */
+export function recordedWalkyTakeBacks(): string[] {
+  return [...walkyTakeBacks];
+}
 /** The `POST /api/walky` bodies the fake bridge took in this test, oldest first. */
 export function recordedWalkyPosts(): readonly WalkySendBody[] {
   return walkyPosts;
@@ -618,6 +670,7 @@ export function recordedWalkyPosts(): readonly WalkySendBody[] {
 export function resetWalky(): void {
   walkyRows = [];
   walkyPosts = [];
+  walkyTakeBacks = [];
 }
 function walkyReceipt(id: string, to: string): WalkyReceipt {
   return { id, state: "accepted", verified: "local", at: Date.now(), by: to.split("/")[0] ?? "solo", target: to };
@@ -957,6 +1010,17 @@ export const handlers = [
   }),
   // No agents, no shell panes, no refusals; a test that needs more overrides it with server.use(...).
   http.get("/api/walky/who", () => HttpResponse.json({ targets: [], skipped: [], refusals: null })),
+  // The take-backs (M62 spec 03): each answers one `taken` result for the row's own target.
+  http.post("/api/walky/:id/cancel", ({ params }) => {
+    const id = String(params.id);
+    walkyTakeBacks.push(`cancel ${id}`);
+    return HttpResponse.json({ results: [{ target: "local/w1:p1", result: "taken", receipt: { ...walkyReceipt(id, "local/w1:p1"), state: "inbox-only", reason: "cancelled by sender" } }] });
+  }),
+  http.post("/api/pane/:pane/walky/:id/drop", ({ params }) => {
+    const id = String(params.id);
+    walkyTakeBacks.push(`drop ${String(params.pane)} ${id}`);
+    return HttpResponse.json({ results: [{ target: "local/w1:p1", result: "taken", receipt: { ...walkyReceipt(id, "local/w1:p1"), state: "inbox-only", reason: "dropped by the pane's owner" } }] });
+  }),
   http.get("/api/snapshot", () => HttpResponse.json(fixtureSnapshot)),
   http.get(/\/api\/pane\/[^/]+$/, () =>
     HttpResponse.json({ paneId: "w1:p1", text: paneTextWithDraft(), truncated: false, revision: 1 }),
