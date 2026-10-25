@@ -4351,6 +4351,16 @@ describe("Composer — an image is edited before it uploads", () => {
     expect(uploads).toBe(0);
     expect(screen.getByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
 
+    // An exported PNG that exceeds the upload size limit keeps the editor open so the user can crop smaller.
+    act(() => {
+      imageEditHarness.lastConfirm?.(
+        new File([new Uint8Array(10 * 1024 * 1024 + 1)], "oversize.png", { type: "image/png" }),
+      );
+    });
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(/too large|10 MB/i));
+    expect(uploads).toBe(0);
+    expect(screen.getByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Fail edit" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument());
     expect(uploads).toBe(0);

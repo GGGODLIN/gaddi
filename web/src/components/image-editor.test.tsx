@@ -91,13 +91,20 @@ describe("ImageEditor sheet shell and native canvas tools", () => {
     const canvas = dialog.querySelector<HTMLCanvasElement>("[data-slot='image-editor-canvas']");
     if (canvas === null) throw new Error("canvas missing");
 
-    // Switch to Draw tool and draw a stroke.
+    // Switch to Draw tool and draw a stroke; verify a second finger mid-stroke is ignored.
     fireEvent.click(screen.getByRole("radio", { name: "Draw" }));
     expect(screen.getByRole("radio", { name: "Draw" })).toHaveAttribute("aria-checked", "true");
 
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 20, clientY: 20 });
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeDisabled();
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 100, clientY: 60 });
+    // Second finger touches down while Finger 1 is still active: must be ignored.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 180, clientY: 90 });
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 180, clientY: 90 });
+    // Finger 1 is still active until Finger 1 lifts:
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeDisabled();
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 100, clientY: 60 });
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeEnabled();
 
     const undoBtn = screen.getByRole("button", { name: "Undo" });
     const redoBtn = screen.getByRole("button", { name: "Redo" });
@@ -114,6 +121,13 @@ describe("ImageEditor sheet shell and native canvas tools", () => {
 
     fireEvent.click(resetBtn);
     expect(resetBtn).toBeDisabled();
+
+    // Draw a circle annotation and confirm with it present (not reset).
+    fireEvent.click(screen.getByRole("radio", { name: "Circle" }));
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 3, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 120, clientY: 80 });
+    fireEvent.pointerUp(canvas, { pointerId: 3, clientX: 120, clientY: 80 });
+    expect(resetBtn).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Use this image" }));
     expect(onConfirm).toHaveBeenCalledTimes(1);

@@ -17,7 +17,8 @@ export const EDITOR_TOOLS = {
 export type EditorTool = (typeof EDITOR_TOOLS)[keyof typeof EDITOR_TOOLS];
 
 export const DEFAULT_ANNOTATION_COLOR = "#ef4444";
-export const MIN_CROP_SPAN = 0.05;
+export const MIN_CROP_SPAN = 0.02;
+export const MAX_EXPORT_DIMENSION = 4096;
 
 export interface NormalizedPoint {
   x: number;
@@ -116,10 +117,30 @@ export function hitCropHandle(
   const top = crop.y;
   const bottom = crop.y + crop.height;
 
-  const nearLeft = Math.abs(pt.x - left) <= radiusX;
-  const nearRight = Math.abs(pt.x - right) <= radiusX;
-  const nearTop = Math.abs(pt.y - top) <= radiusY;
-  const nearBottom = Math.abs(pt.y - bottom) <= radiusY;
+  const insideX = pt.x >= left && pt.x <= right;
+  const insideY = pt.y >= top && pt.y <= bottom;
+  const insideBox = insideX && insideY;
+
+  // Keep the central 40% of even the smallest crop box free for `move` while preserving the full
+  // touch reach on the outer side of each edge and corner.
+  const inRadiusX = Math.min(radiusX, crop.width * 0.3);
+  const inRadiusY = Math.min(radiusY, crop.height * 0.3);
+
+  const distLeft = Math.abs(pt.x - left);
+  const distRight = Math.abs(pt.x - right);
+  const distTop = Math.abs(pt.y - top);
+  const distBottom = Math.abs(pt.y - bottom);
+
+  const limitLeft = pt.x <= left ? radiusX : inRadiusX;
+  const limitRight = pt.x >= right ? radiusX : inRadiusX;
+  const limitTop = pt.y <= top ? radiusY : inRadiusY;
+  const limitBottom = pt.y >= bottom ? radiusY : inRadiusY;
+
+  const nearLeft = distLeft <= limitLeft && distLeft <= distRight;
+  const nearRight = distRight <= limitRight && distRight < distLeft;
+  const nearTop = distTop <= limitTop && distTop <= distBottom;
+  const nearBottom = distBottom <= limitBottom && distBottom < distTop;
+
   const withinX = pt.x >= left - radiusX && pt.x <= right + radiusX;
   const withinY = pt.y >= top - radiusY && pt.y <= bottom + radiusY;
 
@@ -131,7 +152,7 @@ export function hitCropHandle(
   if (nearBottom && withinX) return "s";
   if (nearLeft && withinY) return "w";
   if (nearRight && withinY) return "e";
-  if (pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom) return "move";
+  if (insideBox) return "move";
   return "new";
 }
 
@@ -265,7 +286,9 @@ export function drawAnnotation(
   height: number,
 ): void {
   if (!("beginPath" in ctx) || width <= 0 || height <= 0) return;
-  const strokeWidth = Math.max(2, Math.round(Math.min(width, height) * 0.008));
+  // Scale stroke width and arrow wings to the longer image axis so tall screenshots keep the same
+  // visual weight between the 1200 px preview and the exported image.
+  const strokeWidth = Math.max(1.5, Math.max(width, height) * 0.005);
   ctx.save?.();
   ctx.strokeStyle = annotation.color;
   ctx.fillStyle = annotation.color;
@@ -311,7 +334,7 @@ export function drawAnnotation(
 
   // Arrow: shaft + two head wings.
   const angle = Math.atan2(y1 - y0, x1 - x0);
-  const headLen = Math.max(10, strokeWidth * 3.5);
+  const headLen = strokeWidth * 3.5;
   const wingAngle = Math.PI / 6;
   ctx.beginPath();
   ctx.moveTo(x0, y0);
@@ -340,26 +363,27 @@ export function exportEditedCanvas(
   const sw = Math.max(1, Math.min(fullW - sx, Math.round(clamped.width * fullW)));
   const sh = Math.max(1, Math.min(fullH - sy, Math.round(clamped.height * fullH)));
 
-  const stage = makeCanvas();
-  stage.width = fullW;
-  stage.height = fullH;
-  const stageCtx = stage.getContext("2d");
-  if (stageCtx === null) return null;
-  stageCtx.drawImage?.(source, 0, 0, fullW, fullH);
-  for (const ann of annotations) {
-    drawAnnotation(stageCtx, ann, fullW, fullH);
-  }
-
-  if (sx === 0 && sy === 0 && sw === fullW && sh === fullH) {
-    return stage;
-  }
+  const exportScale = Math.min(1, MAX_EXPORT_DIMENSION / Math.max(1, sw, sh));
+  const outW = Math.max(1, Math.round(sw * exportScale));
+  const outH = Math.max(1, Math.round(sh * exportScale));
 
   const out = makeCanvas();
-  out.width = sw;
-  out.height = sh;
+  out.width = outW;
+  out.height = outH;
   const outCtx = out.getContext("2d");
   if (outCtx === null) return null;
-  outCtx.drawImage?.(stage, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  outCtx.drawImage?.(source, sx, sy, sw, sh, 0, 0, outW, outH);
+  if (annotations.length > 0) {
+    outCtx.save?.();
+    outCtx.translate?.(-sx * exportScale, -sy * exportScale);
+    const scaledFullW = fullW * exportScale;
+    const scaledFullH = fullH * exportScale;
+    for (const ann of annotations) {
+      drawAnnotation(outCtx, ann, scaledFullW, scaledFullH);
+    }
+    outCtx.restore?.();
+  }
   return out;
 }
 

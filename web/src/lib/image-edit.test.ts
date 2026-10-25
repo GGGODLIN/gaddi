@@ -4,6 +4,7 @@ import {
   EDITOR_TOOLS,
   FULL_CROP,
   INITIAL_EDITOR_HISTORY,
+  MAX_EXPORT_DIMENSION,
   MIN_CROP_SPAN,
   applyCropDrag,
   canRedoEditor,
@@ -47,7 +48,7 @@ describe("native canvas editor geometry and history", () => {
     });
   });
 
-  it("identifies crop corners, edges, interior move, and exterior new drag", () => {
+  it("identifies crop corners, edges, interior move, and exterior new drag, including narrow crop boxes", () => {
     const box = { x: 0.2, y: 0.2, width: 0.5, height: 0.5 };
     expect(hitCropHandle(box, { x: 0.21, y: 0.21 }, 0.05, 0.05)).toBe("nw");
     expect(hitCropHandle(box, { x: 0.69, y: 0.21 }, 0.05, 0.05)).toBe("ne");
@@ -59,6 +60,14 @@ describe("native canvas editor geometry and history", () => {
     expect(hitCropHandle(box, { x: 0.69, y: 0.45 }, 0.05, 0.05)).toBe("e");
     expect(hitCropHandle(box, { x: 0.45, y: 0.45 }, 0.05, 0.05)).toBe("move");
     expect(hitCropHandle(box, { x: 0.05, y: 0.05 }, 0.05, 0.05)).toBe("new");
+
+    // Narrow crop box (5% wide on a 320x600 canvas, where 22px radiusX = 0.06875 exceeds box width):
+    const narrow = { x: 0.2, y: 0.2, width: 0.05, height: 0.4 };
+    const rx = 22 / 320;
+    const ry = 22 / 600;
+    expect(hitCropHandle(narrow, { x: 0.25, y: 0.2 }, rx, ry)).toBe("ne");
+    expect(hitCropHandle(narrow, { x: 0.25, y: 0.4 }, rx, ry)).toBe("e");
+    expect(hitCropHandle(narrow, { x: 0.225, y: 0.4 }, rx, ry)).toBe("move");
   });
 
   it("resizes, moves, and draws new crop boxes within bounds", () => {
@@ -112,13 +121,14 @@ describe("native canvas editor geometry and history", () => {
     expect(canUndoEditor(reset)).toBe(true);
   });
 
-  it("draws annotations and crops exported canvases to the target dimensions", () => {
+  it("draws annotations on a single cropped target canvas and caps oversize exports", () => {
     const drawImage = vi.fn();
     const beginPath = vi.fn();
     const moveTo = vi.fn();
     const lineTo = vi.fn();
     const stroke = vi.fn();
     const ellipse = vi.fn();
+    const translate = vi.fn();
     const save = vi.fn();
     const restore = vi.fn();
     const partialCtx: Partial<CanvasRenderingContext2D> = {
@@ -128,6 +138,7 @@ describe("native canvas editor geometry and history", () => {
       lineTo,
       stroke,
       ellipse,
+      translate,
       save,
       restore,
       strokeStyle: "",
@@ -165,6 +176,7 @@ describe("native canvas editor geometry and history", () => {
     );
     expect(stroke).toHaveBeenCalledTimes(2);
 
+    let allocatedCanvases = 0;
     const img = document.createElement("img");
     const exported = exportEditedCanvas(
       img,
@@ -182,14 +194,32 @@ describe("native canvas editor geometry and history", () => {
         },
       ],
       () => {
+        allocatedCanvases += 1;
         const c = document.createElement("canvas");
         vi.spyOn(c, "getContext").mockReturnValue(fakeCtx);
         return c;
       },
     );
+    expect(allocatedCanvases).toBe(1);
     expect(exported).not.toBeNull();
     expect(exported?.width).toBe(200);
     expect(exported?.height).toBe(100);
+    expect(translate).toHaveBeenCalledWith(-100, -20);
+
+    const tallExport = exportEditedCanvas(
+      img,
+      1000,
+      10000,
+      FULL_CROP,
+      [],
+      () => {
+        const c = document.createElement("canvas");
+        vi.spyOn(c, "getContext").mockReturnValue(fakeCtx);
+        return c;
+      },
+    );
+    expect(tallExport?.height).toBe(MAX_EXPORT_DIMENSION);
+    expect(tallExport?.width).toBe(Math.round(1000 * (MAX_EXPORT_DIMENSION / 10000)));
   });
 });
 

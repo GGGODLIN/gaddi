@@ -146,6 +146,7 @@ function editorSessionReducer(state: EditorSessionState, action: EditorSessionAc
         gesture: null,
       };
     case "pointerDown": {
+      if (state.gesture !== null) return state;
       if (state.tool === EDITOR_TOOLS.crop) {
         const handle = hitCropHandle(state.history.crop, action.pt, action.radiusX, action.radiusY);
         const initialDraft =
@@ -366,13 +367,18 @@ export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: Ima
       session.gesture?.kind === "annotation"
         ? [...session.history.annotations, session.gesture.draft]
         : session.history.annotations;
-    paintEditorStage(
-      canvas,
-      session.loadedImage,
-      activeCrop,
-      activeAnnotations,
-      session.tool === EDITOR_TOOLS.crop,
-    );
+    try {
+      paintEditorStage(
+        canvas,
+        session.loadedImage,
+        activeCrop,
+        activeAnnotations,
+        session.tool === EDITOR_TOOLS.crop,
+      );
+    } catch {
+      dispatch({ type: "imageFailed" });
+      onFailRef.current("failed");
+    }
   }, [
     session.loadedImage,
     session.broken,
@@ -398,7 +404,14 @@ export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: Ima
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (event.button !== 0 || session.loadedImage === null || session.broken) return;
+    if (
+      event.button !== 0 ||
+      session.loadedImage === null ||
+      session.broken ||
+      session.gesture !== null
+    ) {
+      return;
+    }
     const canvas = event.currentTarget;
     try {
       canvas.setPointerCapture?.(event.pointerId);
@@ -467,7 +480,8 @@ export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: Ima
     { value: EDITOR_TOOLS.arrow, label: translate("composer.imageEdit.arrow") },
   ] as const;
 
-  const ready = session.loadedImage !== null && url !== null && !session.broken;
+  const stageReady = session.loadedImage !== null && url !== null && !session.broken;
+  const canConfirm = stageReady && session.gesture === null;
 
   const sheet = (
     <BottomSheet
@@ -530,7 +544,7 @@ export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: Ima
               onError={handleImageError}
             />
           )}
-          {!ready && (
+          {!stageReady && (
             <p className="py-6 text-sm text-muted-foreground">{translate("composer.imageEdit.loading")}</p>
           )}
           <canvas
@@ -538,7 +552,7 @@ export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: Ima
             data-slot="image-editor-canvas"
             aria-label={translate("composer.imageEdit.title")}
             className={
-              ready
+              stageReady
                 ? "block max-h-[54dvh] max-w-full cursor-crosshair touch-none select-none"
                 : "hidden"
             }
@@ -551,6 +565,7 @@ export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: Ima
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
+            onLostPointerCapture={handlePointerCancel}
           />
         </div>
         <div className="image-editor-actions flex shrink-0 gap-2">
@@ -567,7 +582,7 @@ export function ImageEditor({ file, onConfirm, onCancel, onFail, onReject }: Ima
             type="button"
             size="lg"
             className="min-h-11 flex-1"
-            disabled={!ready}
+            disabled={!canConfirm}
             onClick={confirm}
           >
             {translate("composer.imageEdit.confirm")}

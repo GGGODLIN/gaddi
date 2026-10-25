@@ -573,7 +573,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const draftPaneRef = useRef({ scope, scopeId, paneId });
   // The image editor's open session. Epoch bumps on pane/scope change, lock, or unmount so a confirm
   // that resolves after the operator has moved on cannot upload into the pane now on screen.
-  const [editFile, setEditFile] = useState<File | null>(null);
+  const [editSession, setEditSession] = useState<{ id: number; file: File } | null>(null);
+  const editSessionSeq = useRef(0);
   const editResolveRef = useRef<((result: File | "cancel") => void) | null>(null);
   const editEpoch = useRef(0);
   const editTargetRef = useRef<(EditTarget & { epoch: number }) | null>(null);
@@ -1176,7 +1177,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // still one tap from coming back, and a reload would take that tap away.
   useHoldReload(
     `composer:${paneId}`,
-    hasDraft || clearedDraft !== null || direct.active || direct.value !== "" || direct.busy || uploading,
+    hasDraft ||
+      clearedDraft !== null ||
+      direct.active ||
+      direct.value !== "" ||
+      direct.busy ||
+      uploading ||
+      editSession !== null,
   );
 
   // Preview appearance latch. A STABLE, non-echo, not-already-handled draft flips the preview on —
@@ -1799,7 +1806,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const resolve = editResolveRef.current;
     editResolveRef.current = null;
     editTargetRef.current = null;
-    if (mountedRef.current) setEditFile(null);
+    if (mountedRef.current) setEditSession(null);
     resolve?.(result);
   }
 
@@ -1814,9 +1821,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const epoch = editEpoch.current;
     const target = draftPaneRef.current;
     editTargetRef.current = { paneId: target.paneId, scopeId: target.scopeId, epoch };
+    editSessionSeq.current += 1;
+    const sessionId = editSessionSeq.current;
     return new Promise((resolve) => {
       editResolveRef.current = resolve;
-      setEditFile(file);
+      setEditSession({ id: sessionId, file });
     });
   }
 
@@ -1824,9 +1833,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const target = editTargetRef.current;
     if (target === null || target.epoch !== editEpoch.current) return;
     if (!sameEditTarget(target, draftPaneRef.current)) return;
-    if (lockedRef.current || offlineRef.current) return;
+    if (lockedRef.current) return;
+    if (offlineRef.current) {
+      setStatus(translate("composer.send.reconnect"), "error");
+      return;
+    }
     if (file.size === 0) {
       setStatus(translate("composer.imageEdit.failed"), "error");
+      return;
+    }
+    const refusal = rejectAttachment(file, limits);
+    if (refusal === "tooLarge") {
+      setStatus(translate("composer.upload.tooLarge", { max: limitMb(limits) }), "error");
+      return;
+    }
+    if (refusal === "badType") {
+      setStatus(translate("composer.upload.badType", { name: file.name }), "error");
       return;
     }
     finishEdit(file);
@@ -1843,8 +1865,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, []);
 
   useEffect(() => {
-    if (editFile !== null && (locked || offline)) abortEditRef.current();
-  }, [editFile, locked, offline]);
+    if (editSession !== null && locked) abortEditRef.current();
+  }, [editSession, locked]);
 
   // Upload an attachment. `targetPaneId` is the pane the file was accepted for: an edit confirmed
   // after the operator switched panes must not follow the closure's latest paneId.
@@ -3157,10 +3179,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </div>
         </BottomSheet>
       )}
-      {editFile !== null && (
+      {editSession !== null && (
         <ImageEditor
-          key={`${editFile.name}:${editFile.size}:${editFile.lastModified}`}
-          file={editFile}
+          key={editSession.id}
+          file={editSession.file}
           onConfirm={confirmEdit}
           onCancel={() => finishEdit("cancel")}
           onFail={(reason) => {
