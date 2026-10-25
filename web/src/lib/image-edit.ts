@@ -182,7 +182,7 @@ export function cropCornerHandleBoxes(
   // the central 40% `move` region.
   const baseSize = Math.min(targetW, targetH) * 0.035;
   const maxByCrop = Math.min(cw, ch) * 0.3;
-  const size = Math.max(0.5, Math.min(baseSize, maxByCrop));
+  const size = Math.min(baseSize, maxByCrop);
   const half = size / 2;
 
   const corners: readonly { handle: "nw" | "ne" | "sw" | "se"; hx: number; hy: number }[] = [
@@ -342,7 +342,7 @@ export function drawAnnotation(
   // axes scale by the same factor between the 1200 px preview and full export, while a tall
   // stitched screenshot (e.g. 1170×20000) keeps a normal ~7 px stroke instead of scaling to its
   // 20000 px height.
-  const strokeWidth = Math.max(0.25, Math.min(width, height) * 0.006);
+  const strokeWidth = Math.min(width, height) * 0.006;
   ctx.save?.();
   ctx.strokeStyle = annotation.color;
   ctx.fillStyle = annotation.color;

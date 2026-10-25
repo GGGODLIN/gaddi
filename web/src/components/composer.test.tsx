@@ -1,4 +1,4 @@
-import { createRef, useMemo, useState } from "react";
+import { createRef, useEffect, useMemo, useState } from "react";
 import type { ComponentProps } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -51,6 +51,7 @@ interface ImageEditHarness {
   mode: "auto" | "manual";
   seen: WeakSet<File>;
   lastConfirm: ((file: File) => void) | null;
+  mounts: number;
 }
 
 const imageEditHarness = vi.hoisted(() => {
@@ -58,6 +59,7 @@ const imageEditHarness = vi.hoisted(() => {
     mode: "auto",
     seen: new WeakSet<File>(),
     lastConfirm: null,
+    mounts: 0,
   };
   return harness;
 });
@@ -69,6 +71,9 @@ vi.mock("@/components/image-editor", () => ({
     onCancel: () => void;
     onFail: (reason: "unavailable" | "failed") => void;
   }) => {
+    useEffect(() => {
+      imageEditHarness.mounts += 1;
+    }, []);
     imageEditHarness.lastConfirm = props.onConfirm;
     if (imageEditHarness.mode === "auto" && !imageEditHarness.seen.has(props.file)) {
       imageEditHarness.seen.add(props.file);
@@ -158,6 +163,7 @@ beforeEach(() => {
   clearStatus();
   imageEditHarness.mode = "auto";
   imageEditHarness.lastConfirm = null;
+  imageEditHarness.mounts = 0;
   canvasGate.available = true;
 });
 
@@ -4510,9 +4516,16 @@ describe("Composer — an image is edited before it uploads", () => {
     }
 
     let uploads = 0;
+    let resolvePendingUpload: (() => void) | null = null;
     server.use(
-      http.post(/\/api\/pane\/[^/]+\/upload$/, () => {
+      http.post(/\/api\/pane\/[^/]+\/upload$/, async () => {
         uploads += 1;
+        if (uploads === 1) {
+          await new Promise<void>((resolve) => {
+            resolvePendingUpload = resolve;
+          });
+          return new HttpResponse("upload failed", { status: 500 });
+        }
         return HttpResponse.json({ ok: true, path: `/tmp/shot-${uploads}.png` });
       }),
     );
@@ -4545,12 +4558,35 @@ describe("Composer — an image is edited before it uploads", () => {
       expect(holdStates).not.toContain(false);
       expect(isReloadHeld()).toBe(true);
 
-      // Picking a new File with identical name, size, and lastModified opens a fresh session.
-      const secondFile = new File(["same-bytes"], "clipboard.png", { type: "image/png", lastModified: 1700000000000 });
-      pick(secondFile);
+      // While the first upload is still pending, picking and cancelling a second image must NOT
+      // release the first upload's reload hold or uploading state.
+      pick(new File(["second"], "second.png", { type: "image/png" }));
       expect(await screen.findByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "Cancel edit" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument());
+      expect(isReloadHeld()).toBe(true);
+      expect(holdStates).not.toContain(false);
+
+      // Once the first upload finishes (with 500 so no draft chip is added), `uploading` clears to
+      // false and the reload hold releases cleanly.
+      act(() => resolvePendingUpload?.());
+      await waitFor(() => expect(isReloadHeld()).toBe(false));
+
+      // Back-to-back files in a single batch with identical name, size, and lastModified must mount
+      // a fresh ImageEditor instance for the second file (monotonic session key).
+      const mountsBeforeBatch = imageEditHarness.mounts;
+      const sameMetaA = new File(["same-bytes"], "clipboard.png", { type: "image/png", lastModified: 1700000000000 });
+      const sameMetaB = new File(["same-bytes"], "clipboard.png", { type: "image/png", lastModified: 1700000000000 });
+      // SAFETY: getByTestId throws when the element is absent, and this id is on an <input>.
+      const photoInput = screen.getByTestId("attach-photos") as HTMLInputElement;
+      fireEvent.change(photoInput, { target: { files: [sameMetaA, sameMetaB] } });
+      expect(await screen.findByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
+      expect(imageEditHarness.mounts).toBe(mountsBeforeBatch + 1);
+      await user.click(screen.getByRole("button", { name: "Cancel edit" }));
+      await waitFor(() => expect(imageEditHarness.mounts).toBe(mountsBeforeBatch + 2));
+      await user.click(screen.getByRole("button", { name: "Cancel edit" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument());
+      expect(isReloadHeld()).toBe(false);
     } finally {
       unsubscribe();
     }

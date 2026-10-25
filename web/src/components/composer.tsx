@@ -676,6 +676,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   clearComposedDraftRef.current = clearComposedDraft;
   const [protocolOffer, setProtocolOffer] = useState<{ text: string; isDraft: boolean; rowsHash: string | null; offers: readonly SendOffer[]; capAck: boolean } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const activeUploadsRef = useRef(0);
   // Pending-send preview: set on a successful send, cleared when the mirror catches up (next text
   // update) or after a 6s safety timeout. Shows "You sent: …" so the user knows the message landed.
   const [lastSent, setLastSent] = useState<string | null>(null);
@@ -1802,17 +1803,26 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // questions again on arrival, and its answer is the one that counts (it can read the bytes, which
   // is the only way to catch a binary wearing a `.md` name). Spending a phone's uplink on 40 MB to
   // be told 10 is the limit is the thing worth not doing.
+  function beginUpload() {
+    activeUploadsRef.current += 1;
+    if (mountedRef.current) setUploading(true);
+  }
+
+  function endUpload() {
+    activeUploadsRef.current = Math.max(0, activeUploadsRef.current - 1);
+    if (mountedRef.current && activeUploadsRef.current === 0) setUploading(false);
+  }
+
   function finishEdit(result: File | "cancel") {
     const resolve = editResolveRef.current;
     editResolveRef.current = null;
     editTargetRef.current = null;
-    if (mountedRef.current) {
-      // Batch `uploading = true` into the same commit that clears `editSession` so `useHoldReload`
-      // never drops to false during the Promise microtask between `finishEdit` and `uploadFile`.
-      if (result !== "cancel" && resolve !== null) setUploading(true);
-      setEditSession(null);
-    }
-    resolve?.(result);
+    // Batch `uploading = true` into the same commit that clears `editSession` so `useHoldReload`
+    // never drops to false during the Promise microtask between `finishEdit` and `uploadFile`.
+    const acquiredUpload = mountedRef.current && result !== "cancel" && resolve !== null;
+    if (acquiredUpload) beginUpload();
+    if (mountedRef.current) setEditSession(null);
+    resolve?.(acquiredUpload ? result : "cancel");
   }
 
   function abortEdit() {
@@ -1875,7 +1885,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   // Upload an attachment. `targetPaneId` is the pane the file was accepted for: an edit confirmed
   // after the operator switched panes must not follow the closure's latest paneId.
-  async function uploadFile(file: File, targetPaneId = paneId, targetScope = scope) {
+  async function uploadFile(
+    file: File,
+    targetPaneId = paneId,
+    targetScope = scope,
+    alreadyHeld = false,
+  ) {
     if (lockedRef.current) return;
     const refusal = rejectAttachment(file, limits);
     if (refusal === "tooLarge") {
@@ -1886,7 +1901,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       setStatus(translate("composer.upload.badType", { name: file.name }), "error");
       return;
     }
-    setUploading(true);
+    if (!alreadyHeld) beginUpload();
     try {
       const res = await api.uploadFile(targetPaneId, file, targetScope);
       if (res.ok) {
@@ -1899,7 +1914,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     } catch (err) {
       setStatus(describeThrownError(err), "error");
     } finally {
-      setUploading(false);
+      if (!alreadyHeld) endUpload();
     }
   }
 
@@ -2127,14 +2142,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           continue;
         }
         const edited = await requestEdit(file);
+        if (edited === "cancel") continue;
         try {
           if (!mountedRef.current || epoch !== editEpoch.current) return;
-          if (edited === "cancel") continue;
           if (lockedRef.current || offlineRef.current) return;
           const target = draftPaneRef.current;
-          await uploadFile(edited, target.paneId, target.scope);
+          await uploadFile(edited, target.paneId, target.scope, true);
         } finally {
-          if (mountedRef.current) setUploading(false);
+          endUpload();
         }
         continue;
       }

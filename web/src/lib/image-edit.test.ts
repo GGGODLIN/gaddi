@@ -83,24 +83,30 @@ describe("native canvas editor geometry and history", () => {
     expect(hitCropHandle(edgeNarrow, { x: 0.025, y: 0.25 }, squareRadius, squareRadius)).toBe("n");
     expect(hitCropHandle(edgeNarrow, { x: 0.025, y: 0.5 }, squareRadius, squareRadius)).toBe("move");
 
-    // Minimum 2% span crop boxes at both canvas corners:
-    for (const minBox of [
-      { x: 0, y: 0, width: MIN_CROP_SPAN, height: MIN_CROP_SPAN },
-      { x: 1 - MIN_CROP_SPAN, y: 1 - MIN_CROP_SPAN, width: MIN_CROP_SPAN, height: MIN_CROP_SPAN },
-    ]) {
-      for (const boxHandle of cropCornerHandleBoxes(minBox, 1200, 1200)) {
-        expect(hitCropHandle(minBox, boxHandle.center, squareRadius, squareRadius)).toBe(
-          boxHandle.handle,
-        );
+    // Minimum 2% span crop boxes at both canvas corners (including extreme 35x1200 tall preview):
+    for (const [w, h] of [
+      [1200, 1200],
+      [35, 1200],
+    ] as const) {
+      for (const minBox of [
+        { x: 0, y: 0, width: MIN_CROP_SPAN, height: MIN_CROP_SPAN },
+        { x: 0, y: 0.25, width: MIN_CROP_SPAN, height: 0.5 },
+        { x: 1 - MIN_CROP_SPAN, y: 1 - MIN_CROP_SPAN, width: MIN_CROP_SPAN, height: MIN_CROP_SPAN },
+      ]) {
+        for (const boxHandle of cropCornerHandleBoxes(minBox, w, h)) {
+          expect(hitCropHandle(minBox, boxHandle.center, squareRadius, squareRadius)).toBe(
+            boxHandle.handle,
+          );
+        }
+        expect(
+          hitCropHandle(
+            minBox,
+            { x: minBox.x + minBox.width / 2, y: minBox.y + minBox.height / 2 },
+            squareRadius,
+            squareRadius,
+          ),
+        ).toBe("move");
       }
-      expect(
-        hitCropHandle(
-          minBox,
-          { x: minBox.x + minBox.width / 2, y: minBox.y + minBox.height / 2 },
-          squareRadius,
-          squareRadius,
-        ),
-      ).toBe("move");
     }
   });
 
