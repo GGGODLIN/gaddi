@@ -664,7 +664,7 @@ export function AgentChat({
         ? undefined
         : () => {
             buzz();
-            setDrawer("switcher");
+            openSwitcher();
           },
   });
   // ── COMPOSING MODE — read ONCE, here, for the whole pane ──────────────────────

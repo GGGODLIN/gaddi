@@ -407,6 +407,7 @@ export function ThreadSidebar({
                   {shellRows.map((pane) => (
                     <PaneRow
                       key={paneRowKey(pane)}
+                      id={rowDomId(pane)}
                       pane={pane}
                       active={paneRowKey(pane) === currentPaneKey}
                       onSelect={onSelect}
@@ -582,7 +583,7 @@ function PaneRow({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-1">
           <span className={cn("min-w-0 truncate text-sm font-medium", roomy && "leading-5", roomy && !active && "text-foreground")}>{name}</span>
-          <PaneBadge pane={pane} className="shrink-0 self-center" />
+          <PaneBadge pane={pane} className={cn("shrink-0 self-center", roomy && "text-muted-foreground")} />
           <PaneMeta
             host={undefined}
             cache={pane.cache}

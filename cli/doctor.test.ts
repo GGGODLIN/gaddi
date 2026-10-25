@@ -1917,7 +1917,7 @@ describe("account-windows", () => {
     const on = (await findings(harness(null))).byCheck.get("account-windows")!;
     expect(on.status).toBe("ok");
     expect(on.detail).toMatch(
-      /^claude: on \(reads .*\.credentials\.json, asks api\.anthropic\.com\); codex: on \(reads .*sessions\); opencode: off by default, unverified \(COLLIE_ACCOUNT_WINDOWS=all\); grok: off by default, unverified \(COLLIE_ACCOUNT_WINDOWS=all\)$/,
+      /^claude: on \(reads .*\.credentials\.json(?: or the Keychain)?, asks api\.anthropic\.com\); codex: on \(reads .*sessions\); opencode: off by default, unverified \(COLLIE_ACCOUNT_WINDOWS=all\); grok: off by default, unverified \(COLLIE_ACCOUNT_WINDOWS=all\)$/,
     );
     const off = (await findings(harness(null, [], { env: { COLLIE_ACCOUNT_WINDOWS: "0" } }))).byCheck.get("account-windows")!;
     expect(off.status).toBe("ok");

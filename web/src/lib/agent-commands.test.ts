@@ -413,6 +413,9 @@ describe("commandsFor with the operator's own rows", () => {
     const commands = commandsFor("claude-code", [mine]).map((c) => c.command);
     expect(commands[0]).toBe("/mine");
     expect(commands).toContain("/compact");
+    // Same for the Muse family: `muse` reaches a `muse-code` pane's palette (ADR 0018 replacement).
+    const museMine = { agent: "muse", command: "/mine", description: "Mine", takesArg: false, argHint: "" };
+    expect(commandsFor("muse-code", [museMine]).map((c) => c.command)).toEqual(["/mine"]);
   });
 
   it("does not let the catalog's prefix tolerance widen a narrow scope", () => {
