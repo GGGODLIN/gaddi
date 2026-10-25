@@ -1806,7 +1806,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const resolve = editResolveRef.current;
     editResolveRef.current = null;
     editTargetRef.current = null;
-    if (mountedRef.current) setEditSession(null);
+    if (mountedRef.current) {
+      // Batch `uploading = true` into the same commit that clears `editSession` so `useHoldReload`
+      // never drops to false during the Promise microtask between `finishEdit` and `uploadFile`.
+      if (result !== "cancel" && resolve !== null) setUploading(true);
+      setEditSession(null);
+    }
     resolve?.(result);
   }
 
@@ -1851,9 +1856,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       setStatus(translate("composer.upload.badType", { name: file.name }), "error");
       return;
     }
-    // Batch `uploading = true` into the same commit that clears `editSession` so `useHoldReload`
-    // never drops to false during the Promise microtask between `finishEdit` and `uploadFile`.
-    setUploading(true);
     finishEdit(file);
   }
 
@@ -2125,17 +2127,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           continue;
         }
         const edited = await requestEdit(file);
-        if (!mountedRef.current || epoch !== editEpoch.current) {
+        try {
+          if (!mountedRef.current || epoch !== editEpoch.current) return;
+          if (edited === "cancel") continue;
+          if (lockedRef.current || offlineRef.current) return;
+          const target = draftPaneRef.current;
+          await uploadFile(edited, target.paneId, target.scope);
+        } finally {
           if (mountedRef.current) setUploading(false);
-          return;
         }
-        if (edited === "cancel") continue;
-        if (lockedRef.current || offlineRef.current) {
-          setUploading(false);
-          return;
-        }
-        const target = draftPaneRef.current;
-        await uploadFile(edited, target.paneId, target.scope);
         continue;
       }
       const target = draftPaneRef.current;
