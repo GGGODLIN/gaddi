@@ -30,19 +30,19 @@ export interface ReadFileOptions {
 /** Kept behind an interface so discovery is testable without a disk. */
 export interface DiscoveryIo {
   /** Canonical path of `dir` when it exists and resolves inside `roots`, else null. */
-  realDir?(dir: string, roots: readonly string[]): Promise<string | null>;
+  realDir(dir: string, roots: readonly string[]): Promise<string | null>;
   /** True when `<dir>/.git` exists and resolves inside `roots`. */
-  hasGit?(dir: string, roots: readonly string[]): Promise<boolean>;
+  hasGit(dir: string, roots: readonly string[]): Promise<boolean>;
   /** The entries of `dir`, symlinks followed and sorted by name; null when absent, unreadable, or outside `roots`. */
-  list(dir: string, roots?: readonly string[]): Promise<Array<{ name: string; dir: boolean }> | null>;
+  list(dir: string, roots: readonly string[]): Promise<Array<{ name: string; dir: boolean }> | null>;
   /** The file's text, or null when absent, unreadable, not a regular file, or outside `roots`. */
-  read(path: string, roots?: readonly string[], opts?: ReadFileOptions): Promise<string | null>;
+  read(path: string, roots: readonly string[], opts?: ReadFileOptions): Promise<string | null>;
 }
 
 /** Frontmatter sits at the top; a skill or command file larger than this is read only this far. */
 const MAX_FILE_BYTES = 64 * 1024;
 /** Settings files are parsed as whole JSON documents; larger files are skipped with a warning. */
-const MAX_SETTINGS_BYTES = 256 * 1024;
+export const MAX_SETTINGS_BYTES = 256 * 1024;
 /** Maximum commands returned in one response. */
 export const MAX_COMMANDS = 1000;
 /** Maximum directory entries inspected in a single folder. */
@@ -53,7 +53,7 @@ export const MAX_SCAN_OPS = 1000;
 const MAX_WALK = 32;
 const MAX_DESCRIPTION = 200;
 /** A single folder, skill, or file name segment: letters, digits and `._-` (no colons or control chars). */
-const NAME_SEGMENT = /^[\p{L}\p{N}._-]{1,64}$/u;
+export const NAME_SEGMENT = /^[\p{L}\p{N}._-]{1,64}$/u;
 /** Full command name after the leading slash: letters, digits and `._:-`, up to 120 characters. */
 const COMMAND_BODY = /^[\p{L}\p{N}._:-]{1,120}$/u;
 
@@ -63,8 +63,7 @@ function isOverrideState(value: string): value is OverrideState {
   return value === "on" || value === "name-only" || value === "user-invocable-only" || value === "off";
 }
 
-async function realUnder(candidate: string, roots?: readonly string[]): Promise<string | null> {
-  if (roots === undefined) return candidate;
+async function realUnder(candidate: string, roots: readonly string[]): Promise<string | null> {
   for (const root of roots) {
     const real = await containedRealpath(candidate, root);
     if (real !== null) return real;
@@ -200,6 +199,25 @@ export function cleanDescription(raw: string | undefined): string {
   return flat.length > MAX_DESCRIPTION ? `${flat.slice(0, MAX_DESCRIPTION - 1)}…` : flat;
 }
 
+/**
+ * Read a settings or trust file up to {@link MAX_SETTINGS_BYTES}; null when absent or oversized so a
+ * truncated document is never parsed as a partial configuration.
+ */
+export async function readSettingsText(
+  io: DiscoveryIo,
+  path: string,
+  roots: readonly string[],
+  onOversize?: () => void,
+): Promise<string | null> {
+  const text = await io.read(path, roots, { maxBytes: MAX_SETTINGS_BYTES, truncate: false });
+  if (text === null) return null;
+  if (Buffer.byteLength(text, "utf8") > MAX_SETTINGS_BYTES) {
+    onOversize?.();
+    return null;
+  }
+  return text;
+}
+
 /** One JSON file as an object; null when absent, oversized or unparseable (the last two reported). */
 async function readJsonObject(
   io: DiscoveryIo,
@@ -208,12 +226,10 @@ async function readJsonObject(
   warn: (m: string) => void,
   ignored = "its skill and plugin settings are ignored",
 ): Promise<JsonObject | null> {
-  const text = await io.read(path, roots, { maxBytes: MAX_SETTINGS_BYTES, truncate: false });
+  const text = await readSettingsText(io, path, roots, () =>
+    warn(`${path} exceeds ${String(MAX_SETTINGS_BYTES)} bytes; ${ignored}`),
+  );
   if (text === null) return null;
-  if (Buffer.byteLength(text, "utf8") > MAX_SETTINGS_BYTES) {
-    warn(`${path} exceeds ${String(MAX_SETTINGS_BYTES)} bytes; ${ignored}`);
-    return null;
-  }
   try {
     return asObject(parseJson(text));
   } catch (err) {
@@ -236,16 +252,13 @@ function booleanEntries(value: JsonValue | undefined): Map<string, boolean> {
  * `.claude` there is the personal folder, read once as such.
  */
 export async function projectDirs(io: DiscoveryIo, cwd: string, home: string): Promise<string[]> {
+  if (!isInside(HOST, cwd, home)) return [];
   const dirs: string[] = [];
   let dir = cwd;
   for (let i = 0; i < MAX_WALK; i++) {
     if (dir === home) break;
     dirs.push(dir);
-    const hasGit =
-      io.hasGit !== undefined
-        ? await io.hasGit(dir, [home])
-        : (await io.list(dir, [home]))?.some((e) => e.name === ".git") === true;
-    if (hasGit) return dirs;
+    if (await io.hasGit(dir, [home])) return dirs;
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;
@@ -323,7 +336,7 @@ async function commandsIn(
   depth = 0,
 ): Promise<ClaudeCommand[]> {
   if (depth > 4 || budget.ops <= 0) return [];
-  const canonical = io.realDir !== undefined ? await io.realDir(root, roots) : root;
+  const canonical = await io.realDir(root, roots);
   if (canonical === null || budget.visitedDirs.has(canonical)) return [];
   budget.visitedDirs.add(canonical);
   budget.ops -= 1;
@@ -438,7 +451,7 @@ async function pluginRows(
 ): Promise<ClaudeCommand[]> {
   // The plugin folder is a personal location: it must resolve inside the config dir or the home.
   // Every read below is then contained in the plugin's own folder, so a link inside it cannot leave.
-  const root = io.realDir !== undefined ? await io.realDir(plugin.installPath, personalRoots) : plugin.installPath;
+  const root = await io.realDir(plugin.installPath, personalRoots);
   if (root === null) {
     warn(`${plugin.key}: ${plugin.installPath} is not a folder inside the config dir or home, so the plugin is left out`);
     return [];

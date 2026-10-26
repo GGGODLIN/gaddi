@@ -257,6 +257,7 @@ the same handlers. There is no second handler set, no second semantic, and no He
 | `POST` | `/crew/v1/pane/:id/focus` | `POST …/focus` | forwarded — additive-optional (§7.1). Shows the pane on **the peer machine's** terminal; a lead that predates it never calls it, and a peer that predates it answers 404 to a lead that does |
 | `POST` | `/crew/v1/pane/:id/answer` | `POST …/answer` | forwarded, additive-optional (§7.1), added 2026-10-12 (ADR 0100). A person's tap answers one open ask of a pane that carries asks as data, by `requestId`, `askId` and `revision`. A WRITE: refused before it is attempted when the member is not taking writes (§10.3) and by the member's own device gate (§12). The answer receipt lives on **the member that owns the pane**, so a retry with the same request id replays there; the lead keeps no copy. A lead that predates it never calls it, and a peer that predates it answers 404, which the phone reads as "this answer did not land", never as taken |
 | `POST` | `/crew/v1/pane/:id/send\|abort` | `POST …/send`, `POST …/abort` | forwarded, additive-optional (§7.1), added 2026-10-12 (ADR 0101). A send or a stop on a pane that takes guarded controls, by `requestId` and exactly one of `turnId` and `askId`: the turn the phone last showed, or an open ask. A stale name is refused with 409 and the current `turnId` and `askIds`, before anything reaches the durable agent. A WRITE: refused before it is attempted when the member is not taking writes (§10.3) and by the member's own device gate (§12). The control receipt lives on **the member that owns the pane**, so a retry with the same request id replays there; the lead keeps no copy. A lead that predates them never calls them, and a peer that predates them answers 404, which the phone reads as stale, never as done |
+| `POST` | `/crew/v1/pane/:id/clear` | `POST …/clear` | forwarded, additive-optional (§7.1), added 2026-10-24 (ADR 0116, the Clear paragraph). A Clear of the harness's input box on a pane with a screen, by `requestId` alone; the member that owns the pane reads the Surface, presses the profile's clear key as a person's tap, reads back, and answers `{ requestId, outcome: "cleared" \| "refused", reason? }`. A WRITE, dialled once on the forwarded-write budget: a timeout is `write_outcome_unknown`, never a second dial. The receipt lives on **the member that owns the pane**, so a retry with the same request id replays there. A lead that predates it never calls it, and a peer that predates it answers a bare 404, which the phone reads as `unsupported_build`, never as cleared |
 | `POST` | `/crew/v1/pane/:id/action` | `POST …/action` | forwarded, additive-optional (§7.1), added 2026-10-13 (M53 spec 07). A tap on one of the buttons a durable agent lists for a pane, by `requestId` and `actionId`, with the `turnId` the phone saw when it names one: a turn that moved is refused with 409 and the current `turnId` and `askIds`, before anything reaches the durable agent. A WRITE: refused before it is attempted when the member is not taking writes (§10.3) and by the member's own device gate (§12). The control receipt lives on **the member that owns the pane**, so a retry with the same request id replays there; the lead keeps no copy. A lead that predates it never calls it, and a peer that predates it answers 404, which the phone reads as a refusal, never as done |
 | `POST` | `/crew/v1/pane/:id/walky` | none: the lead's own call, beside `GET /api/pane/:id/walky` (`WALKY_PANE_ROUTE`) | forwarded, additive-optional (§7.1), added 2026-10-17 (M62). A walky talky message the LEAD routes to the member that owns the pane, `:id` the pane id or `all` for every agent pane there, with the lead's attestation in the body (§21). A WRITE on the write budget, refused before it is attempted when the member is not taking writes (§10.3). Never a phone's: the browser path answers only the GET on this path, and the member answers the POST only from its lead, through walky's own handler and never through the reply handler. It is not behind the member's device gate, because no phone stands behind it and the attestation is what admits it. Audited `walky.deliver` on both sides (§12). A peer that predates it answers 404, which the lead writes as `refused: older member` in the receipt |
 | `POST` | `/crew/v1/tab` | `POST /api/tab` (`:218`) | forwarded |
@@ -3553,6 +3554,13 @@ machine, past `accepted`, **that the lead has not acked yet**. At most 100, the 
 receipt goes 10 minutes after it was first held, acked or not. It is a report on the exchange, never a
 stored state (§18.5): it lives in memory only. **Absent means "nothing to report"** (§7.1).
 
+**A held send** (added 2026-10-21, M62 spec 02). The report may also carry an `accepted` receipt that
+has a `reason`: the member holds the message over a draft or a running turn, and the reason says which
+(`draft present`, `turn running`). It adds no state and no field, so it is additive-optional under
+§7.1: an older lead reads it as the `accepted` it is, and writes it over its own `accepted` as a
+newer receipt of the same state. It ranks as `accepted`, below `unknown` and every finished state, so
+it never goes over either. A bare `accepted` is still never reported.
+
 **The ack cursor** (added 2026-10-18). Each held receipt gets a sequence number, and a newer state for
 the same id and target is a new receipt with a new number. `cursor` is `<epoch>.<seq>` of the newest
 receipt in the report. `epoch` is 8 random lowercase hex characters, minted when the bridge process
@@ -3569,8 +3577,9 @@ pane on that member, for a message the lead routed there. The same receipt repor
 
 **An outcome only moves forward** (added 2026-10-18). The states rank `accepted`, then `unknown`, then
 the finished ones: `delivered`, `inbox-only`, `refused` and `expired`. A reported or pushed receipt is
-taken only when it ranks higher than the one held, or is the same state and newer; a finished state is
-never replaced. A receipt a bridge writes from its own dial (`accepted`, `unknown: member slow`, a
+taken only when it ranks higher than the one held, or is the same state and newer, or is the same
+state of the same millisecond and adds a `reason` the held one lacks (added 2026-10-22: a held send can
+be written in the millisecond of the bare `accepted` before it); a finished state is never replaced. A receipt a bridge writes from its own dial (`accepted`, `unknown: member slow`, a
 refusal) replaces only `accepted`, so a slow leg never goes over the outcome a report already brought.
 
 **A pane under a leg sent as a whole** (added 2026-10-18). A report may name a pane the lead holds no
@@ -3600,7 +3609,8 @@ receipt is still `accepted` on the member. Under an older lead it stays `accepte
 ### The outcome comes back *(added 2026-10-18)*
 
 The lead keeps an **outbox per member**, in memory only: every receipt its own log writes, past
-`accepted`, for a message whose `from.memberId` is that member and whose target is not on that member.
+`accepted` or held (an `accepted` with a `reason`, added 2026-10-21), for a message whose
+`from.memberId` is that member and whose target is not on that member.
 Both kinds of line count, the lead's own deliveries and the lines `mergeReport` writes from another
 member's report. At most 100 per member, the oldest dropped, and a receipt goes 10 minutes after the
 lead held it.

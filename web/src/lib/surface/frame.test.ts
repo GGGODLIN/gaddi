@@ -149,7 +149,7 @@ describe("pinned dialog regions", () => {
   }
 });
 
-// Muse, Oh My Pi's Claude theme, pi's OmO extension and Hermes's classic CLI paint Claude's own input
+// Muse, Oh My Pi's Claude theme, pi's OmO extension, gentle-pi's editor and Hermes's classic CLI paint Claude's own input
 // box: a column-0 ❯ row between two bare U+2500 rules. The anchors are shape only, so the Claude profile finds a frame
 // there, and that is right: the frame says "a box is drawn", and the profile is picked by the binary
 // (the README contract: version and harness from the binary, never from the screen), so the Claude
@@ -159,7 +159,8 @@ const DRAWS_THE_SAME_BOX = (name: string): boolean =>
   name.startsWith("omp--v18-4-claude") ||
   name.startsWith("pi--omo-") ||
   name.startsWith("hermes--") ||
-  name === "pi--prose-quoted-omo-dialog-above-editor.txt";
+  name === "pi--prose-quoted-omo-dialog-above-editor.txt" ||
+  name === "pi--v130-gentle-draft-wrapped.txt";
 
 describe("non-Claude fixtures", () => {
   it("yield null with the Claude profile, except the harnesses that draw the same box", () => {
@@ -415,6 +416,39 @@ describe("findInputFrame", () => {
     expect(findInputFrame(mixed, IDLE)!.placeholder).toBe(false);
     expect(findInputFrame(lines(RULE, "❯", RULE), IDLE)!.placeholder).toBe(false);
     expect(findInputFrame(lines(RULE, "❯", RULE), IDLE)!.interior.text).toBe("");
+  });
+
+  it("marks a placeholder by its colours alone: a whole hole in the placeholder colour, no faint attribute (issue 510)", () => {
+    // Muse paints the empty box's tip — and the model's prompt suggestion, whose words no text list
+    // can name — in rgb(175,177,179) with no SGR 2, where typed text is rgb(31,35,40)
+    // (muse--tip-loop.txt and muse--draft-single.txt). The profile names the colour, so a hole
+    // painted in nothing else is a placeholder; one typed-colour run leaves it a draft.
+    const MUSE = requireProfile("muse").idle;
+    const GHOST = "rgb(175,177,179)";
+    const TYPED = "rgb(31,35,40)";
+    const box = (...rows: FrameRow[]): FrameRow[] => [{ segments: [{ text: RULE }] }, ...rows, { segments: [{ text: RULE }] }];
+    const promptRow = (...runs: FrameRun[]): FrameRow => ({ segments: [{ text: "❯ ", fg: "rgb(236,177,0)" }, ...runs] });
+
+    const hint = findInputFrame(box(promptRow({ text: "Run the test suite and fix any failures", fg: GHOST })), MUSE)!;
+    expect(hint.placeholder).toBe(true);
+    expect(hint.anchorsHit).toContain("placeholder-fg");
+    expect(hint.interior.text).toBe("Run the test suite and fix any failures");
+
+    const wrapped = findInputFrame(
+      box(promptRow({ text: "Run the test suite and", fg: GHOST }), { segments: [{ text: "  fix any failures", fg: GHOST }] }),
+      MUSE,
+    )!;
+    expect(wrapped.placeholder).toBe(true);
+
+    const mixed = findInputFrame(box(promptRow({ text: "Run the test suite", fg: GHOST }, { text: "x", fg: TYPED })), MUSE)!;
+    expect(mixed.placeholder).toBe(false);
+    const typedUnder = findInputFrame(
+      box(promptRow({ text: "Run the test suite and", fg: GHOST }), { segments: [{ text: "  then ship it", fg: TYPED }] }),
+      MUSE,
+    )!;
+    expect(typedUnder.placeholder).toBe(false);
+    const nearMiss = findInputFrame(box(promptRow({ text: "Run the test suite", fg: "rgb(175,176,180)" })), MUSE)!;
+    expect(nearMiss.placeholder).toBe(false);
   });
 
   it("a faint marker in front of a real draft is not a placeholder", () => {

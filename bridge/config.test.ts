@@ -30,6 +30,8 @@ const KEYS = [
   "COLLIE_TRANSCRIPT_ROOT",
   "COLLIE_REDACT",
   "COLLIE_CODEX_ROOT",
+  "COLLIE_KIRO_ROOT",
+  "KIRO_HOME",
   "COLLIE_PI_ROOT",
   "COLLIE_OPENCODE_ROOT",
   "COLLIE_GROK_ROOT",
@@ -102,6 +104,7 @@ describe("loadConfig", () => {
     expect(cfg.journalRoots.opencode).toEqual([join(homedir(), ".local", "share", "opencode")]);
     expect(cfg.journalRoots.grok).toEqual([join(homedir(), ".grok", "sessions")]);
     expect(cfg.journalRoots.hermes).toEqual([join(homedir(), ".hermes")]);
+    expect(cfg.journalRoots.kiro).toEqual([join(homedir(), ".kiro", "sessions")]);
     expect(cfg.journalRoots.openclaw).toEqual([join(homedir(), ".openclaw")]);
     expect(cfg.submitKeys).toEqual(["Enter"]);
     expect(cfg.trustedUser).toBe("");
@@ -119,6 +122,27 @@ describe("loadConfig", () => {
     expect(cfg.multiSession).toBe(true);
     // tailscale serve is used by default (reverse-proxy bypass is opt-in).
     expect(cfg.skipServe).toBe(false);
+  });
+
+  test("COLLIE_ACCOUNT_WINDOWS is claude and codex by default, a list names harnesses, 0 turns it off (ADR 0118)", () => {
+    const base = { ...process.env, COLLIE_ACCOUNT_WINDOWS: undefined };
+    expect(loadConfig(base).accountWindows).toEqual(["claude", "codex"]);
+    for (const off of ["0", "off", "false", "no"]) expect(loadConfig({ ...base, COLLIE_ACCOUNT_WINDOWS: off }).accountWindows).toEqual([]);
+    for (const on of ["1", "on", "true", "yes"]) expect(loadConfig({ ...base, COLLIE_ACCOUNT_WINDOWS: on }).accountWindows).toEqual(["claude", "codex"]);
+    expect(loadConfig({ ...base, COLLIE_ACCOUNT_WINDOWS: "all" }).accountWindows).toEqual(["claude", "codex", "opencode", "grok"]);
+    expect(loadConfig({ ...base, COLLIE_ACCOUNT_WINDOWS: " Grok, claude " }).accountWindows).toEqual(["claude", "grok"]);
+  });
+
+  test("COLLIE_ACCOUNT_WINDOWS with an unknown id warns and keeps only the known ids", () => {
+    const warnings: string[] = [];
+    const realWarn = console.warn;
+    console.warn = (...args: unknown[]) => void warnings.push(args.map(String).join(" "));
+    try {
+      expect(loadConfig({ ...process.env, COLLIE_ACCOUNT_WINDOWS: "opencode,gork" }).accountWindows).toEqual(["opencode"]);
+    } finally {
+      console.warn = realWarn;
+    }
+    expect(warnings.join("\n")).toContain('COLLIE_ACCOUNT_WINDOWS: unknown id "gork"');
   });
 
   test("parses COLLIE_MULTI_SESSION as a boolean toggle (default on)", () => {
@@ -242,6 +266,26 @@ describe("loadConfig", () => {
     process.env.CODEX_HOME = "/srv/codex";
     process.env.COLLIE_CODEX_ROOT = "/elsewhere/rollouts";
     expect(loadConfig().journalRoots.codex).toEqual(["/elsewhere/rollouts"]);
+  });
+
+  test("Kiro V3 follows KIRO_HOME, while the Collie root list wins", () => {
+    // Given: Kiro's own config directory is relocated.
+    process.env.KIRO_HOME = "/srv/kiro";
+    // When: Collie resolves the journal roots.
+    expect(loadConfig().journalRoots.kiro).toEqual([join("/srv/kiro", "sessions")]);
+    process.env.COLLIE_KIRO_ROOT = " /srv/work/sessions, ,/srv/personal/sessions ";
+    // Then: an explicit list preserves order and replaces the agent default.
+    expect(loadConfig().journalRoots.kiro).toEqual(["/srv/work/sessions", "/srv/personal/sessions"]);
+  });
+
+  test("Kiro blank roots fall back to its home, as Kiro does with a blank KIRO_HOME", () => {
+    // Given: a blank Collie override and a KIRO_HOME of spaces.
+    process.env.COLLIE_KIRO_ROOT = " , ";
+    process.env.KIRO_HOME = " ";
+    // When: Collie resolves the journal roots.
+    const roots = loadConfig().journalRoots.kiro;
+    // Then: it reads the default ~/.kiro/sessions.
+    expect(roots).toEqual([join(homedir(), ".kiro", "sessions")]);
   });
 
   test("COLLIE_HERMES_ROOT relocates Hermes state.db", () => {

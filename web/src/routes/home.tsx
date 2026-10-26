@@ -128,7 +128,7 @@ export function HomeRoute() {
     prefs,
     setSpacesOpen,
     setLaunchOpen,
-    setIsolatedSpace,
+    setIsolatedSpaces,
     toggleHiddenSpace,
     setDashView,
     setNeedsYouOnly,
@@ -342,9 +342,9 @@ export function HomeRoute() {
                 creating: creatingTab,
                 onNewTab: (workspaceId, at) => void newTab(workspaceId, at),
               }}
-              isolated={prefs.isolatedSpace}
+              isolated={prefs.isolatedSpaces}
               hidden={prefs.hiddenSpaces}
-              onIsolate={setIsolatedSpace}
+              onIsolate={setIsolatedSpaces}
               {...(data.agents.length > 0 ? { onOpenSwitcher: showSwitcher } : {})}
               onToggleHidden={toggleHiddenSpace}
               hiddenMachines={hiddenMachines}
@@ -388,7 +388,7 @@ export function HomeRoute() {
               {programsFirst && <ProgramSection programs={programs} servers={data.servers} onOpen={openProgram} />}
               <LaunchStrip open={launchOpen} onOpenChange={setLaunchOpen} scope={data.scope} />
               <SpaceOverview
-                workspaces={isolateSpaces(data.workspaces, prefs.isolatedSpace)}
+                workspaces={isolateSpaces(data.workspaces, prefs.isolatedSpaces)}
                 agents={navPanes.agents}
                 shellPanes={navPanes.shellPanes}
                 host={navHost}

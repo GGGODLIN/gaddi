@@ -20,6 +20,7 @@ import { DiskWatch } from "./machine-disks.ts";
 import { MachineSampler } from "./machine-stats.ts";
 import { machineRosterOf, MachineWatch, SOLO_MACHINE_ID, type MachineRosterEntry } from "./machines.ts";
 import { localWatchPane, peerWatchPane } from "./cache/watch-key.ts";
+import { museSessionNameReader } from "./journal/muse.ts";
 import { buildJournalRegistry } from "./journal/registry.ts";
 import { createCacheRulesReader } from "./operator-cache-rules.ts";
 import { AuditLog, fileAuditAppender } from "./audit.ts";
@@ -200,6 +201,8 @@ import { Snooze } from "./snooze.ts";
 import { StateEngine } from "./state-engine.ts";
 import { SubagentTracker } from "./subagents.ts";
 import { TodoTracker } from "./todos.ts";
+import { diskUsageFiles, usageDir, UsageTracker } from "./usage.ts";
+import { AccountWindows, defaultAccountSources, diskCredentialSeams, isTurnEnd } from "./account-windows.ts";
 import {
   bridgeStampSync,
   compareSemver,
@@ -236,6 +239,8 @@ import {
 import { collieVersion, collieVersionBare } from "./version.ts";
 import { SurfaceShadow, type ShadowOptions } from "./surface/shadow.ts";
 import { AskAnswerer, AskBook } from "./surface/ask.ts";
+import { ClearService } from "./surface/clear.ts";
+import { StopService, type StopDeps } from "./surface/stop.ts";
 import { gateFor } from "./surface/key-gate.ts";
 import { RowRing, SendProtocol, SessionLocks } from "./surface/protocol.ts";
 import { ProgramDriver, type ProgramPort } from "./surface/durable-driver.ts";
@@ -787,6 +792,12 @@ await activity.load();
 const journals = cfg.transcript
   ? buildJournalRegistry({ ...cfg.journalRoots, durable: [durableLogDir(cfg.stateDir)] })
   : null;
+// The name the operator gave a Muse session, for the engines' pane naming (journal/muse.ts).
+// It reads the same logs the journal does, so it lives and dies with the same switch: with
+// transcripts off no engine is handed a reader, and muse panes keep their fallbacks exactly as
+// before. One reader for the whole bridge — its per-session scans are keyed by session id, so
+// two collie sessions watching one herd share the fold instead of re-walking the log.
+const museNames = cfg.transcript ? museSessionNameReader(cfg.journalRoots.muse) : undefined;
 const cacheRulesReader = createCacheRulesReader(cfg.cacheRulesFile);
 const paneCache =
   journals === null
@@ -798,6 +809,22 @@ const paneDescription = journals === null ? null : new DescriptionTracker(journa
 const todos = journals === null ? null : new TodoTracker(journals, Date.now);
 // Each pane's running subagents (bridge/subagents.ts), read on the same poll as the todo list.
 const subagents = journals === null ? null : new SubagentTracker(journals, Date.now);
+// The account's 5-hour and 7-day windows (bridge/account-windows.ts, ADR 0118): one ask to the vendor
+// with the operator's own harness login, read on this machine, only while a pane of that harness is
+// here (Codex needs no ask: its own session files carry them). `COLLIE_ACCOUNT_WINDOWS` names the harnesses: unset is
+// claude and codex, `all` adds the unverified opencode and grok, `0` turns it off: no login is read and nothing is asked.
+const accountWindows = new AccountWindows({
+  enabled: cfg.accountWindows.length > 0,
+  sources: defaultAccountSources(diskCredentialSeams(process.env), cfg.accountWindows),
+  fetch: (url, init) => fetch(url, init),
+  now: Date.now,
+  userAgent: `collie/${crewVersion}`,
+  log: (line) => console.log(line),
+});
+// Each pane's context use and subscription windows (bridge/usage.ts), from the files the statusLine
+// wrapper and the beacon write, joined with the account windows above. No journal needed: the pane's
+// session id is the key.
+const usage = new UsageTracker(usageDir(cfg.stateDir), diskUsageFiles, Date.now, accountWindows);
 
 // Which branch each pane's folder is on (bridge/git-head.ts). One for the whole bridge: every
 // session's poll feeds it its folders, and the server reads it from memory at serialise time.
@@ -1404,6 +1431,9 @@ if (holdStore !== null && sendStore !== null) {
   const waiting = holdStore.list().filter((entry) => entry.state === "held").length;
   if (changed > 0 || waiting > 0) console.log(`[send] hold queue replayed: ${String(waiting)} held, ${String(changed)} row(s) settled after the last run`);
 }
+// Walky talky's last word before a held send goes out (M62 spec 02), set once its service exists below:
+// a message meant for a pane instance that is gone never reaches the pane that took its id.
+let walkyReleaseCheck: ((requestId: string, session: string, paneId: string) => boolean) | null = null;
 // The Surface counters (M56 spec 09): one ledger for the bridge, a day file under `<stateDir>/surface/`.
 // Created with either flag, so an instance that computes no Surface touches no new file. It never
 // blocks a send and never changes a verdict.
@@ -1459,7 +1489,7 @@ const makeSession: SessionFactory = (name, endpoint, isPrimary) => {
   const built = endpoint.kind === "program" ? programAdapter(endpoint.source) : terminalAdapter(endpoint.socketPath);
   const target = built.target;
   const herdr = withBeaconsIfBlind(built.adapter, target);
-  const engine = new StateEngine(herdr, cfg.pollMs);
+  const engine = new StateEngine(herdr, cfg.pollMs, { museSessionName: museNames });
 
   // Event-poked polling: a long-lived watch on the multiplexer pokes an immediate re-poll on any
   // herd change, and while it's healthy the interval relaxes to the safety-net cadence. Events are
@@ -1520,6 +1550,13 @@ const makeSession: SessionFactory = (name, endpoint, isPrimary) => {
   if (subagents !== null) {
     engine.onUpdate((s) => void subagents.refresh(s.agents, { session: name }).catch(() => {}));
   }
+  engine.onUpdate((s) => void usage.refresh(s.agents, name).catch(() => {}));
+  // The account windows ride the same poll (first reading, then every five minutes while a pane of the
+  // harness is here) and a turn's end (at most once a minute per harness). Neither waits on the ask.
+  engine.onUpdate((s) => accountWindows.observe(s.agents, name));
+  engine.onTransition((agent, from, to) => {
+    if (isTurnEnd(from, to)) accountWindows.poke(agent.agent);
+  });
 
   // Background notifications on lifecycle transitions (foreground toasts are computed client-side by
   // diffing snapshots). Each session gets its own coordinator + notification slot: the primary keeps
@@ -1622,6 +1659,7 @@ const makeSession: SessionFactory = (name, endpoint, isPrimary) => {
           generation: generationOf,
           asks: askBook,
           holds: holdStore ?? undefined,
+          releaseCheck: (requestId, session, paneId) => walkyReleaseCheck?.(requestId, session, paneId) ?? true,
           // A blind send on one of this session's shell panes joins Sent (ADR 0107); any other pane is left out.
           blindSent: sentRecorder(sentStore, () => engine.current().shellPanes),
         })
@@ -1718,12 +1756,24 @@ const makeSession: SessionFactory = (name, endpoint, isPrimary) => {
   engine.start();
   poker.start();
   const parts = built.probe === undefined ? { herdr, engine, poker, notifications } : { herdr, engine, poker, notifications, program: built.probe };
-  const withHooks = hooks === undefined ? parts : { ...parts, hooks };
+  // The start edge's model rides with the hook source that carried it (bridge/pane-model.ts).
+  const hookModel = hooks === undefined || edgeRouter === null ? undefined : (paneId: string) => edgeRouter.modelOf(name, paneId);
+  const withHooks = hooks === undefined ? parts : hookModel === undefined ? { ...parts, hooks } : { ...parts, hooks, hookModel };
   const withSurface = surface === undefined ? withHooks : { ...withHooks, surface };
   const withSend = send === undefined ? withSurface : { ...withSurface, send };
   const withAsks = asks === undefined ? withSend : { ...withSend, asks };
   const withHold = hold === undefined ? withAsks : { ...withAsks, hold };
-  return driver === undefined ? withHold : { ...withHold, driver };
+  // A Stop on a pane with a screen (M68 spec 01). It reads and presses on its own, so it needs neither the
+  // request store nor the Send Protocol flag: a terminal session always has it.
+  // Its `stopped` receipt is the stop edge the harness may not send (Claude Code fires no Stop hook on Escape).
+  const stopped = surface === undefined ? undefined : (paneId: string): void => void surface.stopSeen(paneId);
+  const stopDeps: StopDeps = { mux: herdr, gate: gateFor(herdr), profile: (harness) => sendProfile(harness) };
+  const stop = endpoint.kind === "terminal" ? new StopService(stopped === undefined ? stopDeps : { ...stopDeps, stopped }) : undefined;
+  const withStop = stop === undefined ? withHold : { ...withHold, stop };
+  // A Clear of the harness's box (ADR 0116, the Clear paragraph): the same mux, key gate and profile as the Stop.
+  const clear = endpoint.kind === "terminal" ? new ClearService({ mux: herdr, gate: gateFor(herdr), profile: (harness) => sendProfile(harness) }) : undefined;
+  const withClear = clear === undefined ? withStop : { ...withStop, clear };
+  return driver === undefined ? withClear : { ...withClear, driver };
 };
 
 const registry = new SessionRegistry({
@@ -1791,15 +1841,22 @@ const walkyRawPanes = (): Omit<WalkyPane, "instance">[] =>
     for (const view of shellPanes) out.push(of(view, false));
     return out;
   });
+/** A Send Protocol outcome for walky talky. A held one carries what holds it now, from its hold file. */
+function walkyResult(sendId: string, outcome: string, reason: string | undefined): SendResult {
+  const why = outcome === "held" ? (holdStore?.get(sendId)?.cause ?? reason) : reason;
+  return why === undefined ? { outcome } : { outcome, reason: why };
+}
 const walkyHost: WalkyHost = {
   panes: () => walkyInstances.stamp(walkyRawPanes()),
-  send: async (pane, sendId, text): Promise<SendResult> => {
+  // A walky send is marked (M62 spec 02): a draft holds it, and its hold ends on walky's one clock.
+  send: async (pane, sendId, text, hold): Promise<SendResult> => {
     const protocol = registry.get(pane.session)?.send;
     if (protocol === undefined) return { outcome: "refused", reason: "no terminal" };
-    const answer = await protocol.handle({ id: sendId, text, mode: "send" }, { session: pane.session, paneId: pane.paneId, harness: pane.harness ?? "" });
+    const request = hold === undefined ? { id: sendId, text, mode: "send" as const } : { id: sendId, text, mode: "send" as const, draftHolds: true, holdUntil: hold.holdUntil };
+    const answer = await protocol.handle(request, { session: pane.session, paneId: pane.paneId, harness: pane.harness ?? "" });
     const receipt = answer.receipt;
     if (receipt === undefined) return { outcome: "unknown" };
-    return receipt.reason === undefined ? { outcome: receipt.outcome } : { outcome: receipt.outcome, reason: receipt.reason };
+    return walkyResult(sendId, receipt.outcome, receipt.reason);
   },
   sendState: (sendId) => {
     const record = sendStore?.get(sendId) ?? null;
@@ -1807,7 +1864,7 @@ const walkyHost: WalkyHost = {
     const receipt = record.receipt;
     // A request with no receipt yet still runs; the start-up recovery ends a crashed one `unknown`.
     if (receipt === undefined) return { outcome: "held" };
-    return receipt.reason === undefined ? { outcome: receipt.outcome } : { outcome: receipt.outcome, reason: receipt.reason };
+    return walkyResult(sendId, receipt.outcome, receipt.reason);
   },
   cancelHeld: (session, paneId, sendId) => {
     registry.get(session)?.send?.cancelHeld(session, paneId, sendId);
@@ -1857,6 +1914,7 @@ const walky = new WalkyService({
   leadName: () => trustStore.current()?.lead?.memberId ?? null,
   remoteSkipped: crew.mode === "lead" ? () => walkyLeadHalf?.skipped() ?? [] : undefined,
 });
+walkyReleaseCheck = (requestId, session, paneId) => walky.deliverer.stillMeant(requestId, session, paneId);
 // A member reports, on each snapshot answer, how the messages from elsewhere ended on its panes, until
 // its lead acks them.
 const walkyReport = crew.mode === "peer" && walkyMemberId !== null ? new WalkyReport(walkyMemberId) : null;
@@ -2807,6 +2865,7 @@ const server = startServer({
   description: paneDescription ?? undefined,
   todos: todos ?? undefined,
   subagents: subagents ?? undefined,
+  usage,
   gitHeads,
   walkyInstance: (session, paneId) => walkyInstances.tokenOf(session, paneId),
   walky,

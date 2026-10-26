@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { commandsFor } from "@/lib/agent-commands";
-import { barFor, BAR_AGENTS, CAPTURE_SOURCED, DURABLE_BAR, durableBarFor } from "@/lib/harness-bar";
+import { barFor, BAR_AGENTS, CAPTURE_SOURCED, DURABLE_BAR, durableBarFor, stopFor } from "@/lib/harness-bar";
 import type { OperatorCommand } from "@/lib/types";
 import { operatorBarStatus } from "@/test/sweep-data";
 
@@ -82,6 +82,7 @@ describe("the shipped bar", () => {
 
   it("gives Muse Claude's four, because its /effort opens a picker of its own", () => {
     expect(barFor("muse").map((i) => i.id)).toEqual(["model", "effort", "compact", "resume"]);
+    expect(barFor("muse").map((i) => i.command)).toEqual(["/model", "/effort", "/compact", "/resume"]);
   });
 
   it("gives agy one bar under both of its names, with Effort inside its /model picker", () => {
@@ -90,7 +91,7 @@ describe("the shipped bar", () => {
   });
 
   it("renders nothing for an agent with no bar, and for no agent at all", () => {
-    for (const agent of ["hermes", "bash", "", undefined, null]) {
+    for (const agent of ["hermes", "kiro", "bash", "", undefined, null]) {
       expect(barFor(agent), `${String(agent)} has no bar`).toEqual([]);
     }
   });
@@ -98,6 +99,7 @@ describe("the shipped bar", () => {
   it("reaches a bar through the catalog's own agent ladder", () => {
     expect(barFor("claude-code").map((i) => i.id)).toEqual(barFor("claude").map((i) => i.id));
     expect(barFor("  CLAUDE ").map((i) => i.id)).toEqual(barFor("claude").map((i) => i.id));
+    expect(barFor("muse-code").map((i) => i.id)).toEqual(barFor("muse").map((i) => i.id));
   });
 
   it("spells every shipped label as a harnessBar key", () => {
@@ -266,5 +268,18 @@ describe("the durable section", () => {
   it("is not a harness: the slash-command table has no entry for it", () => {
     expect(BAR_AGENTS).not.toContain("durable");
     expect(barFor("durable")).toEqual([]);
+  });
+});
+
+describe("stopFor (M68 spec 02)", () => {
+  it("offers Stop whatever the turn reads, once the bridge says a key exists", () => {
+    expect(stopFor({ canStop: true })).toBe(true);
+  });
+
+  it("offers nothing without the bridge's word, whatever the harness is", () => {
+    expect(stopFor({})).toBe(false);
+    expect(stopFor({ canStop: false })).toBe(false);
+    expect(stopFor(undefined)).toBe(false);
+    expect(stopFor(null)).toBe(false);
   });
 });

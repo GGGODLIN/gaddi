@@ -1,23 +1,8 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { BottomSheet } from "@/components/ui/sheet";
 
 import { ImageEditor } from "./image-editor";
-
-vi.mock("react-filerobot-image-editor", () => ({
-  default: () => (
-    <div className="FIE_root" data-phone="true">
-      <div className="FIE_main-container">
-        <div className="FIE_editor-content">
-          <div className="FIE_canvas-container" />
-          <div className="FIE_tools-bar-wrapper">
-            <div className="FIE_tools-bar" />
-          </div>
-        </div>
-      </div>
-    </div>
-  ),
-}));
 
 // A real touch, not React's delegated one. The sheet reads `touches` off the native event.
 function pull(target: Element, fromY: number, toY: number) {
@@ -38,51 +23,144 @@ function panelOf(dialog: HTMLElement) {
   return panel;
 }
 
-describe("ImageEditor sheet shell", () => {
-  it("keeps the editor frame inside this sheet and leaves the same classes alone outside it", async () => {
-    render(
-      <>
-        <style>
-          {".FIE_root{min-height:250px;overflow:auto;height:100%}.FIE_canvas-container{min-height:250px;flex-grow:1}"}
-        </style>
-        <div className="FIE_root" data-slot="outside-root" />
-        <div className="FIE_canvas-container" data-slot="outside-canvas" />
-        <ImageEditor file={new File(["x"], "shot.png", { type: "image/png" })} onConfirm={vi.fn()} onCancel={vi.fn()} onFail={vi.fn()} onReject={vi.fn()} />
-      </>,
-    );
-    await waitFor(() => {
-      expect(document.querySelector(".collie-image-editor .FIE_root")).not.toBeNull();
-    });
-    const insideRoot = document.querySelector(".collie-image-editor .FIE_root");
-    const insideCanvas = document.querySelector(".collie-image-editor .FIE_canvas-container");
-    const actions = document.querySelector(".collie-image-editor .image-editor-actions");
-    if (insideRoot === null || insideCanvas === null || actions === null) {
-      throw new Error("editor frame missing");
-    }
-    const root = getComputedStyle(insideRoot);
-    const canvas = getComputedStyle(insideCanvas);
-    expect(root.minHeight).toBe("0px");
-    expect(root.overflow).toBe("hidden");
-    expect(root.maxHeight).toBe("100%");
-    expect(canvas.minHeight).toBe("0px");
-    expect(canvas.flexGrow).toBe("1");
-    expect(getComputedStyle(actions).flexShrink).toBe("0");
-    expect(getComputedStyle(document.querySelector("[data-slot='outside-root']")!).minHeight).toBe("250px");
-    expect(getComputedStyle(document.querySelector("[data-slot='outside-canvas']")!).minHeight).toBe("250px");
-  });
+function loadEditorImage(dialog: HTMLElement, width = 200, height = 100) {
+  const img = dialog.querySelector<HTMLImageElement>("[data-slot='image-editor-source']");
+  if (img === null) throw new Error("editor source img missing");
+  Object.defineProperty(img, "naturalWidth", { value: width, configurable: true });
+  Object.defineProperty(img, "naturalHeight", { value: height, configurable: true });
+  fireEvent.load(img);
+}
 
+function makeMock2dContext(): CanvasRenderingContext2D {
+  const partial: Partial<CanvasRenderingContext2D> = {
+    clearRect: vi.fn(),
+    drawImage: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    ellipse: vi.fn(),
+    stroke: vi.fn(),
+    translate: vi.fn(),
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
+    lineCap: "butt",
+    lineJoin: "miter",
+  };
+  // SAFETY: test double implements every 2D context method paintEditorStage, drawAnnotation, and exportEditedCanvas call.
+  return partial as CanvasRenderingContext2D;
+}
+
+describe("ImageEditor sheet shell and native canvas tools", () => {
   beforeEach(() => {
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:editor");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-    // SAFETY: canvasAvailable only checks non-null. This value is never drawn on.
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({} as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => makeMock2dContext());
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("reports a missing canvas on the first commit, and Cancel uses the latest callback", () => {
+  it("renders the native canvas stage, tool switcher, and undo/redo/reset controls without third-party editor classes", () => {
+    render(
+      <ImageEditor
+        file={new File(["x"], "shot.png", { type: "image/png" })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        onFail={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Edit image" });
+    expect(dialog.querySelector(".FIE_root")).toBeNull();
+    expect(screen.getByRole("radio", { name: "Crop" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Draw" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "Circle" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "Arrow" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeDisabled();
+
+    loadEditorImage(dialog, 300, 150);
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeEnabled();
+    const canvas = dialog.querySelector<HTMLCanvasElement>("[data-slot='image-editor-canvas']");
+    expect(canvas).not.toBeNull();
+    expect(canvas).not.toHaveClass("hidden");
+  });
+
+  it("supports drawing annotations, undoing, redoing, resetting, and exporting on confirm", () => {
+    const pngDataUrl = `data:image/png;base64,${btoa("cropped-annotated-png")}`;
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(pngDataUrl);
+    const onConfirm = vi.fn<(file: File) => void>();
+
+    render(
+      <ImageEditor
+        file={new File(["raw"], "screen.png", { type: "image/png" })}
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+        onFail={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Edit image" });
+    loadEditorImage(dialog, 200, 100);
+
+    const canvas = dialog.querySelector<HTMLCanvasElement>("[data-slot='image-editor-canvas']");
+    if (canvas === null) throw new Error("canvas missing");
+
+    // Switch to Draw tool and draw a stroke; verify a second finger mid-stroke is ignored.
+    fireEvent.click(screen.getByRole("radio", { name: "Draw" }));
+    expect(screen.getByRole("radio", { name: "Draw" })).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 20, clientY: 20 });
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeDisabled();
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 100, clientY: 60 });
+    // Second finger touches down while Finger 1 is still active: must be ignored.
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 180, clientY: 90 });
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 180, clientY: 90 });
+    // Finger 1 is still active until Finger 1 lifts:
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeDisabled();
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 100, clientY: 60 });
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeEnabled();
+
+    const undoBtn = screen.getByRole("button", { name: "Undo" });
+    const redoBtn = screen.getByRole("button", { name: "Redo" });
+    const resetBtn = screen.getByRole("button", { name: "Reset" });
+    expect(undoBtn).toBeEnabled();
+    expect(resetBtn).toBeEnabled();
+
+    fireEvent.click(undoBtn);
+    expect(undoBtn).toBeDisabled();
+    expect(redoBtn).toBeEnabled();
+
+    fireEvent.click(redoBtn);
+    expect(undoBtn).toBeEnabled();
+
+    fireEvent.click(resetBtn);
+    expect(resetBtn).toBeDisabled();
+
+    // Draw a circle annotation and confirm with it present (not reset).
+    fireEvent.click(screen.getByRole("radio", { name: "Circle" }));
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 3, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 120, clientY: 80 });
+    fireEvent.pointerUp(canvas, { pointerId: 3, clientX: 120, clientY: 80 });
+    expect(resetBtn).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use this image" }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    const exportedFile = onConfirm.mock.calls[0]?.[0];
+    expect(exportedFile?.name).toBe("screen.png");
+    expect(exportedFile?.type).toBe("image/png");
+    expect(exportedFile?.size).toBe("cropped-annotated-png".length);
+  });
+
+  it("reports a missing canvas on the first commit, fails when the preview canvas returns null context, and Cancel uses the latest callback", () => {
     const onFail = vi.fn();
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     const failed = render(
@@ -91,8 +169,24 @@ describe("ImageEditor sheet shell", () => {
     expect(onFail).toHaveBeenCalledWith("unavailable");
     failed.unmount();
 
-    // SAFETY: canvasAvailable only checks non-null. This value is never drawn on.
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({} as CanvasRenderingContext2D);
+    // If canvasAvailable() succeeds on the probe canvas but the preview canvas returns null on paint,
+    // the session marks itself broken, disables Confirm, and notifies onFail("failed").
+    const onStageFail = vi.fn();
+    let getContextCalls = 0;
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => {
+      getContextCalls += 1;
+      return getContextCalls === 1 ? makeMock2dContext() : null;
+    });
+    const stageFailed = render(
+      <ImageEditor file={new File(["x"], "shot.png", { type: "image/png" })} onConfirm={vi.fn()} onCancel={vi.fn()} onFail={onStageFail} onReject={vi.fn()} />,
+    );
+    const stageDialog = screen.getByRole("dialog", { name: "Edit image" });
+    loadEditorImage(stageDialog, 200, 100);
+    expect(onStageFail).toHaveBeenCalledWith("failed");
+    expect(screen.getByRole("button", { name: "Use this image" })).toBeDisabled();
+    stageFailed.unmount();
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => makeMock2dContext());
     const first = vi.fn();
     const second = vi.fn();
     const file = new File(["x"], "shot.png", { type: "image/png" });
@@ -125,7 +219,6 @@ describe("ImageEditor sheet shell", () => {
     const hear = (event: Event) => {
       heard.push(event);
     };
-    // Same phase Konva uses: bubble on window, not capture (DragAndDrop.js touchmove).
     window.addEventListener("touchmove", hear);
     try {
       render(

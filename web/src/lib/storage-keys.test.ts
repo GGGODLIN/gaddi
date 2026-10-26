@@ -41,6 +41,8 @@ interface KeyFate {
 const KEYS = new Map<string, KeyFate>([
   // ── Wiped: what a pairing leaves behind ──
   ["collie:draft:", { area: "local", prefix: true, fate: "wiped", why: "unsent words typed under the pairing" }],
+  // The draft store's second version (lib/drafts.ts, PR 560); under the first one's prefix, so its wipe covers both.
+  ["collie:draft:v2:", { area: "local", prefix: true, fate: "wiped", why: "unsent words typed under the pairing" }],
   // The token and the push endpoint are named by constants, so the scan sees them through those.
   ["collie:device-token", { area: "local", prefix: false, fate: "wiped", why: "the credential itself" }],
   ["collie:push-endpoint", { area: "local", prefix: false, fate: "wiped", why: "names this phone's push endpoint" }],
@@ -69,8 +71,12 @@ const KEYS = new Map<string, KeyFate>([
   ["collie:auto-zen-enabled:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
   ["collie:pins:v1", { area: "local", prefix: false, fate: "kept", why: "pinned pane ids, no content" }],
   ["collie:island-build-dismissed:v1", { area: "local", prefix: false, fate: "kept", why: "a dismissed app build hint" }],
+  ["collie:wide-layout:v1", { area: "local", prefix: false, fate: "kept", why: "large-screen columns per space: pane addresses and widths, no content (ADR 0120)" }],
+  ["collie:wide-sidebar:v1", { area: "local", prefix: false, fate: "kept", why: "preference" }],
+  ["collie:wide-layout-mode:v1", { area: "local", prefix: false, fate: "kept", why: "preference: Auto or Off for the large-screen layout (ADR 0120)" }],
   ["collie:pin-hint:v1", { area: "local", prefix: false, fate: "kept", why: "a dismissed hint" }],
   ["collie:masked-hint:v1", { area: "local", prefix: false, fate: "kept", why: "a dismissed hint" }],
+  ["collie:pane-nav-hint:v1", { area: "local", prefix: false, fate: "kept", why: "the Two fingers first-arm hint was shown (ADR 0121)" }],
   ["collie:hidden-machines:v1", { area: "local", prefix: false, fate: "kept", why: "machine names hidden here" }],
   ["collie:mirror-native:", { area: "local", prefix: true, fate: "kept", why: "a per-pane colour choice" }],
   ["collie:tour:v1", { area: "local", prefix: false, fate: "kept", why: "the tour was seen" }],

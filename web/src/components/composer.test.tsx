@@ -1,4 +1,4 @@
-import { createRef, useMemo, useState } from "react";
+import { createRef, useEffect, useMemo, useState } from "react";
 import type { ComponentProps } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -8,7 +8,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import * as api from "@/lib/api";
 import { setLocale, whenLocaleReady } from "@/lib/i18n";
 import { clearStatus, useStatus } from "@/lib/status";
-import { isReloadHeld, __resetReloadGuard } from "@/lib/reload-guard";
+import { isReloadHeld, subscribeReloadHeld, __resetReloadGuard } from "@/lib/reload-guard";
 import { loadDraft, loadDraftEntry, saveDraft } from "@/lib/drafts";
 import { __resetOperatorCommands } from "@/lib/operator-config";
 import { server } from "@/test/setup";
@@ -51,6 +51,7 @@ interface ImageEditHarness {
   mode: "auto" | "manual";
   seen: WeakSet<File>;
   lastConfirm: ((file: File) => void) | null;
+  mounts: number;
 }
 
 const imageEditHarness = vi.hoisted(() => {
@@ -58,6 +59,7 @@ const imageEditHarness = vi.hoisted(() => {
     mode: "auto",
     seen: new WeakSet<File>(),
     lastConfirm: null,
+    mounts: 0,
   };
   return harness;
 });
@@ -69,6 +71,9 @@ vi.mock("@/components/image-editor", () => ({
     onCancel: () => void;
     onFail: (reason: "unavailable" | "failed") => void;
   }) => {
+    useEffect(() => {
+      imageEditHarness.mounts += 1;
+    }, []);
     imageEditHarness.lastConfirm = props.onConfirm;
     if (imageEditHarness.mode === "auto" && !imageEditHarness.seen.has(props.file)) {
       imageEditHarness.seen.add(props.file);
@@ -158,6 +163,7 @@ beforeEach(() => {
   clearStatus();
   imageEditHarness.mode = "auto";
   imageEditHarness.lastConfirm = null;
+  imageEditHarness.mounts = 0;
   canvasGate.available = true;
 });
 
@@ -818,17 +824,17 @@ describe("Composer: password prompt", () => {
     const box = screen.getByPlaceholderText(/shell command/i);
 
     await user.type(box, "hunter2hunter2");
-    expect(localStorage.getItem("collie:draft:default:w1:p1")).toContain("hunter2hunter2");
+    expect(localStorage.getItem("collie:draft:v2:default:w1:p1")).toContain("hunter2hunter2");
 
     await user.click(screen.getByRole("button", { name: "Send" }));
     await screen.findByRole("button", { name: /use type/i });
-    expect(localStorage.getItem("collie:draft:default:w1:p1")).toBeNull();
+    expect(localStorage.getItem("collie:draft:v2:default:w1:p1")).toBeNull();
     // Through the store's own reader: the draft store has an in-memory tier too (lib/drafts.ts).
     expect(loadDraft(undefined, "w1:p1")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /dismiss password-prompt notice/i }));
     expect(box).toHaveValue("hunter2hunter2");
-    expect(localStorage.getItem("collie:draft:default:w1:p1")).toBeNull();
+    expect(localStorage.getItem("collie:draft:v2:default:w1:p1")).toBeNull();
   });
 
   it("the handoff clears the draft before arming Type", async () => {
@@ -842,7 +848,7 @@ describe("Composer: password prompt", () => {
     await user.click(await screen.findByRole("button", { name: /use type/i }));
 
     await waitFor(() => expect(screen.getByPlaceholderText(/type into the terminal/i)).toHaveValue(""));
-    expect(localStorage.getItem("collie:draft:default:w1:p1")).toBeNull();
+    expect(localStorage.getItem("collie:draft:v2:default:w1:p1")).toBeNull();
     expectLeaving(screen.queryByRole("button", { name: /use type/i }));
   });
 
@@ -2483,10 +2489,15 @@ describe("Composer — clipboard image paste", () => {
     const chipBtn = screen.getByRole("button", { name: "Edit pasted text #1" });
     expect(chipBtn).toHaveTextContent("5 lines · 34 chars");
 
-    // Open the sheet and edit the pasted content
+    // Open the sheet and edit the pasted content; scrolling inside the textarea never triggers the
+    // sheet's pull-down dismiss gesture.
     await user.click(chipBtn);
     const sheetEditor = screen.getByRole("textbox", { name: "Edit pasted text #1" });
     expect(sheetEditor).toHaveValue(longText);
+    fireEvent.touchStart(sheetEditor, { touches: [{ clientY: 100 }] });
+    fireEvent.touchMove(sheetEditor, { touches: [{ clientY: 250 }] });
+    fireEvent.touchEnd(sheetEditor);
+    expect(screen.getByRole("textbox", { name: "Edit pasted text #1" })).toBeInTheDocument();
     fireEvent.change(sheetEditor, { target: { value: "edited 1\nedited 2\nedited 3\nedited 4\nedited 5" } });
     expect(chipBtn).toHaveTextContent("5 lines · 44 chars");
 
@@ -4346,6 +4357,16 @@ describe("Composer — an image is edited before it uploads", () => {
     expect(uploads).toBe(0);
     expect(screen.getByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
 
+    // An exported PNG that exceeds the upload size limit keeps the editor open so the user can crop smaller.
+    act(() => {
+      imageEditHarness.lastConfirm?.(
+        new File([new Uint8Array(10 * 1024 * 1024 + 1)], "oversize.png", { type: "image/png" }),
+      );
+    });
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(/too large|10 MB/i));
+    expect(uploads).toBe(0);
+    expect(screen.getByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Fail edit" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument());
     expect(uploads).toBe(0);
@@ -4459,6 +4480,116 @@ describe("Composer — an image is edited before it uploads", () => {
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(/Reconnect to send/));
     expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument();
     expect(uploads).toBe(0);
+  });
+
+  it("holds reload continuously from opening the editor through upload completion, survives transient offline blips, and remounts for identical file metadata", async () => {
+    const user = userEvent.setup();
+    __resetReloadGuard();
+    const holdStates: boolean[] = [];
+    const unsubscribe = subscribeReloadHeld(() => {
+      holdStates.push(isReloadHeld());
+    });
+    let setStaleProp: ((stale: boolean) => void) | null = null;
+    function OfflineHarness() {
+      const [stale, setStale] = useState(false);
+      setStaleProp = setStale;
+      return (
+        <>
+          <StatusSentinel />
+          <Composer
+            paneId="w1:p1"
+            agent="claude"
+            isShell={false}
+            gone={false}
+            readOnly={false}
+            stale={stale}
+            surface={FREE}
+            text="pane output"
+            terminalDraft={null}
+            rawTerminalDraft={null}
+            prefs={{ wrap: true, fontSize: 11, draftFontSize: 14, chatFontSize: 14, fontFamily: "system", rawTerminal: false, tapToFocus: true, expandClippedReply: true, stretchText: false }}
+            display={{ open: false, onToggle: vi.fn() }}
+            onSent={vi.fn()}
+          />
+        </>
+      );
+    }
+
+    let uploads = 0;
+    let resolvePendingUpload: (() => void) | null = null;
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/upload$/, async () => {
+        uploads += 1;
+        if (uploads === 1) {
+          await new Promise<void>((resolve) => {
+            resolvePendingUpload = resolve;
+          });
+          return new HttpResponse("upload failed", { status: 500 });
+        }
+        return HttpResponse.json({ ok: true, path: `/tmp/shot-${uploads}.png` });
+      }),
+    );
+
+    try {
+      render(
+        <RouterProvider router={createMemoryRouter([{ path: "/", element: <OfflineHarness /> }])} />,
+      );
+      expect(isReloadHeld()).toBe(false);
+
+      const firstFile = new File(["same-bytes"], "clipboard.png", { type: "image/png", lastModified: 1700000000000 });
+      pick(firstFile);
+      const firstDialog = await screen.findByRole("dialog", { name: "Edit image" });
+      expect(isReloadHeld()).toBe(true);
+
+      // Transient offline blip while editing must not close the local editor; confirming while offline
+      // reports Reconnect and keeps the editor open until online returns.
+      act(() => setStaleProp?.(true));
+      expect(screen.getByRole("dialog", { name: "Edit image" })).toBe(firstDialog);
+      await user.click(screen.getByRole("button", { name: "Use this image" }));
+      await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(/Reconnect to send/));
+      expect(uploads).toBe(0);
+      expect(screen.getByRole("dialog", { name: "Edit image" })).toBe(firstDialog);
+
+      act(() => setStaleProp?.(false));
+      holdStates.length = 0;
+      await user.click(screen.getByRole("button", { name: "Use this image" }));
+      await waitFor(() => expect(uploads).toBe(1));
+      // Hold never dropped to false between confirmEdit and uploadFile:
+      expect(holdStates).not.toContain(false);
+      expect(isReloadHeld()).toBe(true);
+
+      // While the first upload is still pending, picking and cancelling a second image must NOT
+      // release the first upload's reload hold or uploading state.
+      pick(new File(["second"], "second.png", { type: "image/png" }));
+      expect(await screen.findByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Cancel edit" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument());
+      expect(isReloadHeld()).toBe(true);
+      expect(holdStates).not.toContain(false);
+
+      // Once the first upload finishes (with 500 so no draft chip is added), `uploading` clears to
+      // false and the reload hold releases cleanly.
+      act(() => resolvePendingUpload?.());
+      await waitFor(() => expect(isReloadHeld()).toBe(false));
+
+      // Back-to-back files in a single batch with identical name, size, and lastModified must mount
+      // a fresh ImageEditor instance for the second file (monotonic session key).
+      const mountsBeforeBatch = imageEditHarness.mounts;
+      const sameMetaA = new File(["same-bytes"], "clipboard.png", { type: "image/png", lastModified: 1700000000000 });
+      const sameMetaB = new File(["same-bytes"], "clipboard.png", { type: "image/png", lastModified: 1700000000000 });
+      // SAFETY: getByTestId throws when the element is absent, and this id is on an <input>.
+      const photoInput = screen.getByTestId("attach-photos") as HTMLInputElement;
+      fireEvent.change(photoInput, { target: { files: [sameMetaA, sameMetaB] } });
+      expect(await screen.findByRole("dialog", { name: "Edit image" })).toBeInTheDocument();
+      expect(imageEditHarness.mounts).toBe(mountsBeforeBatch + 1);
+      await user.click(screen.getByRole("button", { name: "Cancel edit" }));
+      await waitFor(() => expect(imageEditHarness.mounts).toBe(mountsBeforeBatch + 2));
+      await user.click(screen.getByRole("button", { name: "Cancel edit" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument());
+      expect(isReloadHeld()).toBe(false);
+    } finally {
+      unsubscribe();
+    }
   });
 });
 
@@ -4642,7 +4773,7 @@ describe("outcome at the thumb", () => {
   // Send drill 2 (Codex on Herdr, 2026-10-16): a typed_not_submitted on a pane with no frame showed the
   // typed sentence with only Take over and Open Keys. Submit and Discard show for every reason, and each
   // carries the rows hash of the answer, so the bridge acts only on the screen the person saw.
-  it.each(["mismatch", "changed", "modal_cue", "stale_token", "submit_failed"] as const)(
+  it.each(["mismatch", "changed", "modal_cue", "stale_token", "submit_failed", "dialog_open", "unreadable"] as const)(
     "typed_not_submitted %s with no frame: Submit and Discard show, and Submit carries the rows hash it was offered with",
     async (reason) => {
       const user = await send(() => sendAnswer("x", "typed_not_submitted", reason, { offers: offersFor("typed_not_submitted", reason, false), rowsHash: "0f00ba", surface: SURFACES.noMatch }));
@@ -4738,6 +4869,33 @@ describe("outcome at the thumb", () => {
     expect(screen.getByRole("textbox")).toHaveValue("hello there plus more");
   });
 
+  it("unknown, a paste chip's text is edited in the sheet, then the sent text lands: the notice retires, the edited chip stays (#511)", async () => {
+    server.use(...sendHandler(() => sendAnswer("x", "unknown", "no_evidence", { offers: ["keys"] })));
+    const user = userEvent.setup();
+    const { land } = renderComposerWithEntries();
+    const box = screen.getByRole("textbox");
+    const longText = "line 1\nline 2\nline 3\nline 4\nline 5";
+    fireEvent.paste(box, {
+      clipboardData: {
+        items: [],
+        getData: (type: string) => (type === "text/plain" ? longText : ""),
+      },
+    });
+    await waitFor(() => expect(box).toHaveValue("[Pasted #1] "));
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(refusalText()).toMatch(/read the screen, then send again/i));
+
+    await user.click(screen.getByRole("button", { name: "Edit pasted text #1" }));
+    const sheetEditor = screen.getByRole("textbox", { name: "Edit pasted text #1" });
+    fireEvent.change(sheetEditor, { target: { value: "updated 1\nupdated 2\nupdated 3\nupdated 4\nupdated 5" } });
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    land(userTurn(longText, "turn-1"));
+    await waitFor(() => expect(refusalText()).toBe(""));
+    expect(box).toHaveValue("[Pasted #1] ");
+    expect(screen.getByRole("button", { name: "Edit pasted text #1" })).toHaveTextContent("5 lines · 49 chars");
+  });
+
   it("no answer: says so at the thumb, keeps the draft and the request id, and the retry does not send twice", async () => {
     server.use(http.post("/api/send", () => new HttpResponse("down", { status: 502 })));
     const user = userEvent.setup();
@@ -4764,7 +4922,7 @@ describe("outcome at the thumb", () => {
 
   it("every closed outcome and reason lands at the thumb, and none of them puts an action in the header", async () => {
     const outcomeOf = (reason: SendReason): string =>
-      ["mismatch", "changed", "modal_cue", "stale_token", "submit_failed"].includes(reason)
+      ["mismatch", "changed", "modal_cue", "stale_token", "submit_failed", "dialog_open", "unreadable"].includes(reason)
         ? "typed_not_submitted"
         : ["crash", "lost_lock", "no_evidence"].includes(reason)
           ? "unknown"

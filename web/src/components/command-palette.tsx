@@ -49,7 +49,7 @@ export function useClaudeCommands(
   const replacedByOperator = family !== "claude" && rowsFor(mine, agent, (row) => row.command).length > 0;
   const host = scope?.host ?? "";
   const session = scope?.session ?? "";
-  const targetKey = `${host}\0${session}\0${paneId ?? ""}`;
+  const targetKey = `${host}\0${session}\0${paneId ?? ""}\0${family}`;
 
   // Asked on every open, because a skill installed a minute ago should be there; a failed read
   // (an older bridge, a crew member) clears any stale rows from an earlier open and keeps the catalog.
