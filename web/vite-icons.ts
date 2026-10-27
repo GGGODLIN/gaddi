@@ -195,3 +195,6 @@ export function transformIndexIcons(html: string, channel: Channel): string {
   }
   return out;
 }
+
+/** A larger chunk would break offline reading; split vendor code before raising this limit. */
+export const PRECACHE_MAX_FILE_BYTES = 2 * 1024 * 1024;
