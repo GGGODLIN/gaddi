@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { groupPanesByWorkspace, workspaceGroupKey } from "./pane-groups";
-import type { AgentView } from "./types";
+import type { AgentView, WorkspaceView } from "./types";
 
 function pane(paneId: string, over: Partial<AgentView> = {}): AgentView {
   return {
@@ -157,3 +157,78 @@ describe("workspaceGroupKey — a workspace id is not an address on its own", ()
     expect(workspaceGroupKey(pane("p"))).toBe("\u0000\u0000w1");
   });
 });
+
+function space(workspaceId: string, over: Partial<WorkspaceView> = {}): WorkspaceView {
+  return {
+    workspaceId,
+    number: 1,
+    label: workspaceId,
+    focused: false,
+    activeTabId: `${workspaceId}:t1`,
+    tabCount: 1,
+    paneCount: 1,
+    ...over,
+  };
+}
+
+describe("groupPanesByWorkspace — linked worktrees (issue #587)", () => {
+  const REPO = "/repo/membero";
+  const root = space("w1", { number: 1, label: "membero", repoRoot: REPO, isWorktree: false });
+  const wt = space("w2", { number: 2, label: "lucky-meadow-d1ec", repoRoot: REPO, isWorktree: true });
+  const other = space("w3", { number: 3, label: "collie" });
+
+  it("folds a linked worktree's panes under its open root workspace, after the root's own panes", () => {
+    const groups = groupPanesByWorkspace(
+      [
+        pane("wt-pane", { workspaceId: "w2", workspaceLabel: "lucky-meadow-d1ec", workspaceNumber: 2, tabId: "w2:t1" }),
+        pane("root-pane", { workspaceId: "w1", workspaceLabel: "membero", workspaceNumber: 1, tabId: "w1:t1" }),
+        pane("other-pane", { workspaceId: "w3", workspaceLabel: "collie", workspaceNumber: 3, tabId: "w3:t1" }),
+      ],
+      [pane("wt-shell", { workspaceId: "w2", workspaceLabel: "lucky-meadow-d1ec", workspaceNumber: 2, tabId: "w2:t1", kind: "shell", agent: "shell" })],
+      { order: "fixed", workspaces: [root, wt, other] },
+    );
+    expect(labels(groups)).toEqual(["membero", "collie"]);
+    expect(groups[0]!.key).toBe("\u0000\u0000w1");
+    expect(ids(groups)).toEqual([["root-pane", "wt-pane", "wt-shell"], ["other-pane"]]);
+  });
+
+  it("heads the group with the open root workspace even when only its worktree has panes", () => {
+    const groups = groupPanesByWorkspace(
+      [pane("wt-pane", { workspaceId: "w2", workspaceLabel: "lucky-meadow-d1ec", workspaceNumber: 2, tabId: "w2:t1" })],
+      [],
+      { order: "fixed", workspaces: [root, wt] },
+    );
+    expect(labels(groups)).toEqual(["membero"]);
+    expect(groups[0]!.key).toBe("\u0000\u0000w1");
+    expect(ids(groups)).toEqual([["wt-pane"]]);
+  });
+
+  it("keeps an orphan worktree as its own group when its repo root is not open", () => {
+    const groups = groupPanesByWorkspace(
+      [pane("wt-pane", { workspaceId: "w2", workspaceLabel: "lucky-meadow-d1ec", workspaceNumber: 2, tabId: "w2:t1" })],
+      [],
+      { order: "fixed", workspaces: [wt, other] },
+    );
+    expect(labels(groups)).toEqual(["lucky-meadow-d1ec"]);
+    expect(groups[0]!.key).toBe("\u0000\u0000w2");
+  });
+
+  it("never folds a worktree into another machine's root checkout", () => {
+    const groups = groupPanesByWorkspace(
+      [
+        pane("lead-root", { host: "lodge", workspaceId: "w1", workspaceLabel: "membero", workspaceNumber: 1 }),
+        pane("peer-wt", { host: "attic", workspaceId: "w2", workspaceLabel: "lucky-meadow-d1ec", workspaceNumber: 2 }),
+      ],
+      [],
+      {
+        order: "fixed",
+        workspaces: [
+          { ...root, host: "lodge" },
+          { ...wt, host: "attic" },
+        ],
+      },
+    );
+    expect(labels(groups)).toEqual(["membero", "lucky-meadow-d1ec"]);
+  });
+});
+

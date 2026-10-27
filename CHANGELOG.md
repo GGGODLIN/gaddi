@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The workspace filter and pane list fold linked worktrees under their open root workspace.** When a repo's own checkout is open as a workspace, its linked worktrees now join that root workspace's group on the dashboard instead of appearing as separate rows in the Workspaces filter sheet, choosing the root keeps its worktrees' panes visible with their worktree name on the detail line, and an orphan worktree whose repo is not open stays listed on its own. (#587)
+
 ## [2.10.0] - 2026-10-26
 
 ### Changed

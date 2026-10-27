@@ -30,7 +30,7 @@
 // Pure and host-aware, so a crew's two `w1`s are two workspaces (lib/hosts.ts § spaceKey).
 import { hostKey } from "./hosts";
 import { panePlaceParts } from "./pane-name";
-import type { AgentView, ServerSummary, TabView } from "./types";
+import type { AgentView, ServerSummary, TabView, WorkspaceView } from "./types";
 
 /**
  * How the rows inside a group run.
@@ -41,12 +41,18 @@ import type { AgentView, ServerSummary, TabView } from "./types";
 export interface GroupOptions {
   order?: "bridge" | "fixed";
   /** The raw tab list, for the tab numbers "fixed" runs by. A tab not in it sorts after the known ones. */
-  tabs?: readonly TabView[];
+  tabs?: readonly TabView[] | undefined;
   /**
    * The snapshot's machine list, for the order machines run in: this list's own, the lead first.
    * A host it does not name sorts after the named ones, in the order its first pane was met.
    */
-  servers?: readonly ServerSummary[];
+  servers?: readonly ServerSummary[] | undefined;
+  /**
+   * The snapshot's workspace records (issue #587). When given, a linked git worktree whose repo is
+   * also open as a root workspace on the same machine folds its panes under that root workspace's
+   * group, after the root's own panes, so the workspace filter and the pane list agree with Spaces.
+   */
+  workspaces?: readonly WorkspaceView[] | undefined;
 }
 
 /** The same separator `lib/hosts.ts` composes its keys with: a byte no label may contain. */
@@ -64,6 +70,10 @@ export interface WorkspaceGroup {
 
 /** One tab inside a workspace bucket. Never a heading — only an order. */
 interface TabBucket {
+  /** 0 for the root workspace's own tabs; 1 for a linked worktree's tabs, so the root leads its group. */
+  worktreeRank: number;
+  /** The workspace's own order among checkouts in this bucket. */
+  spaceOrder: number;
   /** Where this tab was first met in the given lists. */
   seq: number;
   agents: AgentView[];
@@ -79,6 +89,7 @@ interface Bucket {
   workspaceNumber: number;
   /** Where this workspace was first met, so two workspaces sharing a number still have an order. */
   seq: number;
+  spaceSeqs: Map<string, number>;
   tabs: Map<string, TabBucket>;
 }
 
@@ -111,13 +122,34 @@ export function workspaceGroupKey(pane: AgentView): string {
 export function groupPanesByWorkspace(
   agents: readonly AgentView[],
   shellPanes: readonly AgentView[] = [],
-  { order = "bridge", tabs, servers }: GroupOptions = {},
+  { order = "bridge", tabs, servers, workspaces }: GroupOptions = {},
 ): WorkspaceGroup[] {
   // A tab's own number, host-qualified the way panePlaceParts matches (an id is unique per machine).
   const tabNumber = (pane: AgentView): number => {
     const known = tabs?.find((tv) => tv.tabId === pane.tabId && (tv.host === undefined || tv.host === pane.host));
     return known?.number ?? Number.MAX_SAFE_INTEGER;
   };
+  // Issue #587: map each linked git worktree to the open workspace holding its repo root on the same
+  // machine, using the same `repoRoot` + `isWorktree` predicate `nestWorktrees` and `isolateSpaces`
+  // use (lib/spaces.ts). An orphan worktree whose repo is not open has no entry here and stays its
+  // own group.
+  const parentBySpace = new Map<string, { childLabel: string; parent: WorkspaceView }>();
+  if (workspaces !== undefined && workspaces.length > 0) {
+    const rootByRepo = new Map<string, WorkspaceView>();
+    for (const w of workspaces) {
+      if (w.repoRoot !== undefined && w.isWorktree === false) {
+        const repoKey = `${hostKey(w)}${KEY_SEP}${w.repoRoot}`;
+        if (!rootByRepo.has(repoKey)) rootByRepo.set(repoKey, w);
+      }
+    }
+    for (const w of workspaces) {
+      if (w.repoRoot === undefined || w.isWorktree !== true) continue;
+      const parent = rootByRepo.get(`${hostKey(w)}${KEY_SEP}${w.repoRoot}`);
+      if (parent !== undefined) {
+        parentBySpace.set(`${hostKey(w)}${KEY_SEP}${w.workspaceId}`, { childLabel: w.label, parent });
+      }
+    }
+  }
   const byKey = new Map<string, Bucket>();
   // Seeded from `servers`, so a named machine's rank never depends on which pane arrived first. The
   // lead's own panes may arrive untagged (a solo body), which `hostKey` reads as "".
@@ -128,10 +160,18 @@ export function groupPanesByWorkspace(
   let tabSeq = 0;
 
   const tabOf = (pane: AgentView): TabBucket => {
-    const key = workspaceGroupKey(pane);
+    const host = hostKey(pane);
+    const linked = parentBySpace.get(`${host}${KEY_SEP}${pane.workspaceId}`);
+    const parent =
+      linked !== undefined && (pane.workspaceLabel === "" || linked.childLabel === pane.workspaceLabel)
+        ? linked.parent
+        : undefined;
+    const key =
+      parent !== undefined
+        ? `${host}${KEY_SEP}${pane.session ?? ""}${KEY_SEP}${parent.workspaceId}`
+        : workspaceGroupKey(pane);
     let bucket = byKey.get(key);
     if (bucket === undefined) {
-      const host = hostKey(pane);
       let hostSeq = hostSeqs.get(host);
       if (hostSeq === undefined) {
         hostSeq = (servers?.length ?? 0) + hostSeqs.size;
@@ -141,18 +181,31 @@ export function groupPanesByWorkspace(
         key,
         // The workspace's own name, by the one place rule (lib/pane-name.ts) — the same string the
         // space strip and the crumb use, so the heading and the strip can never disagree.
-        label: panePlaceParts(pane).space,
+        label: parent !== undefined ? parent.label.trim() || parent.workspaceId : panePlaceParts(pane).space,
         hostSeq,
-        workspaceNumber: pane.workspaceNumber,
+        workspaceNumber: parent !== undefined ? parent.number : pane.workspaceNumber,
         seq: workspaceSeq++,
+        spaceSeqs: new Map(),
         tabs: new Map(),
       };
       byKey.set(key, bucket);
     }
-    let tab = bucket.tabs.get(pane.tabId);
+    let spaceSeq = bucket.spaceSeqs.get(pane.workspaceId);
+    if (spaceSeq === undefined) {
+      spaceSeq = bucket.spaceSeqs.size;
+      bucket.spaceSeqs.set(pane.workspaceId, spaceSeq);
+    }
+    const tabKey = `${pane.workspaceId}${KEY_SEP}${pane.tabId}`;
+    let tab = bucket.tabs.get(tabKey);
     if (tab === undefined) {
-      tab = { seq: order === "fixed" ? tabNumber(pane) * 1e6 + tabSeq++ : tabSeq++, agents: [], shells: [] };
-      bucket.tabs.set(pane.tabId, tab);
+      tab = {
+        worktreeRank: parent !== undefined && pane.workspaceId !== parent.workspaceId ? 1 : 0,
+        spaceOrder: order === "fixed" ? pane.workspaceNumber * 1e6 + spaceSeq : spaceSeq,
+        seq: order === "fixed" ? tabNumber(pane) * 1e6 + tabSeq++ : tabSeq++,
+        agents: [],
+        shells: [],
+      };
+      bucket.tabs.set(tabKey, tab);
     }
     return tab;
   };
@@ -169,7 +222,7 @@ export function groupPanesByWorkspace(
       key: g.key,
       label: g.label,
       panes: [...g.tabs.values()]
-        .toSorted((a, b) => a.seq - b.seq)
+        .toSorted((a, b) => a.worktreeRank - b.worktreeRank || a.spaceOrder - b.spaceOrder || a.seq - b.seq)
         .flatMap((tab) =>
           order === "fixed"
             ? tab.agents.toSorted(byPlaceInTab).concat(tab.shells.toSorted(byPlaceInTab))

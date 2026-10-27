@@ -5,11 +5,11 @@ import { clockTime } from "@/lib/format";
 import { useMuxCapability } from "@/lib/mux-capability";
 import { SectionHeader } from "@/components/section-header";
 import { ListGroup } from "@/components/ui/list-group";
-import { groupPanesByWorkspace, type WorkspaceGroup } from "@/lib/pane-groups";
+import { groupPanesByWorkspace, workspaceGroupKey, type WorkspaceGroup } from "@/lib/pane-groups";
 import { StatusCounts, StatusSummaryLine } from "@/components/status-counts";
 import { ATTENTION, bucketOf, triage, worstTriage } from "@/lib/triage";
 import { groupHost, pinnedRows, shownGroups, stripEntries } from "@/lib/dash-view";
-import type { AgentView, BridgeStatus, ServerSummary, SessionSummary, TabView } from "@/lib/types";
+import type { AgentView, BridgeStatus, ServerSummary, SessionSummary, TabView, WorkspaceView } from "@/lib/types";
 import { paneRowKey, paneScope } from "@/lib/hosts";
 import { machinesHiddenFrom } from "@/lib/hidden-machines";
 import { pinMatcher, type Pin } from "@/lib/pins";
@@ -77,6 +77,8 @@ interface AgentListProps {
   tabs?: readonly TabView[];
   /** The snapshot's machine list, for the order machines run in: the lead first (lib/pane-groups.ts). */
   servers?: readonly ServerSummary[] | undefined;
+  /** The snapshot's workspace list, so linked worktrees fold under their open root workspace (issue #587). */
+  workspaces?: readonly WorkspaceView[] | undefined;
   /**
    * The workspace heading's "+" (M40/03, issue 290): a new tab in that workspace, on the heading's
    * own machine and session. Omit and no heading carries one; every strong heading still reserves
@@ -267,6 +269,7 @@ export function AgentList({
   stale = false,
   tabs,
   servers,
+  workspaces,
   newTab,
   isolated = NO_KEYS,
   hidden = NO_KEYS,
@@ -389,7 +392,7 @@ export function AgentList({
   // the one summary line. Push and the badge carry the alarm; this screen answers "where".
   const all = triage(agents);
   const attention = all.filter((s) => ATTENTION.has(s.key) && s.agents.length > 0);
-  const groups = groupPanesByWorkspace(agents, shellPanes, { order: "fixed", tabs, servers });
+  const groups = groupPanesByWorkspace(agents, shellPanes, { order: "fixed", tabs, servers, workspaces });
   if (groups.length === 0) return null;
   // A stale key (a workspace since closed) filters nothing: an isolation nobody can see is dropped,
   // and when every key is stale the list shows everything.
@@ -476,14 +479,15 @@ export function AgentList({
   const headingNewTab = (g: WorkspaceGroup) => {
     const first = g.panes[0];
     if (newTab === undefined || first === undefined) return null;
+    const workspaceId = g.key.slice(g.key.lastIndexOf("\u0000") + 1) || first.workspaceId;
     const at = paneScope(newTab.scope, first, servers, newTab.sessions);
     return (
       <WorkspaceNewTab
-        workspaceId={first.workspaceId}
+        workspaceId={workspaceId}
         label={g.label}
         at={at}
         host={first.host}
-        busy={newTab.creating.has(tabCreateKey(first.workspaceId, at))}
+        busy={newTab.creating.has(tabCreateKey(workspaceId, at))}
         onNewTab={newTab.onNewTab}
       />
     );
@@ -686,7 +690,7 @@ export function AgentList({
               </>
             }
           />
-          <ListGroup>{rows.map((a) => row(a))}</ListGroup>
+          <ListGroup>{rows.map((a) => row(a, workspaceGroupKey(a) === g.key ? "place" : "herd"))}</ListGroup>
         </section>
       ))}
     </div>
