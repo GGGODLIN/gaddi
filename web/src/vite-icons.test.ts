@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   type ChannelEvidence,
   PLAYGROUND_ICON_LINKS,
+  PRECACHE_MAX_FILE_BYTES,
   channelFor,
   iconLinksFor,
   includeAssetsFor,
@@ -226,5 +227,16 @@ describe("precacheIgnoresFor — a channel's precache carries only its own icons
       expect(ignores).not.toContain("sw.js");
       expect(ignores).not.toContain("assets/**");
     }
+  });
+});
+
+describe("the precache file limit", () => {
+  it("keeps Workbox's 2 MiB limit while vendor code is split out", () => {
+    expect(PRECACHE_MAX_FILE_BYTES).toBe(2 * 1024 * 1024);
+  });
+
+  it("is the limit vite.config.ts hands to injectManifest, so the main chunk stays precached", () => {
+    const config = readFileSync(resolve(__dirname, "../vite.config.ts"), "utf8");
+    expect(config).toContain("maximumFileSizeToCacheInBytes: PRECACHE_MAX_FILE_BYTES");
   });
 });
