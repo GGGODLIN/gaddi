@@ -77,6 +77,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **Claude Code's ⎿, ⏺ and ⏵⏵ show on the phone instead of empty boxes.** Collie now ships the terminal symbols agents draw their chrome from, a 19 KB subset of JuliaMono the phone downloads only when one of them is on screen, so each fills one terminal cell like the rest of the mirror.
 - **A Herdr pane's folder is the one its agent runs in.** The pane's `foreground_cwd` is used before the shell's `cwd`, so an agent started in another folder than its shell is placed, and matched to its session, by the folder it really runs in.
 - **Hermes panes show their Chat and discover unreported sessions.** Herdr's `paneAgent` identifies a Hermes pane from its `herdr:hermes` session report, and `hermesJournal` opens WAL-closed `state.db` files with `immutable=1` and discovers unreported sessions from `--resume` argv (including the `python3 -c` launcher) or the newest matching `cwd` across all profiles.
+- **Antigravity (`agy`) menu and modal cards no longer keep status rows in their block lines.** `agyBuildBlocks` slices each lifted menu or modal block at `statusStartLine` so `extractStatusLines` surfaces the status strip once without duplicating rows in the block.
 
 ## [2.10.1] - 2026-10-27
 

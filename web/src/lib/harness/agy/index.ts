@@ -42,7 +42,7 @@ export function agyBuildBlocks(lines: StyledLine[]): Block[] {
     const before = trimTrailingBlank(lines.slice(0, picker.startLine));
     const blocks: Block[] = [];
     if (before.length > 0) blocks.push({ kind: "raw", lines: before });
-    blocks.push({ kind: "menu", menu: picker.model, lines: lines.slice(picker.startLine) });
+    blocks.push({ kind: "menu", menu: picker.model, lines: lines.slice(picker.startLine, picker.statusStartLine) });
     return blocks;
   }
 
