@@ -41,6 +41,21 @@ describe("bundled fonts", () => {
     expect(css).toContain("unicode-range: U+F0000-F1AFF");
   });
 
+  // Off the space, so it never sets the line; off the two-cell emoji, so the phone draws those.
+  it("keeps the terminal-symbol face to one-cell symbols", () => {
+    const range = /font-family: "Terminal Symbols";[\s\S]*?unicode-range: ([^;]+);/.exec(css)?.[1];
+    const inRange = (cp: number) =>
+      range!.split(",").some((r) => {
+        const [lo, hi = lo] = r.trim().slice(2).split("-").map((h) => Number.parseInt(h, 16));
+        return cp >= lo! && cp <= hi!;
+      });
+    expect(inRange(0x23bf)).toBe(true); // ⎿
+    expect(inRange(0x29c9)).toBe(true); // ⧉
+    for (const cp of [0x20, 0x231a, 0x231b, 0x2329, 0x232a, 0x23e9, 0x23ec, 0x23f0, 0x23f3]) {
+      expect(inRange(cp)).toBe(false);
+    }
+  });
+
   // Drift here is the whole failure mode: the SW sweeps every font-cache entry it can't name, so a
   // stylesheet URL missing from FONT_URLS would be re-fetched on every cold load, forever.
   it("names the same files in the stylesheet and the service worker", () => {
