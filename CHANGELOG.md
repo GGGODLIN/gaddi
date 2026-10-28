@@ -25,7 +25,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ### Fixed
 
-- **Worktree folding on the dashboard respects sessions, crew peers and isolated worktree preferences.** `groupPanesByWorkspace` scopes linked-worktree folding to the session `workspaces` came from on each host and positions a folded group at its earliest member's workspace number; `rootLoader` preserves all crew members' `workspaces` for the herd list (`herdWorkspaces`); and isolating an orphan worktree promotes to its root workspace once that root opens (#587).
+- **Worktree folding on the dashboard respects sessions, crew peers and isolated worktree preferences.** `groupPanesByWorkspace` scopes linked-worktree folding to the session `workspaces` came from on each host (including `SWEEP_VIEW` primary-session metadata on crew peers) and positions a folded group at its earliest member's workspace number; `rootLoader` preserves all crew members' `workspaces` for the herd list (`herdWorkspaces`); and `HomeRoute` promotes an isolated orphan worktree preference to its root workspace once that root opens while keeping `isolateSpaces`'s direct contract (#587).
 
 ## [2.10.1] - 2026-10-27
 
