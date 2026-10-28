@@ -249,12 +249,14 @@ describe("reading cost", () => {
   });
 
   test("a database-backed harness is read whole through its source, never tailed", async () => {
-    const j = fakeJournal("opencode");
-    j.state.entries = [prompt("hi", "2026-09-24T10:00:00.000Z")];
-    const tracker = new DescriptionTracker({ opencode: j.adapter }, () => NOW, { tail: j.tail });
-    await tracker.refresh([pane("opencode", "s1")]);
-    expect(j.calls).toEqual({ stat: 1, tail: 0, load: 1 });
-    expect(tracker.describe(pane("opencode", "s1"))?.now).toBe("你：hi");
+    for (const agent of ["opencode", "agy", "antigravity"]) {
+      const j = fakeJournal(agent === "antigravity" ? "agy" : agent);
+      j.state.entries = [prompt("hi", "2026-09-24T10:00:00.000Z")];
+      const tracker = new DescriptionTracker({ [agent === "antigravity" ? "agy" : agent]: j.adapter }, () => NOW, { tail: j.tail });
+      await tracker.refresh([pane(agent, "s1")]);
+      expect(j.calls, agent).toEqual({ stat: 1, tail: 0, load: 1 });
+      expect(tracker.describe(pane(agent, "s1"))?.now, agent).toBe("你：hi");
+    }
   });
 });
 

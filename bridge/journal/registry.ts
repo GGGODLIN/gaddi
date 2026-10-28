@@ -10,6 +10,10 @@
 // LIVE MIRROR; this one owns reading an on-disk log. A harness can plausibly have one without the
 // other.
 
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+import { agyJournal } from "./agy.ts";
 import { claudeJournal } from "./claude.ts";
 import { codexJournal } from "./codex.ts";
 import { durableJournal } from "./durable.ts";
@@ -32,6 +36,8 @@ import type { JournalAdapter } from "./types.ts";
  * an adapter still accepts a bare string so one-root callers read unchanged.
  */
 export interface JournalRoots {
+  /** Antigravity CLI's home, with conversations/<uuid>.db and presence/<uuid>.lock. */
+  agy?: readonly string[];
   /** Claude Code's `~/.claude/projects`, one per config dir. */
   claude: readonly string[];
   /** Codex's `$CODEX_HOME/sessions`. */
@@ -78,6 +84,7 @@ export interface ModelCatalogs {
  */
 export function buildJournalRegistry(roots: JournalRoots, catalogs: ModelCatalogs = {}): Record<string, JournalAdapter> {
   const adapters: JournalAdapter[] = [
+    agyJournal(roots.agy ?? [join(homedir(), ".gemini", "antigravity-cli")]),
     claudeJournal(roots.claude),
     codexJournal(roots.codex),
     piJournal(roots.pi),
@@ -104,7 +111,7 @@ export function buildJournalRegistry(roots: JournalRoots, catalogs: ModelCatalog
  * An alias never adds an adapter, so it is absent from {@link KNOWN_HARNESS_NAMES}: that list
  * answers "which adapters does this build have", and an alias does not change the count.
  */
-export const AGENT_ALIASES = { omp: "pi" } as const;
+export const AGENT_ALIASES = { omp: "pi", antigravity: "agy" } as const;
 
 /**
  * Agents that report their session to Herdr on the FIRST PROMPT, not when they start (issue #294).
@@ -150,7 +157,7 @@ export const DRAWS_IMAGES_OFF_GRID: readonly string[] = ["omp", "pi"];
  * history section must not advise `herdr integration install` for an agent no hook could ever
  * report. Pinned against the adapters themselves in registry.test.ts, so the two cannot drift.
  */
-export const DISCOVERS_OWN_SESSIONS: readonly string[] = ["muse", "openclaw", "kiro"];
+export const DISCOVERS_OWN_SESSIONS: readonly string[] = ["agy", "hermes", "muse", "openclaw", "kiro"];
 
 /**
  * The same pairs as a Map, which is how {@link adapterFor} asks.
@@ -195,5 +202,5 @@ export function journalAgents(registry: Record<string, JournalAdapter>): string[
  * identity off a match against it — see `bridge/mux/types.ts` § `MuxPane.agent`.
  */
 export const KNOWN_HARNESS_NAMES: readonly string[] = journalAgents(
-  buildJournalRegistry({ claude: [], codex: [], pi: [], opencode: [], grok: [], hermes: [], muse: [], openclaw: [], kiro: [] }),
+  buildJournalRegistry({ agy: [], claude: [], codex: [], pi: [], opencode: [], grok: [], hermes: [], muse: [], openclaw: [], kiro: [] }),
 );

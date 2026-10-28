@@ -1,9 +1,13 @@
 import { trimTrailingBlank, type Block, type StyledLine } from "../../blocks";
 import type { DialogDetector, HarnessAdapter } from "../types";
+import { detectArtifactRegion } from "./artifact";
+import { extractInputDraft, extractStatusLines, hasInputBox, normalizeAgyScreenRows, stripChrome } from "./chrome";
 import { detectConversationsRegion } from "./conversations";
-import { detectPromptSelectRegion } from "./prompt-select";
-import { extractInputDraft, extractStatusLines, hasInputBox, stripChrome } from "./chrome";
 import { lineText } from "./markers";
+import { detectAgyModalRegion } from "./modals";
+import { detectModelRegion } from "./model";
+import { detectMultiSelectRegion } from "./multi-select";
+import { detectPromptSelectRegion } from "./prompt-select";
 
 /** The conversations picker, read off the rows' text. */
 function conversationsRegion(lines: StyledLine[]) {
@@ -13,7 +17,10 @@ function conversationsRegion(lines: StyledLine[]) {
 /** The detectors `agyBuildBlocks` runs, in its order, for the unread-dialog card's report (ADR 0123). */
 const AGY_DIALOG_DETECTORS: readonly DialogDetector[] = [
   { name: "prompt-select", detect: detectPromptSelectRegion },
+  { name: "model", detect: detectModelRegion },
   { name: "conversations", detect: conversationsRegion },
+  { name: "artifact", detect: detectArtifactRegion },
+  { name: "modal", detect: detectAgyModalRegion },
 ];
 
 export function agyBuildBlocks(lines: StyledLine[]): Block[] {
@@ -26,7 +33,11 @@ export function agyBuildBlocks(lines: StyledLine[]): Block[] {
     return blocks;
   }
 
-  const picker = conversationsRegion(lines);
+  const picker =
+    detectModelRegion(lines) ??
+    conversationsRegion(lines) ??
+    detectArtifactRegion(lines) ??
+    detectAgyModalRegion(lines);
   if (picker) {
     const before = trimTrailingBlank(lines.slice(0, picker.startLine));
     const blocks: Block[] = [];
@@ -38,7 +49,7 @@ export function agyBuildBlocks(lines: StyledLine[]): Block[] {
   return [{ kind: "raw", lines: stripChrome(lines) }];
 }
 
-export { extractStatusLines, extractInputDraft };
+export { detectMultiSelectRegion, extractStatusLines, extractInputDraft, normalizeAgyScreenRows };
 
 export const agyAdapter: HarnessAdapter = {
   agent: "agy",

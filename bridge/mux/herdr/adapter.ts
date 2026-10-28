@@ -711,6 +711,24 @@ function toCreatedPane(created: CreatedShell): MuxCreatedPane {
 }
 
 /**
+ * Harnesses Herdr never detects from the process, so the pane record carries NO `agent` while one
+ * runs: their identity arrives only through the integration's session report. Hermes is a Python
+ * entrypoint (herdr 0.9.3, live-verified 2026-10-16): with integration v5 the pane reads
+ * `agent: null` + `agent_session: {agent: "hermes", …}`, which landed every Hermes pane in the shell
+ * bucket with its session dropped, so no Chat. An explicit list, because Herdr keeps a pane's last
+ * session report after its agent exits — trusting that for a harness Herdr CAN detect would
+ * resurrect a departed agent over the shell left behind.
+ */
+const SESSION_IDENTIFIED_AGENTS = new Set(["hermes"]);
+
+/** The agent in a pane: Herdr's own detection, else a session-only harness's report, else shell. */
+export function paneAgent(raw: Pick<WirePane, "agent" | "agent_session">): string {
+  if (raw.agent !== null && raw.agent !== undefined && raw.agent.length > 0) return raw.agent;
+  const reported = raw.agent_session?.agent;
+  return reported !== undefined && SESSION_IDENTIFIED_AGENTS.has(reported) ? reported : "shell";
+}
+
+/**
  * One Herdr pane record as a {@link MuxPane}.
  *
  * The joins live here because the space and tab a pane belongs to are things the MULTIPLEXER knows;
@@ -728,7 +746,7 @@ function toMuxPane(
   // Herdr reports the agent name already lower-cased (`claude`, `codex`, `pi`, `omp`) and reports
   // nothing at all for a bare shell. Passed through rather than re-cased, so the name the harness
   // and journal registries key on is byte-identical to what Herdr said.
-  const agent = raw.agent !== null && raw.agent !== undefined && raw.agent.length > 0 ? raw.agent : "shell";
+  const agent = paneAgent(raw);
   // Built mutable and returned readonly: every optional field below is ASSIGNED rather than
   // conditionally spread, so absent stays absent and each condition reads as the one rule it is.
   const pane: MutableMuxPane = {
@@ -737,7 +755,7 @@ function toMuxPane(
     spaceLabel,
     spaceNumber: space?.number ?? 0,
     tabId: raw.tab_id,
-    cwd: raw.cwd,
+    cwd: raw.foreground_cwd !== undefined && raw.foreground_cwd.length > 0 ? raw.foreground_cwd : raw.cwd,
     focused: raw.focused,
     // Herdr drops a pane from `pane.list` when it goes away — a listed pane is a live one, and an
     // id that has left the snapshot answers `pane_not_found` on the next write.

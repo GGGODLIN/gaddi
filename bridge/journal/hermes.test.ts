@@ -1,12 +1,13 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { NO_CURSOR } from "./cursor.ts";
 import { FIRST_TAIL_ROWS } from "./files.ts";
 import {
+  hermesJournal,
   HermesTranscriptSource,
   isHermesSessionId,
   parseHermesTranscript,
@@ -91,6 +92,171 @@ describe("HermesTranscriptSource", () => {
     const loaded = await source.load(key!);
     expect(parseHermesTranscript(loaded.text)[0]?.parts[0]).toEqual({ kind: "text", text: "older turn" });
 
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("opens a WAL-header state.db after -wal/-shm removal without SQLITE_CANTOPEN", async () => {
+    const root = await mkdtemp(join(tmpdir(), "collie-hermes-wal-closed-"));
+    const dbPath = join(root, "state.db");
+    const db = new Database(dbPath);
+    db.run("pragma journal_mode=wal");
+    db.run("create table sessions (id text primary key, source text, started_at real, parent_session_id text)");
+    db.run("create table messages (id integer primary key, session_id text, role text, content text, tool_call_id text, tool_calls text, tool_name text, timestamp real, reasoning text, reasoning_content text, active integer default 1, compacted integer default 0, display_kind text)");
+    db.run("insert into sessions (id, source, started_at, parent_session_id) values (?, 'cli', 1, null)", [SID]);
+    db.run("insert into messages (id, session_id, role, content, timestamp) values (1, ?, 'user', 'wal closed turn', 1)", [SID]);
+    db.run("pragma wal_checkpoint(truncate)");
+    db.close();
+    await rm(`${dbPath}-wal`, { force: true });
+    await rm(`${dbPath}-shm`, { force: true });
+    // Ensure header bytes 18-19 are 2, 2 (WAL mode) with no -wal/-shm on disk, matching ~/.hermes/state.db.
+    const bytes = await readFile(dbPath);
+    bytes[18] = 2;
+    bytes[19] = 2;
+    await writeFile(dbPath, bytes);
+    // Make directory read-only so plain readonly open cannot create -shm and would fail with SQLITE_CANTOPEN.
+    const { chmod } = await import("node:fs/promises");
+    await chmod(root, 0o555);
+    try {
+      const source = new HermesTranscriptSource(root);
+      const key = await source.resolve({ kind: "id", value: SID });
+      expect(key).not.toBeNull();
+      const loaded = await source.load(key!);
+      expect(parseHermesTranscript(loaded.text)[0]?.parts[0]).toEqual({ kind: "text", text: "wal closed turn" });
+    } finally {
+      await chmod(root, 0o755);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("hermesJournal discover", () => {
+  const schema = (db: Database) => {
+    db.run(
+      "create table sessions (id text primary key, source text, started_at real, parent_session_id text, cwd text)",
+    );
+    db.run(
+      "create table messages (id integer primary key, session_id text, role text, content text, tool_call_id text, tool_calls text, tool_name text, timestamp real, reasoning text, reasoning_content text, active integer default 1, compacted integer default 0, display_kind text)",
+    );
+  };
+
+  async function lab(rows: readonly [id: string, cwd: string | null, startedAt: number][]) {
+    const root = await mkdtemp(join(tmpdir(), "collie-hermes-discover-"));
+    const db = new Database(join(root, "state.db"));
+    schema(db);
+    for (const [id, cwd, startedAt] of rows) {
+      db.run("insert into sessions (id, source, started_at, cwd) values (?, 'cli', ?, ?)", [id, startedAt, cwd]);
+    }
+    db.close();
+    return root;
+  }
+
+  test("finds the newest session whose cwd equals the pane's folder", async () => {
+    const root = await lab([
+      ["20261001_000000_aaaaaa", "/a", 1],
+      ["20261002_000000_bbbbbb", "/b", 1],
+      ["20261003_000000_cccccc", "/b", 2],
+    ]);
+    const adapter = hermesJournal([root]);
+    await expect(adapter.discover?.("/b")).resolves.toEqual({ kind: "id", value: "20261003_000000_cccccc" });
+    await expect(adapter.discover?.("/a")).resolves.toEqual({ kind: "id", value: "20261001_000000_aaaaaa" });
+    await expect(adapter.discover?.("/nowhere")).resolves.toBeNull();
+    await expect(adapter.discover?.("")).resolves.toBeNull();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("a profile's own state.db is searched too", async () => {
+    const root = await mkdtemp(join(tmpdir(), "collie-hermes-discover-profile-"));
+    const defaultDb = new Database(join(root, "state.db"));
+    schema(defaultDb);
+    defaultDb.close();
+    const profileDir = join(root, "profiles", "shiro");
+    await mkdir(profileDir, { recursive: true });
+    const profileDb = new Database(join(profileDir, "state.db"));
+    schema(profileDb);
+    profileDb.run("insert into sessions (id, source, started_at, cwd) values (?, 'cli', 1, ?)", [
+      "20261011_004220_164149",
+      "/work",
+    ]);
+    profileDb.close();
+
+    const adapter = hermesJournal([root]);
+    await expect(adapter.discover?.("/work")).resolves.toEqual({ kind: "id", value: "20261011_004220_164149" });
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("newest wins ACROSS databases, not just within the first one that matches", async () => {
+    const root = await mkdtemp(join(tmpdir(), "collie-hermes-discover-cross-db-"));
+    const defaultDb = new Database(join(root, "state.db"));
+    schema(defaultDb);
+    defaultDb.run("insert into sessions (id, source, started_at, cwd) values (?, 'cli', 1, ?)", [
+      "20261001_000000_aaaaaa",
+      "/shared",
+    ]);
+    defaultDb.close();
+    const profileDir = join(root, "profiles", "shiro");
+    await mkdir(profileDir, { recursive: true });
+    const profileDb = new Database(join(profileDir, "state.db"));
+    schema(profileDb);
+    profileDb.run("insert into sessions (id, source, started_at, cwd) values (?, 'cli', 2, ?)", [
+      "20261002_000000_bbbbbb",
+      "/shared",
+    ]);
+    profileDb.close();
+
+    const adapter = hermesJournal([root]);
+    await expect(adapter.discover?.("/shared")).resolves.toEqual({ kind: "id", value: "20261002_000000_bbbbbb" });
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("foreground argv's explicit --resume names the pane's own session across a shared cwd, including python3 -c launcher", async () => {
+    const root = await lab([
+      ["20261001_000000_aaaaaa", "/same", 1],
+      ["20261002_000000_bbbbbb", "/same", 2],
+    ]);
+    const adapter = hermesJournal([root]);
+    await expect(
+      adapter.discover?.("/same", { processes: [{ argv: ["hermes", "chat", "--resume", "20261001_000000_aaaaaa"] }] }),
+    ).resolves.toEqual({ kind: "id", value: "20261001_000000_aaaaaa" });
+    await expect(
+      adapter.discover?.("/same", { processes: [{ argv: ["/usr/local/bin/hermes", "chat", "-r", "20261002_000000_bbbbbb"] }] }),
+    ).resolves.toEqual({ kind: "id", value: "20261002_000000_bbbbbb" });
+    await expect(
+      adapter.discover?.("/same", {
+        processes: [
+          {
+            argv: [
+              "/Users/operator/.hermes/tools/python-3.14.7/bin/python3",
+              "-I",
+              "-c",
+              "import sys\nfrom hermes_cli.main import main\nsys.exit(main())",
+              "chat",
+              "--resume",
+              LOCAL_SID,
+            ],
+          },
+        ],
+      }),
+    ).resolves.toEqual({ kind: "id", value: LOCAL_SID });
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("a bare hermes with no --resume falls through to the cwd walk", async () => {
+    const root = await lab([["20261001_000000_aaaaaa", "/same", 1]]);
+    const adapter = hermesJournal([root]);
+    await expect(
+      adapter.discover?.("/same", { processes: [{ argv: ["hermes", "chat"] }] }),
+    ).resolves.toEqual({ kind: "id", value: "20261001_000000_aaaaaa" });
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("an unresolvable argv id still returns the ref so resolve() gates it", async () => {
+    const root = await lab([["20261001_000000_aaaaaa", "/same", 1]]);
+    const adapter = hermesJournal([root]);
+    await expect(
+      adapter.discover?.("/same", {
+        processes: [{ argv: ["hermes", "chat", "--resume", "20269999_999999_zzzzzz"] }],
+      }),
+    ).resolves.toEqual({ kind: "id", value: "20269999_999999_zzzzzz" });
     await rm(root, { recursive: true, force: true });
   });
 });

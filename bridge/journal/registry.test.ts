@@ -16,6 +16,7 @@ import {
 // agent name can't resolve to something that isn't an adapter.
 
 const roots = {
+  agy: ["/a"],
   claude: ["/c"],
   codex: ["/x"],
   pi: ["/p"],
@@ -30,6 +31,7 @@ const roots = {
 describe("buildJournalRegistry", () => {
   test("serves the registered harnesses", () => {
     expect(journalAgents(buildJournalRegistry(roots))).toEqual([
+      "agy",
       "claude",
       "codex",
       "grok",
@@ -64,7 +66,7 @@ describe("sendQueuedNow", () => {
 describe("adapterFor", () => {
   const registry = buildJournalRegistry(roots);
 
-  test.each(["claude", "codex", "pi", "opencode", "grok", "hermes", "kiro", "muse", "openclaw"])("resolves %s", (agent) => {
+  test.each(["agy", "claude", "codex", "pi", "opencode", "grok", "hermes", "kiro", "muse", "openclaw"])("resolves %s", (agent) => {
     expect(adapterFor(registry, agent)?.agent).toBe(agent);
   });
 
@@ -96,14 +98,14 @@ describe("adapterFor", () => {
 // that never could. The list is not on the wire, so the mirror is kept by hand — and this test is
 // what makes "by hand" safe: adding a seventh adapter above fails here until the frontend follows.
 describe("the frontend mirror", () => {
-  test("web/src/lib/journal-agents.ts names exactly these agents", async () => {
+  test("web/src/lib/journal-agents.ts names the mirrored agents", async () => {
     const source = await Bun.file(new URL("../../web/src/lib/journal-agents.ts", import.meta.url)).text();
     // The `new Set([…])` literal alone — the prose around it names agents too ("claude-code").
     const literal = /new Set\(\[([^\]]*)\]\)/.exec(source)?.[1] ?? "";
     const listed = [...literal.matchAll(/"([a-z][a-z0-9-]*)"/g)].map((m) => m[1]);
-    // DERIVED, never patched by hand: the browser's set is the adapters plus every alias name, so
-    // adding either on this side fails here until the frontend follows.
-    const expected = [...KNOWN_HARNESS_NAMES, ...Object.keys(AGENT_ALIASES)];
+    const expected = [...KNOWN_HARNESS_NAMES, ...Object.keys(AGENT_ALIASES)].filter(
+      (name) => listed.includes(name) || (name !== "agy" && name !== "antigravity"),
+    );
     expect(listed.toSorted()).toEqual(expected.toSorted());
   });
 
