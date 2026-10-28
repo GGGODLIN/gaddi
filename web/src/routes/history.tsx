@@ -13,7 +13,7 @@ import { HISTORY_PAGE_SIZE, type HistoryData } from "@/lib/loaders";
 import { useMuxCapability } from "@/lib/mux-capability";
 import { panePath } from "@/lib/nav";
 import { setStatus } from "@/lib/status";
-import { matchingEntries, step, userTurnIndices } from "@/lib/transcript-search";
+import { step, userTurnIndices } from "@/lib/transcript-search";
 import type { TranscriptEntry } from "@/lib/types";
 import { useRootData } from "@/lib/route-data";
 import { t } from "@/lib/i18n";
@@ -21,6 +21,35 @@ import { useLocale } from "@/hooks/use-locale";
 import { useNav } from "@/hooks/use-nav";
 import { mirrorFont, useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { cn } from "@/lib/utils";
+
+/**
+ * The text a History find runs against for one turn — prose text, the one-line tool summaries AND
+ * tool result bodies. TranscriptView unfolds a tool call whose output matches the query, so the
+ * turn a jump lands on always shows the match.
+ */
+export function searchableText(entry: TranscriptEntry): string {
+  const parts: string[] = [];
+  for (const p of entry.parts) {
+    if (p.kind === "tool") {
+      parts.push(p.name, p.summary, p.result?.text ?? "");
+    } else if (p.kind === "image") {
+      continue;
+    } else {
+      parts.push(p.text);
+    }
+  }
+  return parts.join(" ");
+}
+
+function matchingHistoryEntries(entries: TranscriptEntry[], query: string): number[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return [];
+  const hits: number[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    if (searchableText(entries[i]!).toLowerCase().includes(needle)) hits.push(i);
+  }
+  return hits;
+}
 
 // Pane history route — the agent's own transcript, which is the ONLY conversation history a Claude
 // pane can have. Its terminal runs on the alternate screen, so Herdr retains no scrollback ring at
@@ -108,7 +137,7 @@ export function HistoryRoute() {
   // Index into `entries` (not `shown`) of the turn a find/jump landed on; -1 = nowhere yet.
   const [cursor, setCursor] = useState(-1);
 
-  const matches = useMemo(() => matchingEntries(entries, query), [entries, query]);
+  const matches = useMemo(() => matchingHistoryEntries(entries, query), [entries, query]);
   const userTurns = useMemo(() => userTurnIndices(entries), [entries]);
   const focusedUuid = cursor >= 0 ? entries[cursor]?.uuid : undefined;
 

@@ -97,6 +97,45 @@ describe("TranscriptView", () => {
     expect(screen.getByRole("button")).toBeDisabled();
   });
 
+  it("an empty result stub with no image isn't expandable either (chevron-with-blank-body bug)", () => {
+    showToolCalls();
+    render(
+      <TranscriptView
+        entries={[
+          turn({
+            role: "assistant",
+            parts: [{ kind: "tool", name: "Grep", summary: "foo", result: { text: "", truncated: false } }],
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByRole("button")).toBeDisabled();
+  });
+
+  it("a find hit inside a tool's output unfolds the call and highlights the matched output", () => {
+    const { container } = render(
+      <TranscriptView
+        query="SECRET_TOKEN"
+        entries={[
+          turn({
+            role: "assistant",
+            parts: [
+              {
+                kind: "tool",
+                name: "Bash",
+                summary: "cat /etc/hosts",
+                result: { text: "127.0.0.1 SECRET_TOKEN_XYZ" },
+              },
+            ],
+          }),
+        ]}
+      />,
+    );
+    const button = screen.getByRole("button", { name: /Bash/ });
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(container.querySelector("pre mark")).toHaveTextContent("SECRET_TOKEN");
+  });
+
   it("flags truncated output rather than silently dropping the tail", async () => {
     showToolCalls();
     render(

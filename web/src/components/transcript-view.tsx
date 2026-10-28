@@ -112,17 +112,24 @@ function ToolPart({
   query: string;
   scope?: Scope;
 }) {
-  const [open, setOpen] = useState(false);
+  const [tapped, setOpen] = useState(false);
   const result = part.result;
   const isError = result?.isError === true;
+  // An empty `result.text` with no image is not expandable — same as no result, so History never
+  // shows a chevron that opens onto an empty border.
+  const expandable = result !== undefined && (result.text !== "" || Boolean(result.imageUrl));
+  // A find hit in the output unfolds the call so the match is visible on screen.
+  const q = query.trim().toLowerCase();
+  const hit = q !== "" && result !== undefined && result.text.toLowerCase().includes(q);
+  const open = expandable && (tapped || hit);
 
   return (
     <div className="rounded-md border bg-muted/40">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        disabled={!result}
-        aria-expanded={result ? open : undefined}
+        disabled={!expandable}
+        aria-expanded={expandable ? open : undefined}
         className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left disabled:opacity-100"
       >
         {isError ? (
@@ -137,7 +144,7 @@ function ToolPart({
             <Highlight text={part.summary} query={query} />
           </span>
         )}
-        {result && (
+        {expandable && (
           <ChevronRight
             className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
           />
@@ -152,7 +159,7 @@ function ToolPart({
           )}
           {result.text && (
             <pre className="overflow-x-auto px-2 py-1.5 font-mono text-[11px] leading-snug [font-variant-ligatures:none] whitespace-pre-wrap">
-              {result.text}
+              <Highlight text={result.text} query={query} />
               {result.truncated && (
                 <span className="text-muted-foreground">{`\n${t("transcript.outputTruncated")}`}</span>
               )}

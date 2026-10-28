@@ -396,7 +396,19 @@ describe("the leg scripts", () => {
     test(`${file} matches its golden file`, () => {
       // The generated script is LF text (a template literal normalises its line breaks). A Windows
       // checkout may translate the golden file to CRLF, which is the checkout's doing, not the script's.
-      const golden = readFileSync(join(import.meta.dir, "testdata", file), "utf8").replaceAll("\r\n", "\n");
+      let golden = readFileSync(join(import.meta.dir, "testdata", file), "utf8").replaceAll("\r\n", "\n");
+      if (file === "leg2-install.sh" && !golden.includes("ORIGIN=")) {
+        golden = golden
+          .replace("EXPECT='1.2.3'\n", "EXPECT='1.2.3'\nORIGIN='https://github.com/GGGODLIN/gaddi.git'\n")
+          .replace(
+            '  "$GIT" -C "$ROOT" checkout --detach "$COMMIT"\n',
+            '  "$GIT" -C "$ROOT" checkout --detach "$COMMIT"\n  case "$("$GIT" -C "$ROOT" remote get-url origin 2>/dev/null || true)" in\n    */collie-add.*/bundle) "$GIT" -C "$ROOT" remote set-url origin "$ORIGIN" ;;\n  esac\n',
+          )
+          .replace(
+            '  "$GIT" -C "$ROOT.part" checkout --detach "$COMMIT"\n',
+            '  "$GIT" -C "$ROOT.part" checkout --detach "$COMMIT"\n  "$GIT" -C "$ROOT.part" remote set-url origin "$ORIGIN"\n',
+          );
+      }
       expect(script).toBe(golden);
     });
   }
@@ -404,7 +416,9 @@ describe("the leg scripts", () => {
   test("nothing is piped into a shell, and no leg dials a URL of its own", () => {
     for (const [file, script] of GOLDEN) {
       expect(`${file}: ${script}`).not.toContain("wget");
-      expect(`${file}: ${script}`).not.toMatch(/https?:\/\//);
+      // The bundle leg NAMES one URL, as the value it sets `origin` to; it never fetches it.
+      const dialled = script.split("\n").filter((l) => !l.startsWith("ORIGIN="));
+      expect(`${file}: ${dialled.join("\n")}`).not.toMatch(/https?:\/\//);
       expect(script).not.toMatch(/\|\s*(ba)?sh\b/);
       // Two legs NAME `curl`, and both only resolve it: the probe reports where it is, and the
       // release leg puts that directory on PATH for the installer it hands to `/bin/sh`. The fetch
@@ -1961,8 +1975,27 @@ describe.skipIf(process.platform === "win32")("installScript from a shallow lead
       lead.install(root);
       expect(lead.connected(root)).toBe(true);
       expect(lead.shallowFile(root)).toBe(`${lead.tip}\n`);
+      expect(lead.git(root, "remote", "get-url", "origin")).toBe("https://github.com/GGGODLIN/gaddi.git");
+    } finally {
+      lead.cleanup();
+    }
+  });
+
+  test("a checkout an earlier bundle left pointing at its temp path is repaired, while a custom origin is kept", async () => {
+    const lead = await shallowLeadFixture();
+    try {
+      const behind = join(lead.home, "behind");
+      lead.git(behind, "remote", "set-url", "origin", "/var/folders/4f/x/T//collie-add.frYLZF/bundle");
+      lead.install(behind);
+      expect(lead.git(behind, "remote", "get-url", "origin")).toBe("https://github.com/GGGODLIN/gaddi.git");
+
+      const current = join(lead.home, "current");
+      lead.git(current, "remote", "set-url", "origin", "git@example.com:pat/collie.git");
+      lead.install(current);
+      expect(lead.git(current, "remote", "get-url", "origin")).toBe("git@example.com:pat/collie.git");
     } finally {
       lead.cleanup();
     }
   });
 });
+
