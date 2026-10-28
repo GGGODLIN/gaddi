@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import { useEffect, type ComponentProps } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -16,6 +16,19 @@ import {
   uninstallFakeMediaRecorder,
 } from "@/test/media-recorder";
 import { Composer } from "./composer";
+
+// 這組測試驗證圖片晶片旁的麥克風；canvas 與編輯操作由編輯器測試覆蓋。
+vi.mock("@/lib/image-edit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/image-edit")>()),
+  canvasAvailable: () => true,
+}));
+
+vi.mock("@/components/image-editor", () => ({
+  ImageEditor: ({ file, onConfirm }: { file: File; onConfirm: (file: File) => void }) => {
+    useEffect(() => onConfirm(file), [file, onConfirm]);
+    return null;
+  },
+}));
 
 vi.mock("@/lib/liveness", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/liveness")>()),
