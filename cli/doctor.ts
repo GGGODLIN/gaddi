@@ -449,11 +449,10 @@ async function render(
 /** One check, one line. The status leads, the identifier is the second word, the remedy closes it. */
 function line(f: Finding): string {
   const head = f.status === "ok" ? "✓" : `${f.status}:`;
-  // 22 = longest check id ("integration-opencode", 20 chars) + 2, so every id gets
-  // at least one space before the detail. Grow this if a longer check id lands.
+  // Keep the established column, with two spaces after identifiers longer than it.
   // A detail of more than one line (the Windows `secrets-private` line puts a path on its own)
   // continues under its first line. No other detail holds a line break.
-  const body = `  ${head.padEnd(9)}${f.check.padEnd(22)}${f.detail.replaceAll("\n", `\n${" ".repeat(33)}`)}`;
+  const body = `  ${head.padEnd(9)}${f.check.padEnd(Math.max(22, f.check.length + 2))}${f.detail.replaceAll("\n", `\n${" ".repeat(33)}`)}`;
   return f.remedy === null ? body : `${body} → ${f.remedy}`;
 }
 

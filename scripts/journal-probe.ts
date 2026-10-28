@@ -20,8 +20,10 @@
 // output; the ref's kind and a short prefix of its value are printed, never a turn of a transcript.
 
 import { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { beaconReader } from "../bridge/beacon-io.ts";
 import { identityOf } from "../bridge/beacon/decorate.ts";
@@ -167,6 +169,7 @@ async function candidateRefsUnder(
     }
   }
 
+  if (agent === "agy") return agyCandidates(root);
   if (agent === "openclaw") return openclawCandidates(root);
   if (agent === "hermes") return hermesCandidates(root);
 
@@ -219,6 +222,35 @@ async function openclawCandidates(root: string): Promise<{ refs: AgentSessionRef
 }
 
 /**
+ * Antigravity CLI keeps one SQLite per conversation under `<root>/conversations/<uuid>.db` (or a
+ * plaintext `transcript.jsonl` under `<root>/brain/<uuid>/.system_generated/logs/`). Candidate refs
+ * are the newest conversation UUIDs by file mtime.
+ */
+async function agyCandidates(root: string): Promise<{ refs: AgentSessionRef[]; total: number }> {
+  const convDir = join(root, "conversations");
+  const found: { id: string; mtimeMs: number }[] = [];
+  try {
+    for (const name of await readdir(convDir)) {
+      const m = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.db$/i.exec(name);
+      if (m === null) continue;
+      try {
+        const st = await stat(join(convDir, name));
+        found.push({ id: m[1]!, mtimeMs: st.mtimeMs });
+      } catch {
+        // disappeared mid-scan
+      }
+    }
+  } catch {
+    // no conversations dir
+  }
+  found.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return {
+    refs: found.slice(0, MAX_CANDIDATES).map((f) => ({ kind: "id", value: f.id })),
+    total: found.length,
+  };
+}
+
+/**
  * Hermes keeps one SessionDB per profile: `<root>/state.db` for the default profile and
  * `<root>/profiles/<name>/state.db` for each named one. Herdr names a session by its id, so the
  * candidates are the newest ids of every one of those databases, the adapter's own search order.
@@ -235,9 +267,12 @@ async function hermesCandidates(root: string): Promise<{ refs: AgentSessionRef[]
   }
   const refs: AgentSessionRef[] = [];
   for (const path of dbs) {
+    if (!existsSync(path)) continue;
     let db: Database;
     try {
-      db = new Database(path, { readonly: true });
+      const uri = pathToFileURL(path);
+      uri.search = "mode=ro&immutable=1";
+      db = new Database(existsSync(`${path}-wal`) ? path : uri.href, { readonly: true });
     } catch {
       continue;
     }

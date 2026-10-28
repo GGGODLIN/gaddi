@@ -10,9 +10,6 @@
 // LIVE MIRROR; this one owns reading an on-disk log. A harness can plausibly have one without the
 // other.
 
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 import { agyJournal } from "./agy.ts";
 import { claudeJournal } from "./claude.ts";
 import { codexJournal } from "./codex.ts";
@@ -37,7 +34,7 @@ import type { JournalAdapter } from "./types.ts";
  */
 export interface JournalRoots {
   /** Antigravity CLI's home, with conversations/<uuid>.db and presence/<uuid>.lock. */
-  agy?: readonly string[];
+  agy: readonly string[];
   /** Claude Code's `~/.claude/projects`, one per config dir. */
   claude: readonly string[];
   /** Codex's `$CODEX_HOME/sessions`. */
@@ -84,7 +81,7 @@ export interface ModelCatalogs {
  */
 export function buildJournalRegistry(roots: JournalRoots, catalogs: ModelCatalogs = {}): Record<string, JournalAdapter> {
   const adapters: JournalAdapter[] = [
-    agyJournal(roots.agy ?? [join(homedir(), ".gemini", "antigravity-cli")]),
+    agyJournal(roots.agy),
     claudeJournal(roots.claude),
     codexJournal(roots.codex),
     piJournal(roots.pi),

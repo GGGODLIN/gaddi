@@ -370,8 +370,7 @@ export class AgyTranscriptSource implements TranscriptSource {
     const path = await this.contained(key);
     if (path === null) return null;
     if (path.endsWith(".jsonl")) return statFile(path);
-    const db = await statFile(path);
-    const wal = await statFile(`${path}-wal`);
+    const [db, wal] = await Promise.all([statFile(path), statFile(`${path}-wal`)]);
     return db ? { size: db.size + (wal?.size ?? 0), mtimeMs: Math.max(db.mtimeMs, wal?.mtimeMs ?? 0) } : null;
   }
 

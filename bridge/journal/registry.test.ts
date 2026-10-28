@@ -103,9 +103,7 @@ describe("the frontend mirror", () => {
     // The `new Set([…])` literal alone — the prose around it names agents too ("claude-code").
     const literal = /new Set\(\[([^\]]*)\]\)/.exec(source)?.[1] ?? "";
     const listed = [...literal.matchAll(/"([a-z][a-z0-9-]*)"/g)].map((m) => m[1]);
-    const expected = [...KNOWN_HARNESS_NAMES, ...Object.keys(AGENT_ALIASES)].filter(
-      (name) => listed.includes(name) || (name !== "agy" && name !== "antigravity"),
-    );
+    const expected = [...KNOWN_HARNESS_NAMES, ...Object.keys(AGENT_ALIASES)];
     expect(listed.toSorted()).toEqual(expected.toSorted());
   });
 
