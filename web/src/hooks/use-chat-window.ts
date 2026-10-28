@@ -110,6 +110,8 @@ export interface ChatFeed {
 export function useChatWindow({
   paneId,
   scope,
+  instance,
+  pane,
   enabled,
   savedCopy = false,
   seen = true,
@@ -117,6 +119,13 @@ export function useChatWindow({
   paneId: string;
   /** Which machine + which named session this pane lives in — every other pane read carries it. */
   scope?: Scope;
+  /**
+   * The pane's session instance (`AgentView.instance`): another session that takes the same pane id
+   * carries another one, and neither the held window nor the saved copy crosses from one to the other.
+   */
+  instance?: string;
+  /** Optional pane holder from which `pane.agent?.instance` is read when `instance` is not passed directly. */
+  pane?: { readonly agent?: { readonly instance?: string } };
   /** False for a pane with no journal, and for every pane while the operator is on the terminal. */
   enabled: boolean;
   /**
@@ -130,6 +139,7 @@ export function useChatWindow({
    */
   seen?: boolean;
 }): ChatFeed {
+  const resolvedInstance = instance ?? pane?.agent?.instance;
   const revalidator = useRevalidator();
   const [held, setHeld] = useState<ChatWindow>(EMPTY_CHAT_WINDOW);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -161,7 +171,7 @@ export function useChatWindow({
   // is a different terminal in every session and on every machine, and merging one machine's turns
   // into another's is the one mistake this whole module exists to avoid. Reset during render rather
   // than in an effect, so the first paint after a switch is empty rather than the previous pane's.
-  const address = paneScopeKey(scope, paneId);
+  const address = `${paneScopeKey(scope, paneId)}${resolvedInstance === undefined ? "" : `#${resolvedInstance}`}`;
   const [shownAddress, setShownAddress] = useState(address);
   if (shownAddress !== address) {
     setShownAddress(address);
@@ -205,14 +215,14 @@ export function useChatWindow({
     const last = lastSaved.current;
     if (last !== null && last.window === current && at - last.at < REWRITE_AFTER_MS) return;
     lastSaved.current = { window: current, at };
-    void saveChatTail(scope, paneId, current.entries, keepChatOf(loadDisplayPrefs()), at);
-  }, [paneId, scope]);
+    void saveChatTail(scope, paneId, resolvedInstance, current.entries, keepChatOf(loadDisplayPrefs()), at);
+  }, [paneId, scope, resolvedInstance]);
 
   /** Draw the saved copy into a window that holds nothing. A window with turns is never touched. */
   const readSaved = useCallback(async () => {
     if (window.current.entries.length > 0) return;
     const askedFor = address;
-    const saved = await loadChatTail(scope, paneId);
+    const saved = await loadChatTail(scope, paneId, resolvedInstance);
     // Only into the same empty window it was asked for: a pane switch, or a live answer that landed
     // while the store was being read, wins.
     if (saved === null || !alive.current || addressNow.current !== askedFor || window.current.entries.length > 0) {
@@ -221,7 +231,7 @@ export function useChatWindow({
     const copy = savedChatWindow(saved.entries, saved.at);
     window.current = copy;
     setHeld(copy);
-  }, [address, paneId, scope]);
+  }, [address, paneId, scope, resolvedInstance]);
 
   /**
    * A read failed for want of a bridge: keep what is held and mark it, or draw the saved copy into an
