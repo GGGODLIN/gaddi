@@ -359,4 +359,3 @@ describe("groupPanesByWorkspace — linked worktrees (issue #587)", () => {
     ]);
   });
 });
-
