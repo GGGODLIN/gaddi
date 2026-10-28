@@ -144,7 +144,17 @@ export function isolateSpaces(
     const label = parts[parts.length - 1];
     const host = parts[0];
     const match = workspaces.find((w) => w.label === label && (w.host ?? "") === host);
-    return match === undefined ? [] : [{ match, host }];
+    if (match === undefined) return [];
+    const root =
+      match.repoRoot !== undefined && match.isWorktree === true
+        ? workspaces.find(
+            (w) =>
+              w.isWorktree === false &&
+              w.repoRoot === match.repoRoot &&
+              (w.host ?? "") === host,
+          )
+        : undefined;
+    return [{ match: root ?? match, host }];
   });
   if (matches.length === 0) return [...workspaces];
   return workspaces.filter((w) =>

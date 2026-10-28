@@ -346,7 +346,7 @@ export function HomeRoute() {
               stale={data.stale === true}
               tabs={data.tabs}
               servers={data.servers}
-              workspaces={data.workspaces}
+              workspaces={data.herdWorkspaces ?? data.workspaces}
               // Each workspace heading's "+" (M40/03): the list resolves each heading's own machine and
               // session from these, the way a row's tap does, and sends the create there.
               newTab={{

@@ -230,5 +230,56 @@ describe("groupPanesByWorkspace — linked worktrees (issue #587)", () => {
     );
     expect(labels(groups)).toEqual(["membero", "lucky-meadow-d1ec"]);
   });
+
+  it("pulls the root group up to its worktree's position when the worktree has a lower workspace number", () => {
+    const childFirst = space("w1", { number: 1, label: "lucky-meadow-d1ec", repoRoot: REPO, isWorktree: true });
+    const middle = space("w2", { number: 2, label: "collie" });
+    const rootLater = space("w3", { number: 3, label: "membero", repoRoot: REPO, isWorktree: false });
+    const groups = groupPanesByWorkspace(
+      [
+        pane("wt-pane", { workspaceId: "w1", workspaceLabel: "lucky-meadow-d1ec", workspaceNumber: 1, tabId: "w1:t1" }),
+        pane("other-pane", { workspaceId: "w2", workspaceLabel: "collie", workspaceNumber: 2, tabId: "w2:t1" }),
+        pane("root-pane", { workspaceId: "w3", workspaceLabel: "membero", workspaceNumber: 3, tabId: "w3:t1" }),
+      ],
+      [],
+      { order: "fixed", workspaces: [childFirst, middle, rootLater] },
+    );
+    expect(labels(groups)).toEqual(["membero", "collie"]);
+    expect(ids(groups)).toEqual([["root-pane", "wt-pane"], ["other-pane"]]);
+  });
+
+  it("never folds another session's pane in a widened (?all=1) snapshot even when workspaceId and label match", () => {
+    const groups = groupPanesByWorkspace(
+      [
+        pane("primary-wt", {
+          session: "default",
+          workspaceId: "w2",
+          workspaceLabel: "lucky-meadow-d1ec",
+          workspaceNumber: 2,
+          tabId: "w2:t1",
+        }),
+        pane("other-session-same-id-and-name", {
+          session: "secondary",
+          workspaceId: "w2",
+          workspaceLabel: "lucky-meadow-d1ec",
+          workspaceNumber: 2,
+          tabId: "w2:t1",
+        }),
+      ],
+      [],
+      {
+        order: "fixed",
+        workspaces: [root, wt],
+        sessions: [
+          { name: "default", isPrimary: true, reachable: true, agents: 1, working: 0, blocked: 0 },
+          { name: "secondary", isPrimary: false, reachable: true, agents: 1, working: 0, blocked: 0 },
+        ],
+      },
+    );
+    expect(groups.map((g) => ({ key: g.key, label: g.label, panes: g.panes.map((p) => p.paneId) }))).toEqual([
+      { key: "\u0000default\u0000w1", label: "membero", panes: ["primary-wt"] },
+      { key: "\u0000secondary\u0000w2", label: "lucky-meadow-d1ec", panes: ["other-session-same-id-and-name"] },
+    ]);
+  });
 });
 
