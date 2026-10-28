@@ -7,9 +7,8 @@
 // conversation in a shared folder.
 import { Database } from "bun:sqlite";
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import type { JsonValue } from "../json.ts";
@@ -309,13 +308,25 @@ function withDb<T>(path: string, read: (db: Database) => T): T | null {
   if (!existsSync(path)) return null;
   let db: Database | undefined;
   try {
-    // AGY removes its WAL on close but leaves WAL mode in the header. Avoid creating side files.
-    const uri = pathToFileURL(path);
-    uri.search = "mode=ro&immutable=1";
-    db = new Database(existsSync(`${path}-wal`) ? path : uri.href, { readonly: true });
+    db = new Database(path, { readonly: true });
     return read(db);
   } catch {
-    return null;
+    // AGY removes its WAL on close but leaves WAL mode (header bytes 18-19 = 2, 2) in the header.
+    try {
+      const buf = new Uint8Array(readFileSync(path));
+      if (buf.length >= 20 && buf[18] === 2 && buf[19] === 2) {
+        buf[18] = 1;
+        buf[19] = 1;
+      }
+      const mem = Database.deserialize(buf, { readonly: true });
+      try {
+        return read(mem);
+      } finally {
+        mem.close();
+      }
+    } catch {
+      return null;
+    }
   } finally {
     db?.close();
   }

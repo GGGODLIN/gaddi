@@ -10,10 +10,9 @@
 // Each database is opened read-only.
 
 import { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 
 import type { JsonObject, JsonValue } from "../json.ts";
 import {
@@ -116,23 +115,32 @@ function sessionFromArgv(processes: readonly ForegroundProcess[] | undefined): s
 
 function withDb<T>(dbPath: string, fn: (db: Database) => T): T | null {
   if (!existsSync(dbPath)) return null;
-  let db: Database;
+  let db: Database | undefined;
   try {
-    // Hermes opens state.db in WAL mode (header bytes 18-19 = 2, 2) and Python sqlite3 removes
-    // -wal/-shm on close. Without -wal on disk, plain readonly open tries to create -shm and fails
-    // with SQLITE_CANTOPEN (errno 14); mode=ro&immutable=1 reads the file without side files.
-    const uri = pathToFileURL(dbPath);
-    uri.search = "mode=ro&immutable=1";
-    db = new Database(existsSync(`${dbPath}-wal`) ? dbPath : uri.href, { readonly: true });
-  } catch {
-    return null;
-  }
-  try {
+    db = new Database(dbPath, { readonly: true });
     return fn(db);
   } catch {
-    return null;
+    // Hermes opens state.db in WAL mode (header bytes 18-19 = 2, 2) and Python sqlite3 removes
+    // -wal/-shm on close. Without -wal on disk, plain readonly open tries to create -shm and fails
+    // with SQLITE_CANTOPEN (errno 14). Deserializing an in-memory copy with header bytes 18-19 set
+    // to 1, 1 reads the committed pages without touching the disk or relying on OS-specific URI flags.
+    try {
+      const buf = new Uint8Array(readFileSync(dbPath));
+      if (buf.length >= 20 && buf[18] === 2 && buf[19] === 2) {
+        buf[18] = 1;
+        buf[19] = 1;
+      }
+      const mem = Database.deserialize(buf, { readonly: true });
+      try {
+        return fn(mem);
+      } finally {
+        mem.close();
+      }
+    } catch {
+      return null;
+    }
   } finally {
-    db.close();
+    db?.close();
   }
 }
 

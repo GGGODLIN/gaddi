@@ -20,10 +20,9 @@
 // output; the ref's kind and a short prefix of its value are printed, never a turn of a transcript.
 
 import { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { beaconReader } from "../bridge/beacon-io.ts";
 import { identityOf } from "../bridge/beacon/decorate.ts";
@@ -268,23 +267,34 @@ async function hermesCandidates(root: string): Promise<{ refs: AgentSessionRef[]
   const refs: AgentSessionRef[] = [];
   for (const path of dbs) {
     if (!existsSync(path)) continue;
-    let db: Database;
+    let db: Database | undefined;
     try {
-      const uri = pathToFileURL(path);
-      uri.search = "mode=ro&immutable=1";
-      db = new Database(existsSync(`${path}-wal`) ? path : uri.href, { readonly: true });
-    } catch {
-      continue;
-    }
-    try {
+      db = new Database(path, { readonly: true });
       const rows = db
         .query<{ id: string }, [number]>("select id from sessions order by started_at desc limit ?")
         .all(MAX_CANDIDATES);
       for (const r of rows) refs.push({ kind: "id", value: r.id });
     } catch {
-      // a database of another shape: the adapter's own resolve says so when it is asked
+      try {
+        const buf = new Uint8Array(readFileSync(path));
+        if (buf.length >= 20 && buf[18] === 2 && buf[19] === 2) {
+          buf[18] = 1;
+          buf[19] = 1;
+        }
+        const mem = Database.deserialize(buf, { readonly: true });
+        try {
+          const rows = mem
+            .query<{ id: string }, [number]>("select id from sessions order by started_at desc limit ?")
+            .all(MAX_CANDIDATES);
+          for (const r of rows) refs.push({ kind: "id", value: r.id });
+        } finally {
+          mem.close();
+        }
+      } catch {
+        // a database of another shape: the adapter's own resolve says so when it is asked
+      }
     } finally {
-      db.close();
+      db?.close();
     }
   }
   return { refs, total: refs.length };
