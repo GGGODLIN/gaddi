@@ -20,6 +20,7 @@
 // output; the ref's kind and a short prefix of its value are printed, never a turn of a transcript.
 
 import { Database } from "bun:sqlite";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -167,6 +168,7 @@ async function candidateRefsUnder(
     }
   }
 
+  if (agent === "agy") return agyCandidates(root);
   if (agent === "openclaw") return openclawCandidates(root);
   if (agent === "hermes") return hermesCandidates(root);
 
@@ -219,6 +221,53 @@ async function openclawCandidates(root: string): Promise<{ refs: AgentSessionRef
 }
 
 /**
+ * Antigravity CLI keeps one SQLite per conversation under `<root>/conversations/<uuid>.db` (or a
+ * plaintext `transcript.jsonl` under `<root>/brain/<uuid>/.system_generated/logs/`). Candidate refs
+ * are the newest conversation UUIDs by file mtime.
+ */
+async function agyCandidates(root: string): Promise<{ refs: AgentSessionRef[]; total: number }> {
+  const convDir = join(root, "conversations");
+  const found: { id: string; mtimeMs: number }[] = [];
+  try {
+    for (const name of await readdir(convDir)) {
+      const m = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.db$/i.exec(name);
+      if (m === null) continue;
+      try {
+        const st = await stat(join(convDir, name));
+        found.push({ id: m[1]!, mtimeMs: st.mtimeMs });
+      } catch {
+        // disappeared mid-scan
+      }
+    }
+  } catch {
+    // no conversations dir
+  }
+  found.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return {
+    refs: found.slice(0, MAX_CANDIDATES).map((f) => ({ kind: "id", value: f.id })),
+    total: found.length,
+  };
+}
+
+const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
+
+function canDeserializeClosedWal(dbPath: string, err: Error): boolean {
+  if (
+    !/SQLITE_|SQLiteError|unable to open database file|readonly database|disk I\/O error/i.test(
+      `${err.name} ${err.message}`,
+    )
+  ) {
+    return false;
+  }
+  if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;
+  try {
+    return statSync(dbPath).size <= MAX_DESERIALIZE_BYTES;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Hermes keeps one SessionDB per profile: `<root>/state.db` for the default profile and
  * `<root>/profiles/<name>/state.db` for each named one. Herdr names a session by its id, so the
  * candidates are the newest ids of every one of those databases, the adapter's own search order.
@@ -235,21 +284,35 @@ async function hermesCandidates(root: string): Promise<{ refs: AgentSessionRef[]
   }
   const refs: AgentSessionRef[] = [];
   for (const path of dbs) {
-    let db: Database;
+    if (!existsSync(path)) continue;
+    let db: Database | undefined;
     try {
       db = new Database(path, { readonly: true });
-    } catch {
-      continue;
-    }
-    try {
       const rows = db
         .query<{ id: string }, [number]>("select id from sessions order by started_at desc limit ?")
         .all(MAX_CANDIDATES);
       for (const r of rows) refs.push({ kind: "id", value: r.id });
-    } catch {
-      // a database of another shape: the adapter's own resolve says so when it is asked
+    } catch (err) {
+      if (!(err instanceof Error) || !canDeserializeClosedWal(path, err)) continue;
+      try {
+        const buf = new Uint8Array(readFileSync(path));
+        if (buf.length < 20 || buf[18] !== 2 || buf[19] !== 2) continue;
+        buf[18] = 1;
+        buf[19] = 1;
+        const mem = Database.deserialize(buf, { readonly: true });
+        try {
+          const rows = mem
+            .query<{ id: string }, [number]>("select id from sessions order by started_at desc limit ?")
+            .all(MAX_CANDIDATES);
+          for (const r of rows) refs.push({ kind: "id", value: r.id });
+        } finally {
+          mem.close();
+        }
+      } catch {
+        // a database of another shape: the adapter's own resolve says so when it is asked
+      }
     } finally {
-      db.close();
+      db?.close();
     }
   }
   return { refs, total: refs.length };

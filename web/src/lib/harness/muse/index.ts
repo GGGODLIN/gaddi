@@ -57,7 +57,7 @@
 //      buttons whose taps would type into the filter.
 
 import { lineText, trimTrailingBlank, type Block, type StyledLine } from "../../blocks";
-import type { HarnessAdapter } from "../types";
+import type { DialogDetector, HarnessAdapter } from "../types";
 import { detectApprovalRegion } from "./approval";
 import { museAttachCarriesSend } from "./attach";
 import { detectCheckboxRegion } from "./checkbox";
@@ -66,7 +66,7 @@ import {
   composerReady,
   extractAgentsFooter,
   extractInputDraft,
-  extractStatusLines,
+  extractStatusLines as tailStatusLines,
   regionReachesTail,
   stripChrome,
 } from "./chrome";
@@ -75,6 +75,22 @@ import { museDraftIsOpaque, musePasteCarriesSend } from "./paste";
 import { detectQuestionRegion } from "./question";
 import { detectTrustRegion } from "./trust";
 import { detectSessionPicker } from "../session-picker";
+
+/** The resume session picker. The highlighted session row starts at column 0 (`⟩ 1h ago      oak-thebe
+ *  · …`); the search field's `  ⟩ Search` is indented, so it never counts as a session. */
+function sessionPickerRegion(lines: StyledLine[]) {
+  const texts = lines.map((l) => rstrip(lineText(l)));
+  return detectSessionPicker(texts, /^⟩ \S/, (from, to) => regionSignature(texts, from, to));
+}
+
+/** The detectors `museBuildBlocks` runs, in its order, for the unread-dialog card's report (ADR 0123). */
+const MUSE_DIALOG_DETECTORS: readonly DialogDetector[] = [
+  { name: "approval", detect: detectApprovalRegion },
+  { name: "question", detect: detectQuestionRegion },
+  { name: "checkbox", detect: detectCheckboxRegion },
+  { name: "trust", detect: detectTrustRegion },
+  { name: "session-picker", detect: sessionPickerRegion },
+];
 
 /**
  * Muse's pane → blocks. The four dialog arms run in the build order of the dialog notes (approval →
@@ -133,10 +149,7 @@ export function museBuildBlocks(lines: StyledLine[]): Block[] {
       lines: lines.slice(trust.startLine),
     });
   }
-  // The highlighted session row starts at column 0 (`⟩ 1h ago      oak-thebe · …`); the search
-  // field's `  ⟩ Search` is indented, so it never counts as a session.
-  const texts = lines.map((l) => rstrip(lineText(l)));
-  const picker = detectSessionPicker(texts, /^⟩ \S/, (from, to) => regionSignature(texts, from, to));
+  const picker = sessionPickerRegion(lines);
   if (picker !== null) {
     return lift(lines, picker.startLine, picker.model.signature, {
       kind: "menu",
@@ -177,6 +190,18 @@ function lift(lines: StyledLine[], startLine: number, region: string, dialog: Bl
 }
 
 /**
+ * The statusline for the strip, only when the blocks took it off the mirror. A lifted dialog's card
+ * runs from the dialog to the screen's last row, statusline included, and that region is what a tap
+ * is bound to, so it is not trimmed. While a card shows the row the strip stays empty rather than
+ * draw it twice (the 2026-10-20 field report; status-strip.test.ts holds every adapter to this).
+ */
+function extractStatusLines(lines: StyledLine[]): StyledLine[] {
+  const status = tailStatusLines(lines);
+  if (status.length === 0) return status;
+  return museBuildBlocks(lines).every((block) => block.kind === "raw") ? status : [];
+}
+
+/**
  * Positive evidence that Muse's own TUI owns the tail, for the unread-dialog card (.adr/0053, addendum
  * 2026-09-26): its bottom rule and statusline are there (`locateTail`). Every Muse dialog keeps them,
  * the approval that replaces the box and the tasks popup between them included, while the shell after
@@ -211,6 +236,7 @@ export const museAdapter: HarnessAdapter = {
   // promises "cancel".
   cancelKey: "Escape",
   modalOnScreen: museModalOnScreen,
+  dialogDetectors: MUSE_DIALOG_DETECTORS,
   extractInputDraft,
   extractStatusLines,
   extractAgentsFooter,

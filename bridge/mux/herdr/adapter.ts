@@ -23,6 +23,7 @@
 // the list is that the NEXT adapter's is shorter.
 
 import { meaningfulTabLabel, meaningfulTerminalTitle } from "../../activity.ts";
+import { hermesArgs } from "../../journal/hermes.ts";
 import { isUnnamedTab } from "../../pane-name.ts";
 import type { DialMode } from "../../dial.ts";
 import type { ForegroundProcess } from "../../journal/types.ts";
@@ -327,14 +328,42 @@ export class HerdrMux implements MuxAdapter {
    */
   async snapshot(): Promise<MuxSnapshot> {
     const wire = await this.fetchWire();
-    await this.settleRepos(wire.workspaces);
+    const [, hermesPanes] = await Promise.all([
+      this.settleRepos(wire.workspaces),
+      this.settleHermesPanes(wire.panes),
+    ]);
     const spaceById = new Map(wire.workspaces.map((w) => [w.workspace_id, w]));
     const tabById = new Map(wire.tabs.map((t) => [t.tab_id, t]));
     return {
-      panes: wire.panes.map((p) => toMuxPane(p, spaceById, tabById)),
+      panes: wire.panes.map((p) => toMuxPane(p, spaceById, tabById, hermesPanes)),
       spaces: wire.workspaces.map((w) => toMuxSpace(w, this.repoByWorkspace.get(w.workspace_id)?.repo ?? null)),
       tabs: wire.tabs.map(toMuxTab),
     };
+  }
+
+  /**
+   * Panes whose `raw.agent` is unset because Hermes's wrapper execs into `python3 -I -c
+   * "…from hermes_cli.main import main…"`, which Herdr's binary-name detector does not recognise as
+   * `hermes`. Checked through `pane.process_info` so a live Hermes pane is named `"hermes"`, while
+   * a pane where Hermes exited back to a shell (even with a leftover `herdr:hermes` session report)
+   * stays `"shell"`.
+   */
+  private async settleHermesPanes(panes: readonly WirePane[]): Promise<ReadonlySet<string>> {
+    const found = new Set<string>();
+    const candidates = panes.filter((p) => p.agent === null || p.agent === undefined || p.agent.length === 0);
+    await Promise.all(
+      candidates.map(async (p) => {
+        try {
+          const info = await this.client.processInfo(p.pane_id);
+          if (info.foreground_processes?.some((proc) => Array.isArray(proc.argv) && hermesArgs(proc.argv) !== null)) {
+            found.add(p.pane_id);
+          }
+        } catch {
+          // A pane that disappeared or a server that predates `pane.process_info` stays a shell.
+        }
+      }),
+    );
+    return found;
   }
 
   /**
@@ -722,13 +751,20 @@ function toMuxPane(
   raw: WirePane,
   spaceById: Map<string, WireWorkspace>,
   tabById: Map<string, WireTab>,
+  hermesPanes?: ReadonlySet<string>,
 ): MuxPane {
   const space = spaceById.get(raw.workspace_id);
   const spaceLabel = space?.label ?? raw.workspace_id;
   // Herdr reports the agent name already lower-cased (`claude`, `codex`, `pi`, `omp`) and reports
   // nothing at all for a bare shell. Passed through rather than re-cased, so the name the harness
-  // and journal registries key on is byte-identical to what Herdr said.
-  const agent = raw.agent !== null && raw.agent !== undefined && raw.agent.length > 0 ? raw.agent : "shell";
+  // and journal registries key on is byte-identical to what Herdr said. When `raw.agent` is unset
+  // but `pane.process_info` shows Hermes's Python launcher in the foreground, name the pane `hermes`.
+  const agent =
+    raw.agent !== null && raw.agent !== undefined && raw.agent.length > 0
+      ? raw.agent
+      : hermesPanes?.has(raw.pane_id) === true
+        ? "hermes"
+        : "shell";
   // Built mutable and returned readonly: every optional field below is ASSIGNED rather than
   // conditionally spread, so absent stays absent and each condition reads as the one rule it is.
   const pane: MutableMuxPane = {
@@ -737,7 +773,7 @@ function toMuxPane(
     spaceLabel,
     spaceNumber: space?.number ?? 0,
     tabId: raw.tab_id,
-    cwd: raw.cwd,
+    cwd: raw.foreground_cwd !== undefined && raw.foreground_cwd.length > 0 ? raw.foreground_cwd : raw.cwd,
     focused: raw.focused,
     // Herdr drops a pane from `pane.list` when it goes away — a listed pane is a live one, and an
     // id that has left the snapshot answers `pane_not_found` on the next write.

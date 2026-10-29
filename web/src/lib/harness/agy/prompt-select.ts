@@ -77,6 +77,7 @@ const QUESTION_SCAN_LIMIT = 12;
 export interface PromptRegion {
   model: PromptModel;
   startLine: number;
+  statusStartLine: number;
 }
 
 export function coreRegionSignature(texts: string[], from: number, footer: number): string {
@@ -128,6 +129,7 @@ export function detectPromptSelectRegionIn(texts: string[]): PromptRegion | null
 
   const firstOpt = menu[0]!.index;
   const lastOpt = menu[menu.length - 1]!.index;
+  if (texts.slice(firstOpt, lastOpt).some(isHorizontalRule)) return null;
 
   // A checkbox question: Space ticks a row and a digit's effect there is unmeasured, so no recipe here
   // answers it. It stays raw and the unread-dialog card offers Escape. It is known by a box on any of
@@ -190,11 +192,6 @@ export function detectPromptSelectRegionIn(texts: string[]): PromptRegion | null
     options.push({
       label: row.label,
       description: desc.length ? desc.join(" ") : undefined,
-      // The digit alone answers a question (1.3.5, live 2026-10-15): it submitted a one-question call,
-      // and on the first of two it answered and moved on, so a trailing Enter answered the second
-      // question with whatever row its pointer stood on. The plan family is the same widget: a
-      // conversation holding a plan artifact only adds `ctrl+r Review` to the footer, and there too
-      // the Enter answered Question 2/2 (live 2026-10-15).
       keys: [String(row.n)],
     });
   }
@@ -202,15 +199,11 @@ export function detectPromptSelectRegionIn(texts: string[]): PromptRegion | null
 
   const signature = regionSignature(texts, firstOpt - SIGNATURE_LOOKBACK, footerIndex);
   const coreSignature = coreRegionSignature(texts, questionAt, footerIndex);
-  // The block starts at the question's row, so the card's question is not also painted in the raw
-  // mirror above it. Only when nothing but blank rows and rules lie between the question and the
-  // first option: a row there (the trust prompt's `Antigravity CLI requires permission…`) is shown
-  // by the mirror alone, and the block then keeps starting at the first option.
   let startLine = questionAt;
   for (let i = questionAt + 1; i < firstOpt; i++) {
     if (!isBlank(texts[i]!) && !isHorizontalRule(texts[i]!)) startLine = firstOpt;
   }
-  return { model: { question, options, family, signature, coreSignature }, startLine };
+  return { model: { question, options, family, signature, coreSignature }, startLine, statusStartLine: footerIndex + 1 };
 }
 
 export function detectPromptSelect(lines: StyledLine[]): PromptModel | null {

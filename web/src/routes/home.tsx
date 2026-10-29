@@ -48,7 +48,7 @@ import { t, tn } from "@/lib/i18n";
 import { prefetchFolders } from "@/lib/folders";
 import { glideForward } from "@/lib/glide";
 import { homePath, newPath, spaceChangesPath, spacePath } from "@/lib/nav";
-import { workspaceGroupKey, type WorkspaceGroup } from "@/lib/pane-groups";
+import { resolveIsolatedPrefKeys, workspaceGroupKey, type WorkspaceGroup } from "@/lib/pane-groups";
 import { panePlaceParts } from "@/lib/pane-name";
 import { scopeKey, type Scope } from "@/lib/scope";
 import { countBlocked, hasReady } from "@/lib/triage";
@@ -212,6 +212,17 @@ export function HomeRoute() {
     () => ambientPanes(data.agents, data.shellPanes, data.scope, data.servers, data.sessions),
     [data.agents, data.shellPanes, data.scope, data.servers, data.sessions],
   );
+  const herdWorkspaces = data.herdWorkspaces ?? data.workspaces;
+  const isolatedSpaces = useMemo(
+    () =>
+      resolveIsolatedPrefKeys(prefs.isolatedSpaces, {
+        workspaces: herdWorkspaces,
+        scope: data.scope,
+        servers: data.servers,
+        sessions: data.sessions,
+      }),
+    [prefs.isolatedSpaces, herdWorkspaces, data.scope, data.servers, data.sessions],
+  );
   // THE PROGRAMS SECTION (M55 spec 13): every program session in the snapshot, this machine's and each
   // crew member's, in a section of its own, and a tap opens its home, the conversation list, on the
   // machine that runs it. None on a snapshot with no program session, and the section then draws
@@ -346,7 +357,7 @@ export function HomeRoute() {
               stale={data.stale === true}
               tabs={data.tabs}
               servers={data.servers}
-              workspaces={data.workspaces}
+              workspaces={herdWorkspaces}
               // Each workspace heading's "+" (M40/03): the list resolves each heading's own machine and
               // session from these, the way a row's tap does, and sends the create there.
               newTab={{
@@ -355,7 +366,7 @@ export function HomeRoute() {
                 creating: creatingTab,
                 onNewTab: (workspaceId, at) => void newTab(workspaceId, at),
               }}
-              isolated={prefs.isolatedSpaces}
+              isolated={isolatedSpaces}
               hidden={prefs.hiddenSpaces}
               onIsolate={setIsolatedSpaces}
               {...(data.agents.length > 0 ? { onOpenSwitcher: showSwitcher } : {})}
@@ -401,7 +412,7 @@ export function HomeRoute() {
               {programsFirst && <ProgramSection programs={programs} servers={data.servers} onOpen={openProgram} />}
               <LaunchStrip open={launchOpen} onOpenChange={setLaunchOpen} scope={data.scope} />
               <SpaceOverview
-                workspaces={isolateSpaces(data.workspaces, prefs.isolatedSpaces)}
+                workspaces={isolateSpaces(data.workspaces, isolatedSpaces)}
                 agents={navPanes.agents}
                 shellPanes={navPanes.shellPanes}
                 host={navHost}

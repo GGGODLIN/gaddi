@@ -20,7 +20,7 @@
 //           A command on a harness whose profile declares a command list needs two such reads, at
 //           least COMMAND_SETTLE_MS (160 ms) apart, that agree on the rows under the box: a list drawn
 //           late is never what Enter acts on (`commandSettle` in gapsMs)
-//   commit  the profile's submit keys through the gate with a 150 ms token; `submit-sent` is on disk first
+//   commit  the profile's submit keys through the gate with a 150 ms token minted after `submit-sent` is on disk (a slow write must not spend the token's lifetime)
 //   S2      (6, 3000) read until the box is empty or a running sign shows: `sent`; else `unknown`. A command
 //           that found nothing reads once more (6, 3000): its own screen may be slow to draw
 // A request past the sum of the bounds ends `unknown` and releases the lock. A protocol token never carries Escape; a person's Stop does, through the key gate, with a receipt (ADR 0116).
@@ -197,9 +197,10 @@ import { noEchoPromptIn } from "../../web/src/lib/no-echo.ts";
 import { isUploadImagePath, pastePieces } from "../../web/src/lib/upload-path.ts";
 import { pointsAt, staleListUnder } from "../../web/src/lib/surface/command-list.ts";
 import type { PopupRead } from "../../web/src/lib/surface/popup.ts";
-import { commandListAnyText, commandListAt, isRunningRow, noticeOver, ownCommandList, popupAt, readCues, readCuesFor, runningSign, withoutCommandList, withoutPopup, withoutPromptEchoes, type CommandListRead, type Cue } from "../../web/src/lib/surface/cues.ts";
+import { commandListAnyText, commandListAt, isKeyHintRow, isRunningRow, noticeOver, ownCommandList, popupAt, readCues, readCuesFor, runningSign, withoutCommandList, withoutPopup, withoutPromptEchoes, type CommandListRead, type Cue } from "../../web/src/lib/surface/cues.ts";
 import { loadProfiles } from "../../web/src/lib/surface/profile.ts";
 import { surfaceOfScreen } from "../../web/src/lib/surface/fold.ts";
+import { keyRowItems } from "../../web/src/lib/surface/key-row.ts";
 import { findInputFrame, rowText, type Frame, type FrameRow } from "../../web/src/lib/surface/frame.ts";
 import { liftAsk, liftDialog, readerBlocks } from "../../web/src/lib/surface/lift.ts";
 import type { AboveNotice } from "../../web/src/lib/surface/notice.ts";
@@ -611,6 +612,8 @@ interface Snap {
   /** {@link plain} as read, nothing masked: what the lab's example keeps. */
   readonly plainRaw: readonly string[];
   readonly frame: Frame | null;
+  /** The profile's `idle.volatile.above.ticks`: the rows above the box are read through {@link tickMarked}. */
+  readonly ticks: boolean;
   readonly surface: Surface;
   readonly cueStrength: "none" | "weak" | "strong";
   /** The cues of the framed read behind {@link cueStrength}, for a refusal's example. */
@@ -724,12 +727,20 @@ const BRACKET = /\([^()]*\)/gu;
  */
 export function steadyRow(row: string, signs: readonly RegExp[] = []): string {
   // A row the profile names as a running row (idle.runningRows) shows its spinner glyph as a fixed mark.
-  if (signs.some((sign) => sign.test(row.trimEnd()))) return row.replace(/[\u2800-\u28ff]/gu, "*").replace(/\d+/gu, "0");
+  if (signs.some((sign) => sign.test(row.trimEnd()))) return tickMarked(row);
   // A spinner row with or without its bracket group reads as the glyph mark and the verb alone.
   const verb = SPINNER_VERB_ROW.exec(row);
   if (verb !== null) return `${verb[1] ?? ""}*${verb[2] ?? ""}`;
   if (!isRunningRow(row)) return row;
   return row.replace(SPINNER_LEAD, "$1*").replace(BRACKET, (run) => run.replace(/\d+/gu, "0"));
+}
+
+/**
+ * A row with its braille glyphs and its digit runs read as fixed marks: a spinner that turned, a
+ * counter or a clock that ticked reads the same. Every other character still counts.
+ */
+function tickMarked(row: string): string {
+  return row.replace(/[\u2800-\u28ff]/gu, "*").replace(/\d+/gu, "0");
 }
 
 function mark(snap: Snap | null): ReadMark | null {
@@ -1076,7 +1087,8 @@ function otherScreenOf(texts: readonly string[], frame: Frame | null, screens: r
 function transcriptAbove(snap: Snap, frame: Frame): string[] {
   const band = frame.volatile.above === null ? frame.top : frame.volatile.above.first;
   const end = snap.ownList?.side === "above" ? Math.min(band, snap.ownList.first) : band;
-  const rows = snap.texts.slice(0, end).map((t) => t.trimEnd());
+  // A profile whose rows above may tick in place (`idle.volatile.above.ticks`): a counter that moved is no moved screen.
+  const rows = snap.texts.slice(0, end).map((t) => (snap.ticks ? tickMarked(t) : t).trimEnd());
   while (rows.length > 0 && rows[rows.length - 1]!.length === 0) rows.pop();
   return rows;
 }
@@ -1312,7 +1324,38 @@ function commitKeys(state: RunState): readonly string[] {
     return [keys.queueKey];
   }
   if (state.command || state.request.mode === "command") return keys.commandSubmit ?? keys.submit;
+  // A confirmed manual answer belongs to the dialog, not the normal composer.
+  // Use Enter only when its unchanged footer explicitly names Enter as submit.
+  if (manualSubmitHint(state)) return GENERIC_SUBMIT;
   return keys.submit;
+}
+
+/** A submit hint on the unread dialog the person confirmed, still present after read-back. */
+function manualSubmitHint(state: RunState): boolean {
+  if (!state.manual || state.command || state.queued || state.streamed) return false;
+  const { s0, s1 } = state.marks;
+  if (s0 === null || s1 === null || s0.frame !== null || s1.frame !== null) return false;
+  if (s0.surface.modal !== "unreadable" || s1.surface.modal !== "unreadable") return false;
+  const before = submitHintTail(s0);
+  const after = submitHintTail(s1);
+  return before !== null && after !== null && before.length === after.length && before.every((row, i) => row === after[i]);
+}
+
+/** The last key-hint row and its tail, not the first cue, which may be quoted in the answer. */
+function submitHintTail(snap: Snap): readonly string[] | null {
+  const { first, end } = bottomWindow(snap.texts);
+  for (let row = end - 1; row >= first; row--) {
+    const text = snap.texts[row] ?? "";
+    if (!isKeyHintRow(text)) continue;
+    if (!keyRowItems(text).some((item) => /^Enter(?: to)? submit$/iu.test(item))) return null;
+    return snap.texts.slice(row, end);
+  }
+  return null;
+}
+
+/** The submitted inline dialog closed to a recognised empty composer. Shared by Send and Submit. */
+function manualDialogClosed(state: RunState, snap: Snap): boolean {
+  return manualSubmitHint(state) && snap.frame !== null && snap.surface.modal === "none" && boxText(snap.frame).length === 0;
 }
 
 /** Whether the box answers a question the agent asked: the profile's `idle.answerPrompt` on the frame's prompt row. */
@@ -1722,10 +1765,10 @@ function ownListScroll(before: Snap, after: Snap): number {
 /** How many non-blank transcript rows must still show above the box before blank rows under a list may count as scroll. */
 const SCROLL_ANCHOR_ROWS = 2;
 
-/** {@link aboveUnchanged} for a manual send: the transcript above the box may lose text, never gain it. */
-function aboveLostOnly(before: Snap, after: Snap): boolean {
+/** {@link aboveUnchanged} for a manual send: the transcript above the box may lose text, never gain it. `topSlack` as in {@link lostTextOnly}. */
+function aboveLostOnly(before: Snap, after: Snap, topSlack = 0): boolean {
   if (before.frame === null || after.frame === null) return false;
-  return lostTextOnly(transcriptAbove(before, before.frame), transcriptAbove(after, after.frame));
+  return lostTextOnly(transcriptAbove(before, before.frame), transcriptAbove(after, after.frame), topSlack);
 }
 
 /** What a manual send asks of a framed pane: no modal cue grew, and the transcript above the box only lost text. */
@@ -2080,6 +2123,9 @@ function typedOnLanding(s0: readonly string[], now: readonly string[], landing: 
   const win = bottomWindow(now);
   for (let row = win.end - 1; row >= win.first; row--) {
     if (!flat(now.slice(row)).startsWith(line)) continue;
+    // A row that reads as it did at S0 was not typed into. It only quotes the text, as a footer that
+    // says the same words as the answer does; the search goes on up to the row that changed.
+    if (wsFree(now[row] ?? "") === wsFree(s0[row] ?? "")) continue;
     return lostTextOnly(s0.slice(0, landing.row), now.slice(0, row));
   }
   return false;
@@ -2093,6 +2139,23 @@ function typedOnLanding(s0: readonly string[], now: readonly string[], landing: 
  */
 function emptyBoxBack(s0: readonly string[], now: readonly string[], landing: Landing, typed: string): boolean {
   return emptiedTo(s0[landing.row] ?? "", now, typed);
+}
+
+/**
+ * Whether a box drawn with nothing before its text (a question's answer editor, one space in) was
+ * emptied in place: the rows that changed since S0 include `targetRow`, the row the text was found
+ * on, are next to each other, read blank now, and held exactly one of `texts` at S0, and every other
+ * row reads as it did. A blank row alone proves nothing ({@link emptiedTo}), so the rest of the screen
+ * standing still is the evidence, and a duplicate of the text that emptied elsewhere is not the box.
+ */
+function blankedInPlace(s0: readonly string[], now: readonly string[], targetRow: number, texts: readonly string[]): boolean {
+  const changed: number[] = [];
+  for (let i = 0; i < Math.max(s0.length, now.length); i++) if (wsFree(s0[i] ?? "") !== wsFree(now[i] ?? "")) changed.push(i);
+  if (changed.length === 0 || !changed.includes(targetRow)) return false;
+  if (changed.some((row, i) => i > 0 && row !== changed[i - 1]! + 1)) return false;
+  if (changed.some((row) => wsFree(now[row] ?? "").length > 0)) return false;
+  const removed = flat(changed.map((row) => s0[row] ?? ""));
+  return texts.some((text) => flat([text]) === removed);
 }
 
 /**
@@ -3657,7 +3720,7 @@ export class SendProtocol {
         // The length of the text Collie typed sizes the clear of a box that hides its head; a box that
         // held another text has no length Collie knows.
         if (located === null) await this.clear(state, s0, state.heldOther ? null : [...lines.join("\n")].length);
-        else await this.clearBare(state, located);
+        else await this.clearBare(state, located, s0, lines);
         this.lap(state, "clear");
         return;
       }
@@ -3793,8 +3856,8 @@ export class SendProtocol {
     this.guard(state);
     const { gate, store } = this.deps;
     const { paneId } = state.target;
-    const token = gate.mint(paneId, GENERIC_SUBMIT, gate.revision(paneId));
     store.markSubmitSent(state.record.id);
+    const token = gate.mint(paneId, GENERIC_SUBMIT, gate.revision(paneId));
     const result = await this.within(state, gate.commit(token));
     if (!result.ok) {
       const reason: SendReason = result.reason === "mux" ? "submit_failed" : result.reason;
@@ -4283,17 +4346,24 @@ export class SendProtocol {
     if (!grid.ok) return null;
     const rows = splitLines(parseAnsi(grid.value.text));
     const idle = state.match?.profile.idle ?? null;
-    const frame = idle === null ? null : findInputFrame(rows, idle);
+    const found = idle === null ? null : findInputFrame(rows, idle);
     const blocks = readerBlocks(rows, harness);
     const ask =
       this.deps.asks === undefined
         ? liftAsk(blocks, grid.value.revision)
         : this.deps.asks.publish(paneId, this.deps.generation(paneId) ?? "gone", liftDialog(blocks), askLifetimeOf(state.match));
-    const { surface } = surfaceOfScreen({ seq: 0, source: "screen", at: this.now(), revision: grid.value.revision, rows, ask }, idle);
+    // A dialog at S0 can reuse the composer's frame. The Surface discards that frame there;
+    // once S0 proved a real composer frame, later reads keep `found` to judge what landed inside it.
+    const { surface, frame: surfaceFrame } = surfaceOfScreen({ seq: 0, source: "screen", at: this.now(), revision: grid.value.revision, rows, ask }, idle);
+    const frame = (state.marks.s0?.frame ?? null) !== null ? found : surfaceFrame;
     const texts = rows.map((row) => rowText(row).trimEnd());
     const plainRaw = rows.map(plainOf);
     const signs = (idle?.runningRows ?? []).map((source) => new RegExp(source, "u"));
     const plain = plainRaw.map((row) => steadyRow(row, signs));
+    const ticks = idle?.volatile.above.ticks === true;
+    // The rows a person checks, with the rows above the box read as the compares read them: a counter
+    // that ticked over the box between the look and the tap is no screen the person did not see.
+    const checked = ticks && frame !== null ? plain.map((row, i) => (i < frame.top ? tickMarked(row) : row)) : plain;
     const win = bottomWindow(texts);
     this.deps.ring.push({ requestId: state.record.id, step, at: this.now(), rows: texts });
     const framed = readCuesFor(rows, frame, idle);
@@ -4316,6 +4386,7 @@ export class SendProtocol {
       plain,
       plainRaw,
       frame,
+      ticks,
       surface,
       cueStrength: framed.strength,
       cuesUnderBox: frame !== null && framed.cues.length > 0 && framed.cues.every((cue) => cue.row > frame.bottom),
@@ -4348,7 +4419,7 @@ export class SendProtocol {
       ownList,
       hash: shortHash(texts.join("\n")),
       // A running row's timer is masked (steadyRow): a ticking timer is not a screen the person did not see.
-      rowsHash: shortHash(plain.slice(win.first, win.end).join("\n")),
+      rowsHash: shortHash(checked.slice(win.first, win.end).join("\n")),
     };
     state.previousRead = state.lastRead;
     state.lastRead = snap;
@@ -4743,7 +4814,9 @@ export class SendProtocol {
           : manual
             ? aboveLostOnly(s0, snap)
             : command
-              ? aboveUnchanged(s0, snap, ownListScroll(s0, snap))
+              ? // A profile whose rows above lose text once the box holds a character (Codex hides its
+                // welcome picture) loses them for a command too, as the probe allows (outsideUnchanged).
+                aboveUnchanged(s0, snap, ownListScroll(s0, snap)) || (aboveLosesText(state) && aboveLostOnly(s0, snap, SCROLLBACK_SLACK))
               : outsideUnchanged(s0, snap, aboveLosesText(state)) || this.aboveMovedInTurn(state, s0, snap);
         if (!outside) {
           why = "changed";
@@ -4855,15 +4928,19 @@ export class SendProtocol {
     throw new Ended("typed_not_submitted", "mismatch", sawNote(result.snap, { framed: true, offers: ["keys"], detail, cause: NOTICE_KEY }));
   }
 
-  /** Commit: `submit-sent` on disk, then the submit keys through the gate on S1's revision. */
+  /**
+   * Commit: `submit-sent` on disk, then the submit keys through the gate on S1's revision. The token is
+   * minted after the write and `openSend`, right before the commit: a slow disk write must not spend the
+   * token's 150 ms lifetime. `submit-sent` is still on disk before the key goes out.
+   */
   private async commit(state: RunState, s1: Snap): Promise<void> {
     state.phase = "commit";
     this.guard(state);
     const keys = commitKeys(state);
     const { gate, store } = this.deps;
-    const token = gate.mint(state.target.paneId, keys, s1.gateRevision);
     store.markSubmitSent(state.record.id);
     this.openSend(state);
+    const token = gate.mint(state.target.paneId, keys, s1.gateRevision);
     const result = await this.within(state, gate.commit(token));
     if (!result.ok) {
       const reason: SendReason = result.reason === "mux" ? "submit_failed" : result.reason;
@@ -4909,6 +4986,9 @@ export class SendProtocol {
         return boxText(snap.frame).length === 0 || runningSign(snap.rows, snap.frame, state.match?.profile.idle.runningRows) ? "pass" : "wait";
       }
       if (landing === null) return "wait";
+      // A submitted inline answer closes the whole dialog, rather than restoring
+      // its blank landing row. A recognised empty composer is positive evidence.
+      if (manualDialogClosed(state, snap)) return "pass";
       if (command) return flat(snap.plain).includes(flat([landing.probed.slice(0, landing.index) + lines.join("") + afterProbe(landing)])) ? "wait" : "pass";
       // No frame: the landing row, found at its S0 distance from the last non-blank row, reads as it
       // did at S0 again, and the typed text no longer stands there. The rows under it may change (a
@@ -5039,7 +5119,7 @@ export class SendProtocol {
    * nothing from there down holds the text. With no box found there is no evidence: `unknown`.
    */
   private async awaitBareEmpty(state: RunState, located: Located | null): Promise<void> {
-    const result = located === null ? null : await this.poll(state, "s2", BOUNDS.s2, (snap) => (emptiedTo(located.head, snap.plain, located.text) ? "pass" : "wait"));
+    const result = located === null ? null : await this.poll(state, "s2", BOUNDS.s2, (snap) => (manualDialogClosed(state, snap) || emptiedTo(located.head, snap.plain, located.text) ? "pass" : "wait"));
     state.marks.s2 = result?.snap ?? null;
     if (result?.verdict !== "pass") throw new Ended("unknown", "no_evidence", { detail: "The submit key went out, but the box did not show it was taken." });
   }
@@ -5048,11 +5128,15 @@ export class SendProtocol {
    * Discard on a pane with no frame: the clear key as many times as the text has characters plus the
    * profile's slack, in one batch through the gate, then reads until the box found at S0 reads empty.
    */
-  private async clearBare(state: RunState, located: Located): Promise<void> {
+  private async clearBare(state: RunState, located: Located, s0: Snap, lines: readonly string[]): Promise<void> {
     const clearKey = state.match?.profile.keys.clear ?? GENERIC_CLEAR;
     const count = Math.min(CLEAR_BATCH, [...located.text].length + clearKey.slack);
     await this.keysThroughGate(state, Array.from({ length: count }, () => clearKey.key), "unknown");
-    const result = await this.poll(state, "clear", CLEAR_BOUND, (snap) => (emptiedTo(located.head, snap.plain, located.text) ? "pass" : "wait"));
+    // A box with no glyph before its text cannot be found again by its head: judge the whole screen.
+    const blankHead = wsFree(located.head).length === 0;
+    const emptied = (snap: Snap): boolean =>
+      blankHead ? blankedInPlace(s0.plain, snap.plain, located.row, [located.text, lines.join("")]) : emptiedTo(located.head, snap.plain, located.text);
+    const result = await this.poll(state, "clear", CLEAR_BOUND, (snap) => (emptied(snap) ? "pass" : "wait"));
     if (result.verdict !== "pass") throw new Ended("unknown", "no_evidence", { detail: "The box did not empty inside the bound." });
   }
 

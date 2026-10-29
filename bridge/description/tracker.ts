@@ -39,7 +39,7 @@ export const WIDE_TAIL_BYTES = 4 * 1024 * 1024;
 export const TAILED_AGENTS: ReadonlySet<string> = new Set(["claude", "codex", "pi", "omp", "grok", "muse"]);
 
 /** The database-backed harness whose session is read whole through `source.load`. */
-export const LOADED_AGENTS: ReadonlySet<string> = new Set(["opencode"]);
+export const LOADED_AGENTS: ReadonlySet<string> = new Set(["agy", "antigravity", "opencode"]);
 
 export interface DescriptionTrackerOptions {
   floorMs?: number;

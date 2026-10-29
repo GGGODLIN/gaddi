@@ -5,7 +5,12 @@ import { clockTime } from "@/lib/format";
 import { useMuxCapability } from "@/lib/mux-capability";
 import { SectionHeader } from "@/components/section-header";
 import { ListGroup } from "@/components/ui/list-group";
-import { groupPanesByWorkspace, workspaceGroupKey, type WorkspaceGroup } from "@/lib/pane-groups";
+import {
+  groupPanesByWorkspace,
+  resolveIsolatedPrefKeys,
+  workspaceGroupKey,
+  type WorkspaceGroup,
+} from "@/lib/pane-groups";
 import { StatusCounts, StatusSummaryLine } from "@/components/status-counts";
 import { ATTENTION, bucketOf, triage, worstTriage } from "@/lib/triage";
 import { groupHost, pinnedRows, shownGroups, stripEntries } from "@/lib/dash-view";
@@ -392,11 +397,13 @@ export function AgentList({
   // the one summary line. Push and the badge carry the alarm; this screen answers "where".
   const all = triage(agents);
   const attention = all.filter((s) => ATTENTION.has(s.key) && s.agents.length > 0);
-  const groups = groupPanesByWorkspace(agents, shellPanes, { order: "fixed", tabs, servers, workspaces });
+  const groupScope = { order: "fixed" as const, tabs, servers, workspaces, scope: viewScope, sessions: newTab?.sessions };
+  const groups = groupPanesByWorkspace(agents, shellPanes, groupScope);
   if (groups.length === 0) return null;
   // A stale key (a workspace since closed) filters nothing: an isolation nobody can see is dropped,
-  // and when every key is stale the list shows everything.
-  const isolatedSet = new Set(isolated);
+  // and when every key is stale the list shows everything. An isolated orphan worktree whose root
+  // workspace has since opened promotes to that root workspace (issue #587).
+  const isolatedSet = new Set(resolveIsolatedPrefKeys(isolated, groupScope));
   const isolatedGroups = groups.filter((g) => isolatedSet.has(workspacePrefKey(g)));
   const hiddenSet = new Set(hidden);
   // THE MACHINE FILTER (issue #288), one clause beside hide: a group on a hidden machine leaves
@@ -474,12 +481,13 @@ export function AgentList({
   // A workspace heading's "+", addressed to the heading's OWN machine and session, never the ambient
   // ones: this list holds every machine in a crew, and a crew's machines number their spaces from
   // `w1` each, so the ambient scope would open a peer's tab in the lead's `w1`. Every pane of a group
-  // shares one workspace, machine and session, so its first pane addresses the whole workspace, as
-  // the Changes tab's rows do (routes/home.tsx). A group is never empty; the guard is for the type.
+  // shares one machine and session, so its first pane resolves `at`, while the group key names the
+  // root workspace itself (which may hold only a linked worktree's panes, issue #587). A group is
+  // never empty; the guard is for the type.
   const headingNewTab = (g: WorkspaceGroup) => {
     const first = g.panes[0];
     if (newTab === undefined || first === undefined) return null;
-    const workspaceId = g.key.slice(g.key.lastIndexOf("\u0000") + 1) || first.workspaceId;
+    const workspaceId = g.key.slice(g.key.lastIndexOf("\u0000") + 1);
     const at = paneScope(newTab.scope, first, servers, newTab.sessions);
     return (
       <WorkspaceNewTab

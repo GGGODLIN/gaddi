@@ -2229,6 +2229,9 @@ describe("the pane fits its viewport", () => {
       const { container } = renderChat({ text: STATUS_TEXT });
       expect(screen.queryByRole("button", { name: "Switch pane" })).not.toBeNull();
 
+      // A soft keyboard only stands on a focused field (use-keyboard.ts), so the caret goes in first,
+      // the way tapping the composer does on the phone.
+      act(() => document.querySelector<HTMLTextAreaElement>('[data-slot="chat-input"]')!.focus());
       kb.open(460); // a soft keyboard: -384px, well past the open threshold
 
       // `Collapse` unmounts at the END of its exit, so the statusline leaves the tree — and leaving
@@ -4325,6 +4328,31 @@ describe("AgentChat: a new agent pane draws Chat from the first frame", () => {
     expect(screen.getByText(/recent pane output/)).toBeInTheDocument();
     expect(bodies(view.frames)).toEqual(["terminal", "chat", "terminal"]);
     swapsOnlyUnderCover(view.frames);
+  });
+
+  it("(f) a question no screen reader lifts takes a readable session to the terminal while it asks", async () => {
+    // OpenClaw has a journal reader and no block grammar, as dsh-tui does: its dialogs are never cards.
+    const view = renderShell();
+    await handOver(view, agentOf("openclaw", "working", true));
+    await advance(view, 500);
+    expect(view.container.querySelector('[data-slot="session-stream"]')).not.toBeNull();
+    view.set(agentOf("openclaw", "blocked", true));
+    expect(view.container.querySelector('[data-slot="session-stream"]')).toBeNull();
+    expect(screen.getByText(/recent pane output/)).toBeInTheDocument();
+    view.set(agentOf("openclaw", "working", true));
+    await advance(view, 500);
+    expect(view.container.querySelector('[data-slot="session-stream"]')).not.toBeNull();
+    // The shell's terminal, then Chat, the question's terminal, and Chat again.
+    expect(bodies(view.frames)).toEqual(["terminal", "chat", "terminal", "chat"]);
+  });
+
+  it("(f) a question a screen reader lifts keeps a readable session on Chat", async () => {
+    const view = renderShell();
+    await handOver(view, agentOf("claude", "working", true));
+    await advance(view, 500);
+    view.set(agentOf("claude", "blocked", true));
+    expect(view.container.querySelector('[data-slot="session-stream"]')).not.toBeNull();
+    expect(bodies(view.frames)).toEqual(["terminal", "chat"]);
   });
 
   it("(e) a device on the terminal sees the terminal throughout, and the cover still lifts once", async () => {

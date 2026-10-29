@@ -138,7 +138,7 @@ import { hasJournalAdapter, reportsSessionOnFirstPrompt } from "@/lib/journal-ag
 import { journalReadingOf, paneBody, type JournalReading } from "@/lib/chat-gate";
 import { paneRowKey, paneScope } from "@/lib/hosts";
 import { isLead, paneScopeKey } from "@/lib/scope";
-import { openReport } from "@/lib/report/store";
+import { openReport, unreadDialogReport } from "@/lib/report/store";
 import { answerRouteFor, textRouteFor } from "@/lib/send-path";
 import { useSessionCard, wearsExperimental } from "@/lib/session-cards";
 import { usePins } from "@/lib/pins";
@@ -1076,7 +1076,13 @@ export function AgentChat({
   const warming = historyAvailable && switchSheetOpen;
   // `savedCopy`: when the loaders drew the mirror from the saved copy, an empty Chat window reads its
   // own saved copy at once rather than waiting for its read to fail (M46 pass 3).
-  const chatFeed = useChatWindow({ paneId, scope, enabled: chatFetch || warming, savedCopy: stale });
+  const chatFeed = useChatWindow({
+    paneId,
+    scope,
+    instance: agent?.instance,
+    enabled: chatFetch || warming,
+    savedCopy: stale,
+  });
   const chatStatus = chatFeed.window.status;
   const journal: JournalReading = journalReadingOf(chatStatus);
   // What this view has seen of how the agent began, for the gate (hooks/use-pane-start.ts): the
@@ -1103,6 +1109,9 @@ export function AgentChat({
     history: paneStart.history,
     activity: paneStart.activity,
     settled: paneStart.settled,
+    // A harness Collie has no screen reader for asks in a dialog no card can lift, so the question
+    // is on screen only in the terminal (lib/chat-gate.ts, rule 1b).
+    unreadQuestion: agent?.status === "blocked" && adapterFor(agent?.agent) === undefined,
   });
   const chatBody = body !== "terminal";
   // What the Chat body's running question card says about the dialog below it. Chat body only: the
@@ -2989,6 +2998,9 @@ export function AgentChat({
               onMultiSelectAnswer={handleMultiSelectAnswer}
               onMenuAction={handleMenuAction}
               onUnreadDialogAction={handleUnreadDialogAction}
+              // Report a problem from the card (ADR 0123, amendment 2026-10-28): this machine's panes only,
+              // as in the pane menu, since the report route reads no member's pane yet.
+              onUnreadDialogReport={isLead(scope) ? (cancel) => openReport(unreadDialogReport(paneId, scope, cancel)) : undefined}
               promptDisabled={readOnly || gone}
               paneId={paneId}
               scope={scope}
