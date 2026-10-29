@@ -76,7 +76,7 @@ export function splitHermesKey(key: string): { dbPath: string; sessionId: string
  * process is not Hermes. Handles both a direct `hermes` argv[0] and the Python `-c` launcher
  * (`python3 -I -c "...from hermes_cli.main import main..." "$@"`) Hermes's wrapper script execs into.
  */
-function hermesArgs(argv: readonly string[]): readonly string[] | null {
+export function hermesArgs(argv: readonly string[]): readonly string[] | null {
   if (argv.length === 0) return null;
   const base = (argv[0]!.split(/[/\\]/).pop() ?? "").replace(/\.exe$/i, "").toLowerCase();
   if (base === "hermes") return argv.slice(1);

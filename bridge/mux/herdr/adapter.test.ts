@@ -150,6 +150,43 @@ describe("a shell pane with a leftover agent_session stays a shell", () => {
       expect(pane.agentSession).toBeUndefined();
     }
   });
+
+  test("promotes a pane with raw.agent null to hermes only while Hermes runs in foreground_processes", async () => {
+    class HermesLauncherHerdr extends FakeHerdr {
+      override async sessionSnapshot(): Promise<WireSnapshot> {
+        const snapshot = await super.sessionSnapshot();
+        return {
+          ...snapshot,
+          panes: snapshot.panes.map((pane) =>
+            Object.assign({}, pane, {
+              agent: null,
+              agent_session: { source: "herdr:hermes", agent: "hermes", kind: "id", value: "20261016_020350_311a21" },
+            }),
+          ),
+        };
+      }
+    }
+    const fake = new HermesLauncherHerdr();
+    const [first] = await fake.listPanes();
+    const paneId = first!.pane_id;
+    fake.setProcesses(paneId, [
+      {
+        pid: 4100,
+        argv: ["/opt/hermes/bin/python3", "-I", "-c", "from hermes_cli.main import main\nsys.exit(main())", "chat"],
+      },
+    ]);
+    const live = await new HerdrMux(fake, () => []).snapshot();
+    const livePane = live.panes.find((p) => p.paneId === paneId)!;
+    expect(livePane.agent).toBe("hermes");
+    expect(livePane.agentSession).toEqual({ kind: "id", value: "20261016_020350_311a21" });
+
+    // Once Hermes exits back to zsh, the same pane returns to shell and drops the leftover session.
+    fake.setProcesses(paneId, [{ pid: 4100, argv: ["-zsh"] }]);
+    const exited = await new HerdrMux(fake, () => []).snapshot();
+    const exitedPane = exited.panes.find((p) => p.paneId === paneId)!;
+    expect(exitedPane.agent).toBe("shell");
+    expect(exitedPane.agentSession).toBeUndefined();
+  });
 });
 
 describe("herdr 0.9.3: the repo comes from worktree.list", () => {
