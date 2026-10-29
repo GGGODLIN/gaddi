@@ -172,6 +172,7 @@ describe("a shell pane with a leftover agent_session stays a shell", () => {
     fake.setProcesses(paneId, [
       {
         pid: 4100,
+        name: "python3.14",
         argv: ["/opt/hermes/bin/python3", "-I", "-c", "from hermes_cli.main import main\nsys.exit(main())", "chat"],
       },
     ]);
@@ -181,7 +182,7 @@ describe("a shell pane with a leftover agent_session stays a shell", () => {
     expect(livePane.agentSession).toEqual({ kind: "id", value: "20261016_020350_311a21" });
 
     // Once Hermes exits back to zsh, the same pane returns to shell and drops the leftover session.
-    fake.setProcesses(paneId, [{ pid: 4100, argv: ["-zsh"] }]);
+    fake.setProcesses(paneId, [{ pid: 4100, name: "zsh", argv: ["-zsh"] }]);
     const exited = await new HerdrMux(fake, () => []).snapshot();
     const exitedPane = exited.panes.find((p) => p.paneId === paneId)!;
     expect(exitedPane.agent).toBe("shell");
