@@ -26,6 +26,21 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Fixed
 
 - **A 14px draft that unwraps to three lines after stacking no longer un-stacks, and closed-WAL fallback matches only open errors.** `nextStacked` now un-stacks below 80/124px only when `scrollHeight > clientHeight` shows the viewport cap is active, and `canDeserializeClosedWal` in the Hermes and Antigravity journal adapters matches only SQLite open/readonly/SHM errors rather than any `SQLiteError`.
+- **Codex at Ultra effort no longer blocks sends from the phone.** Codex 0.164 and 0.165 draw the
+  composer prompt as `»` at Ultra effort and as `›` at Max. Both readers knew only `›`, so Gaddi
+  could not find the input box and asked you to confirm a send by hand. Both glyphs now count, in
+  the Codex profile and in the Codex reader. The reader keeps one list of the two glyphs, and a test
+  checks that the profile spells the same pair. A numbered option row is still not a prompt. (#615)
+  Thanks @Skydev0h for the diagnosis.
+- **An update no longer fails because the release download is slow.** The release download had a 20
+  second total deadline, so a slow link timed out and Gaddi said it could not reach github.com. The
+  download now stops when no bytes arrive for 60 seconds, and the error says the download stalled,
+  with how much had arrived. Connecting and the small release lookups keep their 20 second limit.
+  ([#613](https://github.com/AltanS/collie/issues/613)) Thanks @mglasner for the diagnosis.
+- **A very slow release download now ends after 30 minutes instead of trickling on.** A server that
+  sends a few bytes just inside each 60 second window never counts as stalled, so the download has a
+  total cap of 30 minutes. The error says the download took longer than 30 minutes and how much had
+  arrived, and nothing is changed. ([#613](https://github.com/AltanS/collie/issues/613))
 
 ## [2.11.0] - 2026-10-29
 

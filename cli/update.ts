@@ -1615,6 +1615,11 @@ function netError(deps: UpdateDeps, what: string, url: string, failure: NetFailu
     deps.io.err(`error: ${what} failed (HTTP ${failure.status}). Nothing was changed.`);
     return;
   }
+  if (failure.kind === "stall" || failure.kind === "slow") {
+    // The host answered and then went quiet or too slow, so it is NOT "could not reach" (#613).
+    deps.io.err(`error: ${what} ${failure.message}. Nothing was changed.`);
+    return;
+  }
   deps.io.err(`error: could not reach github.com — ${what} failed (${failure.message}). Nothing was changed.`);
 }
 
