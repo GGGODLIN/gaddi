@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -163,6 +163,29 @@ describe("HermesTranscriptSource", () => {
     try {
       const source = new HermesTranscriptSource(root);
       expect(await source.resolve({ kind: "id", value: SID })).toBeNull();
+
+      // Non-open SQLite errors (e.g. SQLITE_ERROR on missing table even when header bytes are 2, 2)
+      // must not trigger Database.deserialize.
+      const schemaRoot = await mkdtemp(join(tmpdir(), "collie-hermes-wal-schema-"));
+      const schemaPath = join(schemaRoot, "state.db");
+      const schemaDb = new Database(schemaPath);
+      schemaDb.run("pragma journal_mode=wal");
+      schemaDb.run("create table unrelated (x integer)");
+      schemaDb.run("pragma wal_checkpoint(truncate)");
+      schemaDb.close();
+      await rm(`${schemaPath}-shm`, { force: true });
+      const schemaBytes = await readFile(schemaPath);
+      schemaBytes[18] = 2;
+      schemaBytes[19] = 2;
+      await writeFile(schemaPath, schemaBytes);
+      const spy = spyOn(Database, "deserialize");
+      try {
+        expect(await new HermesTranscriptSource(schemaRoot).resolve({ kind: "id", value: SID })).toBeNull();
+        expect(spy).toHaveBeenCalledTimes(0);
+      } finally {
+        spy.mockRestore();
+        await rm(schemaRoot, { recursive: true, force: true });
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }

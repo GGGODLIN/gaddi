@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -240,6 +240,27 @@ describe("AGY read-only source and exact discovery", () => {
     await writeFile(path, bytes);
     const source = new AgyTranscriptSource(root);
     expect(await source.resolve({ kind: "id", value: ID })).toBeNull();
+
+    // Non-open SQLite errors (e.g. SQLITE_ERROR on missing schema even when header bytes are 2, 2)
+    // must not trigger Database.deserialize.
+    const schemaPath = join(root, "conversations", `${OTHER}.db`);
+    const schemaDb = new Database(schemaPath);
+    schemaDb.run("pragma journal_mode=wal");
+    schemaDb.run("create table unrelated (x integer)");
+    schemaDb.run("pragma wal_checkpoint(truncate)");
+    schemaDb.close();
+    await rm(`${schemaPath}-shm`, { force: true });
+    const schemaBytes = new Uint8Array(await Bun.file(schemaPath).arrayBuffer());
+    schemaBytes[18] = 2;
+    schemaBytes[19] = 2;
+    await writeFile(schemaPath, schemaBytes);
+    const spy = spyOn(Database, "deserialize");
+    try {
+      expect(await source.resolve({ kind: "id", value: OTHER })).toBeNull();
+      expect(spy).toHaveBeenCalledTimes(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test("binds the process's lock, not newer neighbouring sessions or a stale --conversation argument", async () => {

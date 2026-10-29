@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A 14px draft that unwraps to three lines after stacking no longer un-stacks, and closed-WAL fallback matches only open errors.** `nextStacked` now un-stacks below 80/124px only when `scrollHeight > clientHeight` shows the viewport cap is active, and `canDeserializeClosedWal` in the Hermes and Antigravity journal adapters matches only SQLite open/readonly/SHM errors rather than any `SQLiteError`.
+
 ## [2.11.0] - 2026-10-29
 
 ### Changed

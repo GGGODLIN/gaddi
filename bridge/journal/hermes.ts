@@ -114,13 +114,11 @@ function sessionFromArgv(processes: readonly ForegroundProcess[] | undefined): s
 }
 
 const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
+const CLOSED_WAL_OPEN_ERROR =
+  /\b(?:SQLITE_CANTOPEN(?:_\w+)?|SQLITE_READONLY(?:_\w+)?|SQLITE_IOERR_SHM\w*)\b|unable to open database file|attempt to write a readonly database|disk I\/O error/i;
 
-function canDeserializeClosedWal(dbPath: string, err: Error): boolean {
-  if (
-    !/SQLITE_|SQLiteError|unable to open database file|readonly database|disk I\/O error/i.test(
-      `${err.name} ${err.message}`,
-    )
-  ) {
+function canDeserializeClosedWal(dbPath: string, err: Error & { readonly code?: string }): boolean {
+  if (!CLOSED_WAL_OPEN_ERROR.test(`${err.code ?? ""} ${err.message}`)) {
     return false;
   }
   if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;

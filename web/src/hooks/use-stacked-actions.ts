@@ -53,11 +53,12 @@ export function nextStacked(
   }
   if (lines <= UNSTACK_AT_LINES) return false;
   // When the viewport shrinks (rotation, keyboard, split view) so `max-h` caps `clientHeight` below
-  // the button column while the draft still holds `stackAt`+ lines or overflows its box, un-stack so
-  // the column does not prop the composer taller than the cap. When a draft simply re-wrapped to
-  // fewer lines after stacking freed width (`lines < stackAt` and `scrollHeight <= clientHeight`),
-  // keep the hysteresis.
-  if ((lines >= stackAt || scrollHeight > clientHeight) && !clearsColumnHeight(stackAt, clientHeight)) {
+  // the button column (`scrollHeight > clientHeight`), un-stack so the column does not prop the
+  // composer taller than the cap. When `scrollHeight <= clientHeight`, the field is not capped by
+  // the viewport — any height below 80/124px is just the draft unwrapping by a line in the wider
+  // stacked layout (such as 4 lines = 96px in row unwrapping to 3 lines = 75px at 14px font), where
+  // un-stacking would wrap it back to 96px and oscillate.
+  if (scrollHeight > clientHeight && !clearsColumnHeight(stackAt, clientHeight)) {
     return false;
   }
   return true;
