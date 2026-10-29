@@ -252,7 +252,13 @@ async function agyCandidates(root: string): Promise<{ refs: AgentSessionRef[]; t
 const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
 
 function canDeserializeClosedWal(dbPath: string, err: Error): boolean {
-  if (!/SQLITE_CANTOPEN|unable to open database file/i.test(err.message)) return false;
+  if (
+    !/SQLITE_|SQLiteError|unable to open database file|readonly database|disk I\/O error/i.test(
+      `${err.name} ${err.message}`,
+    )
+  ) {
+    return false;
+  }
   if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;
   try {
     return statSync(dbPath).size <= MAX_DESERIALIZE_BYTES;
