@@ -146,24 +146,24 @@ describe("HermesTranscriptSource", () => {
     await writeFile(dbPath, bytes);
     await writeFile(`${dbPath}-wal`, "uncheckpointed");
     const { chmod } = await import("node:fs/promises");
-    await chmod(root, 0o555);
-    try {
-      const source = new HermesTranscriptSource(root);
-      expect(await source.resolve({ kind: "id", value: SID })).toBeNull();
-    } finally {
-      await chmod(root, 0o755);
+    if (process.platform !== "win32") {
+      await chmod(root, 0o555);
+      try {
+        const source = new HermesTranscriptSource(root);
+        expect(await source.resolve({ kind: "id", value: SID })).toBeNull();
+      } finally {
+        await chmod(root, 0o755);
+      }
     }
 
     await rm(`${dbPath}-wal`, { force: true });
-    bytes[18] = 1;
-    bytes[19] = 2;
+    bytes[18] = 3;
+    bytes[19] = 3;
     await writeFile(dbPath, bytes);
-    await chmod(root, 0o555);
     try {
       const source = new HermesTranscriptSource(root);
       expect(await source.resolve({ kind: "id", value: SID })).toBeNull();
     } finally {
-      await chmod(root, 0o755);
       await rm(root, { recursive: true, force: true });
     }
   });

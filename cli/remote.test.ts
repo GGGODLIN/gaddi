@@ -1968,7 +1968,7 @@ describe.skipIf(process.platform === "win32")("installScript from a shallow lead
     }
   });
 
-  test("a fresh install from the bundle is a connected checkout", async () => {
+  test("a fresh install from the bundle is a connected checkout and repairs a temp-bundle origin", async () => {
     const lead = await shallowLeadFixture();
     try {
       const root = join(lead.home, ".collie");
@@ -1976,14 +1976,7 @@ describe.skipIf(process.platform === "win32")("installScript from a shallow lead
       expect(lead.connected(root)).toBe(true);
       expect(lead.shallowFile(root)).toBe(`${lead.tip}\n`);
       expect(lead.git(root, "remote", "get-url", "origin")).toBe("https://github.com/GGGODLIN/gaddi.git");
-    } finally {
-      lead.cleanup();
-    }
-  });
 
-  test("a checkout an earlier bundle left pointing at its temp path is repaired, while a custom origin is kept", async () => {
-    const lead = await shallowLeadFixture();
-    try {
       const behind = join(lead.home, "behind");
       lead.git(behind, "remote", "set-url", "origin", "/var/folders/4f/x/T//collie-add.frYLZF/bundle");
       lead.install(behind);

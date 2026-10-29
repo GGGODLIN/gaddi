@@ -224,25 +224,22 @@ describe("AGY read-only source and exact discovery", () => {
     await writeFile(`${path}-wal`, "uncheckpointed");
     const convDir = join(root, "conversations");
     const { chmod } = await import("node:fs/promises");
-    await chmod(convDir, 0o555);
-    try {
-      const source = new AgyTranscriptSource(root);
-      expect(await source.resolve({ kind: "id", value: ID })).toBeNull();
-    } finally {
-      await chmod(convDir, 0o755);
+    if (process.platform !== "win32") {
+      await chmod(convDir, 0o555);
+      try {
+        const source = new AgyTranscriptSource(root);
+        expect(await source.resolve({ kind: "id", value: ID })).toBeNull();
+      } finally {
+        await chmod(convDir, 0o755);
+      }
     }
 
     await rm(`${path}-wal`, { force: true });
-    bytes[18] = 1;
-    bytes[19] = 2;
+    bytes[18] = 3;
+    bytes[19] = 3;
     await writeFile(path, bytes);
-    await chmod(convDir, 0o555);
-    try {
-      const source = new AgyTranscriptSource(root);
-      expect(await source.resolve({ kind: "id", value: ID })).toBeNull();
-    } finally {
-      await chmod(convDir, 0o755);
-    }
+    const source = new AgyTranscriptSource(root);
+    expect(await source.resolve({ kind: "id", value: ID })).toBeNull();
   });
 
   test("binds the process's lock, not newer neighbouring sessions or a stale --conversation argument", async () => {
