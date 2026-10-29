@@ -1,6 +1,14 @@
+import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { nextStacked, STACK_AT_LINES, STACK_THREE_AT_LINES, UNSTACK_AT_LINES } from "./use-stacked-actions";
+import {
+  draftLines,
+  nextStacked,
+  STACK_AT_LINES,
+  STACK_THREE_AT_LINES,
+  UNSTACK_AT_LINES,
+  useStackedActions,
+} from "./use-stacked-actions";
 
 // The hysteresis, as a model. A line holds `perLine` characters beside the row's two buttons and
 // `perLine + gained` beside a column's one; the text is `n` characters. Whatever the starting state
@@ -31,6 +39,25 @@ describe("nextStacked", () => {
     expect(nextStacked(false, STACK_THREE_AT_LINES, STACK_THREE_AT_LINES)).toBe(true);
     expect([2, 3, 4, 40].map((l) => nextStacked(true, l, STACK_THREE_AT_LINES))).toEqual([true, true, true, true]);
     expect(nextStacked(true, UNSTACK_AT_LINES, STACK_THREE_AT_LINES)).toBe(false);
+  });
+
+  it("stays unstacked when scrollHeight reaches 5 lines (124px) but clientHeight is capped at 72px by a short viewport", () => {
+    expect(nextStacked(false, STACK_THREE_AT_LINES, STACK_THREE_AT_LINES, 72)).toBe(false);
+    expect(nextStacked(false, STACK_AT_LINES, STACK_AT_LINES, 72)).toBe(false);
+    expect(nextStacked(false, STACK_THREE_AT_LINES, STACK_THREE_AT_LINES, 124)).toBe(true);
+    expect(nextStacked(false, STACK_AT_LINES, STACK_AT_LINES, 84)).toBe(true);
+
+    const textarea = document.createElement("textarea");
+    textarea.style.lineHeight = "22px";
+    textarea.style.paddingTop = "7px";
+    textarea.style.paddingBottom = "7px";
+    Object.defineProperty(textarea, "scrollHeight", { value: 124, configurable: true });
+    Object.defineProperty(textarea, "clientHeight", { value: 72, configurable: true });
+    expect(draftLines(textarea)).toBe(5);
+
+    const field = { current: textarea };
+    const { result } = renderHook(() => useStackedActions(field, "five lines of text", STACK_THREE_AT_LINES));
+    expect(result.current).toBe(false);
   });
 
   it("settles in at most one change for every draft length, line width and starting state", () => {

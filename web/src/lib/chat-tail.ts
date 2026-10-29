@@ -132,16 +132,6 @@ function heldForPassword(key: string, at: number): boolean {
 
 // ── The door ─────────────────────────────────────────────────────────────────
 
-type SaveTailRest =
-  | [instance: string | undefined, entries: readonly ChatEntry[], keep: KeepChat, at?: number]
-  | [entries: readonly ChatEntry[], keep: KeepChat, at?: number, instance?: string];
-
-function hasEntriesFirst(
-  args: SaveTailRest,
-): args is [entries: readonly ChatEntry[], keep: KeepChat, at?: number, instance?: string] {
-  return Array.isArray(args[0]);
-}
-
 /**
  * Write through the newest turns of a pane's window, under the lifetime `keep` asks for. Resolves
  * true when a record was written. Off, an empty window and a pane at a password prompt write nothing.
@@ -151,27 +141,11 @@ function hasEntriesFirst(
 export function saveChatTail(
   scope: Scope | undefined,
   paneId: string,
-  instance: string | undefined,
   entries: readonly ChatEntry[],
   keep: KeepChat,
-  at?: number,
-): Promise<boolean>;
-export function saveChatTail(
-  scope: Scope | undefined,
-  paneId: string,
-  entries: readonly ChatEntry[],
-  keep: KeepChat,
-  at?: number,
+  at: number = Date.now(),
   instance?: string,
-): Promise<boolean>;
-export function saveChatTail(
-  scope: Scope | undefined,
-  paneId: string,
-  ...rest: SaveTailRest
 ): Promise<boolean> {
-  const [instance, entries, keep, at = Date.now()] = hasEntriesFirst(rest)
-    ? [rest[3], rest[0], rest[1], rest[2]]
-    : [rest[0], rest[1], rest[2], rest[3]];
   registerTailWipe();
   const ttlMs = keepChatTtl(keep);
   const key = paneScopeKey(scope, paneId);

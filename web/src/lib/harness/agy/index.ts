@@ -6,7 +6,6 @@ import { detectConversationsRegion } from "./conversations";
 import { lineText } from "./markers";
 import { detectAgyModalRegion } from "./modals";
 import { detectModelRegion } from "./model";
-import { detectMultiSelectRegion } from "./multi-select";
 import { detectPromptSelectRegion } from "./prompt-select";
 
 /** The conversations picker, read off the rows' text. */
@@ -49,7 +48,7 @@ export function agyBuildBlocks(lines: StyledLine[]): Block[] {
   return [{ kind: "raw", lines: stripChrome(lines) }];
 }
 
-export { detectMultiSelectRegion, extractStatusLines, extractInputDraft, normalizeAgyScreenRows };
+export { extractStatusLines, extractInputDraft, normalizeAgyScreenRows };
 
 export const agyAdapter: HarnessAdapter = {
   agent: "agy",

@@ -112,13 +112,13 @@ function isEnvelope(tag: string, text: string): boolean {
  * them; drawn as text they open the turn with markup, and in the queue row they took a tenth of its
  * 200 characters.
  */
-const PASTED_CONTENT = /<pasted_content id="([^"]*)">\n?([\s\S]*?)\n?<\/pasted_content(?: id="\1")?>/g;
+const PASTED_CONTENT = /(^|\n)<pasted_content id="([0-9a-f]+)">\n?([\s\S]*?)\n?<\/pasted_content(?:\s+id="\2")?>/g;
 
 /** The text with each recorded paste replaced by what was pasted, trimmed at both ends. A tag with no
  *  matching close (same id) is left as it is. */
 export function unwrapPastes(text: string): string {
   if (!text.includes("<pasted_content ")) return text;
-  return text.replace(PASTED_CONTENT, (_whole, _id: string, body: string) => body).trim();
+  return text.replace(PASTED_CONTENT, "$1$3").trim();
 }
 
 /**

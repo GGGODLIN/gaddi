@@ -210,6 +210,41 @@ describe("AGY read-only source and exact discovery", () => {
     }
   });
 
+  test("does not deserialize stale main-DB bytes when a -wal file exists or header is not WAL 2, 2", async () => {
+    const root = await home();
+    const { path, db } = database(root);
+    db.run("pragma journal_mode=wal");
+    db.run("pragma wal_checkpoint(truncate)");
+    db.close();
+    await rm(`${path}-shm`, { force: true });
+    const bytes = new Uint8Array(await Bun.file(path).arrayBuffer());
+    bytes[18] = 2;
+    bytes[19] = 2;
+    await writeFile(path, bytes);
+    await writeFile(`${path}-wal`, "uncheckpointed");
+    const convDir = join(root, "conversations");
+    const { chmod } = await import("node:fs/promises");
+    await chmod(convDir, 0o555);
+    try {
+      const source = new AgyTranscriptSource(root);
+      expect(await source.resolve({ kind: "id", value: ID })).toBeNull();
+    } finally {
+      await chmod(convDir, 0o755);
+    }
+
+    await rm(`${path}-wal`, { force: true });
+    bytes[18] = 1;
+    bytes[19] = 2;
+    await writeFile(path, bytes);
+    await chmod(convDir, 0o555);
+    try {
+      const source = new AgyTranscriptSource(root);
+      expect(await source.resolve({ kind: "id", value: ID })).toBeNull();
+    } finally {
+      await chmod(convDir, 0o755);
+    }
+  });
+
   test("binds the process's lock, not newer neighbouring sessions or a stale --conversation argument", async () => {
     const root = await home();
     const { db } = database(root);

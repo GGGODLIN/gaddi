@@ -112,22 +112,23 @@ function ToolPart({
   query: string;
   scope?: Scope;
 }) {
-  const [tapped, setOpen] = useState(false);
+  const [toggled, setToggled] = useState<{ readonly query: string; readonly open: boolean } | null>(null);
   const result = part.result;
   const isError = result?.isError === true;
   // An empty `result.text` with no image is not expandable — same as no result, so History never
   // shows a chevron that opens onto an empty border.
   const expandable = result !== undefined && (result.text !== "" || Boolean(result.imageUrl));
-  // A find hit in the output unfolds the call so the match is visible on screen.
+  // A find hit in the output unfolds the call so the match is visible on screen; a tap overrides
+  // that for the current query without leaving the call stuck open once the search clears.
   const q = query.trim().toLowerCase();
   const hit = q !== "" && result !== undefined && result.text.toLowerCase().includes(q);
-  const open = expandable && (tapped || hit);
+  const open = expandable && (toggled !== null && toggled.query === q ? toggled.open : hit);
 
   return (
     <div className="rounded-md border bg-muted/40">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => expandable && setToggled({ query: q, open: !open })}
         disabled={!expandable}
         aria-expanded={expandable ? open : undefined}
         className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left disabled:opacity-100"

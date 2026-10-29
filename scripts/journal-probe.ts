@@ -20,7 +20,7 @@
 // output; the ref's kind and a short prefix of its value are printed, never a turn of a transcript.
 
 import { Database } from "bun:sqlite";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -249,6 +249,18 @@ async function agyCandidates(root: string): Promise<{ refs: AgentSessionRef[]; t
   };
 }
 
+const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
+
+function canDeserializeClosedWal(dbPath: string, err: Error): boolean {
+  if (!/SQLITE_CANTOPEN|unable to open database file/i.test(err.message)) return false;
+  if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;
+  try {
+    return statSync(dbPath).size <= MAX_DESERIALIZE_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Hermes keeps one SessionDB per profile: `<root>/state.db` for the default profile and
  * `<root>/profiles/<name>/state.db` for each named one. Herdr names a session by its id, so the
@@ -274,13 +286,13 @@ async function hermesCandidates(root: string): Promise<{ refs: AgentSessionRef[]
         .query<{ id: string }, [number]>("select id from sessions order by started_at desc limit ?")
         .all(MAX_CANDIDATES);
       for (const r of rows) refs.push({ kind: "id", value: r.id });
-    } catch {
+    } catch (err) {
+      if (!(err instanceof Error) || !canDeserializeClosedWal(path, err)) continue;
       try {
         const buf = new Uint8Array(readFileSync(path));
-        if (buf.length >= 20 && buf[18] === 2 && buf[19] === 2) {
-          buf[18] = 1;
-          buf[19] = 1;
-        }
+        if (buf.length < 20 || buf[18] !== 2 || buf[19] !== 2) continue;
+        buf[18] = 1;
+        buf[19] = 1;
         const mem = Database.deserialize(buf, { readonly: true });
         try {
           const rows = mem

@@ -7,7 +7,7 @@
 // conversation in a shared folder.
 import { Database } from "bun:sqlite";
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -304,20 +304,32 @@ export function parseAgyTranscript(text: string): TranscriptEntry[] {
 
 type StepRow = { idx: number; type: number; format: number; payload: Uint8Array };
 
+const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
+
+function canDeserializeClosedWal(dbPath: string, err: Error): boolean {
+  if (!/SQLITE_CANTOPEN|unable to open database file/i.test(err.message)) return false;
+  if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;
+  try {
+    return statSync(dbPath).size <= MAX_DESERIALIZE_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 function withDb<T>(path: string, read: (db: Database) => T): T | null {
   if (!existsSync(path)) return null;
   let db: Database | undefined;
   try {
     db = new Database(path, { readonly: true });
     return read(db);
-  } catch {
+  } catch (err) {
+    if (!(err instanceof Error) || !canDeserializeClosedWal(path, err)) return null;
     // AGY removes its WAL on close but leaves WAL mode (header bytes 18-19 = 2, 2) in the header.
     try {
       const buf = new Uint8Array(readFileSync(path));
-      if (buf.length >= 20 && buf[18] === 2 && buf[19] === 2) {
-        buf[18] = 1;
-        buf[19] = 1;
-      }
+      if (buf.length < 20 || buf[18] !== 2 || buf[19] !== 2) return null;
+      buf[18] = 1;
+      buf[19] = 1;
       const mem = Database.deserialize(buf, { readonly: true });
       try {
         return read(mem);

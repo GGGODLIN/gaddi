@@ -28,9 +28,28 @@ export const STACK_THREE_AT_LINES = 5;
  */
 export const UNSTACK_AT_LINES = 1;
 
+/**
+ * Whether the rendered textarea box (`clientHeight`) is tall enough for the stacked button column
+ * not to grow the composer: two 36px faces with `gap-2` stand 80px tall (76px floor), three stand
+ * 124px tall (116px floor). In a short viewport where `max-h-[min(10rem,30dvh)]` caps `clientHeight`
+ * below the column, `scrollHeight` can pass five lines while the visible field is only 72px tall,
+ * and stacking would jump the composer taller. `clientHeight === 0` is an unlaid-out node (jsdom).
+ */
+function clearsColumnHeight(stackAt: number, clientHeight: number): boolean {
+  const minHeight = stackAt >= STACK_THREE_AT_LINES ? 116 : 76;
+  return clientHeight === 0 || clientHeight >= minHeight;
+}
+
 /** The next state from the last one and the visual line count the field reads at its current width. */
-export function nextStacked(stacked: boolean, lines: number, stackAt = STACK_AT_LINES): boolean {
-  return stacked ? lines > UNSTACK_AT_LINES : lines >= stackAt;
+export function nextStacked(
+  stacked: boolean,
+  lines: number,
+  stackAt = STACK_AT_LINES,
+  clientHeight = 0,
+): boolean {
+  return stacked
+    ? lines > UNSTACK_AT_LINES
+    : lines >= stackAt && clearsColumnHeight(stackAt, clientHeight);
 }
 
 // What a `line-height: normal` field measures when the engine hands back the keyword instead of a
@@ -72,7 +91,7 @@ export function useStackedActions(
     const el = field.current;
     if (el === null) return;
     const lines = draftLines(el);
-    setStacked((was) => nextStacked(was, lines, stackAt));
+    setStacked((was) => nextStacked(was, lines, stackAt, el.clientHeight));
   }, [field, stackAt]);
   useLayoutEffect(measure, [measure, draft]);
   useEffect(() => {

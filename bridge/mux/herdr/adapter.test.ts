@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { MuxSpace } from "../types.ts";
-import { HerdrMux, paneAgent, REPO_LOOKUP_RETRY_MS, SCROLL_STATE_MEMO_MS, workspaceRepoOf } from "./adapter.ts";
+import { HerdrMux, REPO_LOOKUP_RETRY_MS, SCROLL_STATE_MEMO_MS, workspaceRepoOf } from "./adapter.ts";
 import type { PaneRead, WirePane, WireSnapshot, WireWorkspace, WireWorktreeListing } from "./client.ts";
 import { FakeHerdr } from "./fixture.ts";
 
@@ -122,26 +122,33 @@ describe("a pane reports where its foreground agent is working", () => {
   });
 });
 
-// herdr 0.9.3 never detects Hermes from the process: with its v5 integration the pane reads
-// `agent: null` plus a `herdr:hermes` session, and reading that as a shell dropped the session too,
-// so a Hermes pane had no Chat.
-describe("paneAgent", () => {
-  const hermesSession = { source: "herdr:hermes", agent: "hermes", kind: "id", value: "20261016_020350_311a21" };
-
-  test("Herdr's own detection wins", () => {
-    expect(paneAgent({ agent: "claude", agent_session: hermesSession })).toBe("claude");
-  });
-
-  test("a Hermes pane is identified by its session report alone", () => {
-    expect(paneAgent({ agent: null, agent_session: hermesSession })).toBe("hermes");
-  });
-
-  // Herdr keeps a pane's last report after its agent exits, so a leftover ref from a harness Herdr
-  // CAN detect must not resurrect it over the shell left behind.
-  test("a leftover session from a process-detected harness leaves a shell a shell", () => {
-    expect(paneAgent({ agent: null, agent_session: { agent: "claude", kind: "id", value: "abc" } })).toBe("shell");
-    expect(paneAgent({ agent: null, agent_session: null })).toBe("shell");
-    expect(paneAgent({})).toBe("shell");
+// Herdr keeps a pane's last agent_session report after its agent exits back to a shell (agent: null),
+// so a leftover report — including hermes — must not resurrect the exited agent over the shell.
+describe("a shell pane with a leftover agent_session stays a shell", () => {
+  test.each([
+    ["hermes", { source: "herdr:hermes", agent: "hermes", kind: "id", value: "20261016_020350_311a21" }],
+    ["claude", { source: "herdr:claude", agent: "claude", kind: "id", value: "abc" }],
+  ])("does not resurrect %s when raw.agent is null", async (_name, leftover) => {
+    class LeftoverSessionHerdr extends FakeHerdr {
+      override async sessionSnapshot(): Promise<WireSnapshot> {
+        const snapshot = await super.sessionSnapshot();
+        return {
+          ...snapshot,
+          panes: snapshot.panes.map((pane) =>
+            Object.assign({}, pane, {
+              agent: null,
+              agent_session: leftover,
+            }),
+          ),
+        };
+      }
+    }
+    const { panes } = await new HerdrMux(new LeftoverSessionHerdr(), () => []).snapshot();
+    expect(panes.length).toBeGreaterThan(0);
+    for (const pane of panes) {
+      expect(pane.agent).toBe("shell");
+      expect(pane.agentSession).toBeUndefined();
+    }
   });
 });
 

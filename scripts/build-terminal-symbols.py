@@ -56,6 +56,7 @@ def main() -> None:
         "pyftsubset",
         str(work / "JuliaMono-Regular.ttf"),
         f"--unicodes={RANGES}",
+        "--name-IDs=0,1,2,3,4,5,6,7,13,14",
         "--layout-features=",
         "--no-hinting",
         "--desubroutinize",

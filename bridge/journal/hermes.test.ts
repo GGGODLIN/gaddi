@@ -127,6 +127,46 @@ describe("HermesTranscriptSource", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("does not deserialize stale main-DB bytes when a -wal sidecar exists or header is not WAL 2, 2", async () => {
+    const root = await mkdtemp(join(tmpdir(), "collie-hermes-wal-guard-"));
+    const dbPath = join(root, "state.db");
+    const db = new Database(dbPath);
+    db.run("pragma journal_mode=wal");
+    db.run("create table sessions (id text primary key, source text, started_at real, parent_session_id text)");
+    db.run("create table messages (id integer primary key, session_id text, role text, content text, tool_call_id text, tool_calls text, tool_name text, timestamp real, reasoning text, reasoning_content text, active integer default 1, compacted integer default 0, display_kind text)");
+    db.run("insert into sessions (id, source, started_at, parent_session_id) values (?, 'cli', 1, null)", [SID]);
+    db.run("insert into messages (id, session_id, role, content, timestamp) values (1, ?, 'user', 'stale main turn', 1)", [SID]);
+    db.run("pragma wal_checkpoint(truncate)");
+    db.close();
+    await rm(`${dbPath}-shm`, { force: true });
+    const bytes = await readFile(dbPath);
+    bytes[18] = 2;
+    bytes[19] = 2;
+    await writeFile(dbPath, bytes);
+    await writeFile(`${dbPath}-wal`, "uncheckpointed");
+    const { chmod } = await import("node:fs/promises");
+    await chmod(root, 0o555);
+    try {
+      const source = new HermesTranscriptSource(root);
+      expect(await source.resolve({ kind: "id", value: SID })).toBeNull();
+    } finally {
+      await chmod(root, 0o755);
+    }
+
+    await rm(`${dbPath}-wal`, { force: true });
+    bytes[18] = 1;
+    bytes[19] = 2;
+    await writeFile(dbPath, bytes);
+    await chmod(root, 0o555);
+    try {
+      const source = new HermesTranscriptSource(root);
+      expect(await source.resolve({ kind: "id", value: SID })).toBeNull();
+    } finally {
+      await chmod(root, 0o755);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("hermesJournal discover", () => {
@@ -257,6 +297,26 @@ describe("hermesJournal discover", () => {
         processes: [{ argv: ["hermes", "chat", "--resume", "20269999_999999_zzzzzz"] }],
       }),
     ).resolves.toEqual({ kind: "id", value: "20269999_999999_zzzzzz" });
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("declares sharedFolderBlind and returns null in a shared folder unless argv names a session", async () => {
+    const root = await lab([
+      ["20261001_000000_aaaaaa", "/same", 1],
+      ["20261002_000000_bbbbbb", "/same", 2],
+    ]);
+    const adapter = hermesJournal([root]);
+    expect(adapter.sharedFolderBlind).toBe(true);
+    await expect(adapter.discover?.("/same", { shared: true })).resolves.toBeNull();
+    await expect(
+      adapter.discover?.("/same", { shared: true, processes: [{ argv: ["hermes", "chat"] }] }),
+    ).resolves.toBeNull();
+    await expect(
+      adapter.discover?.("/same", {
+        shared: true,
+        processes: [{ argv: ["hermes", "--resume", "20261001_000000_aaaaaa"] }],
+      }),
+    ).resolves.toEqual({ kind: "id", value: "20261001_000000_aaaaaa" });
     await rm(root, { recursive: true, force: true });
   });
 });

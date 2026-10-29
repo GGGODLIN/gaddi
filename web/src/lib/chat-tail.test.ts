@@ -38,32 +38,32 @@ afterEach(() => {
 describe("the Chat tail", () => {
   it("writes the entries through and reads them back with the time the bridge answered", async () => {
     const entries = [entry("a", 1, "hello"), entry("b", 2, "again")];
-    expect(await saveChatTail(undefined, "w1:p1", undefined, entries, "1d", clock)).toBe(true);
-    const got = await loadChatTail(undefined, "w1:p1", undefined);
+    expect(await saveChatTail(undefined, "w1:p1", entries, "1d", clock)).toBe(true);
+    const got = await loadChatTail(undefined, "w1:p1");
     expect(got?.at).toBe(clock);
     expect(got?.entries.map((e) => e.uuid)).toEqual(["a", "b"]);
   });
 
   it("keeps panes, sessions and machines apart", async () => {
-    await saveChatTail(undefined, "w1:p1", undefined, [entry("a", 1, "hi")], "1d", clock);
-    expect(await loadChatTail({ session: "demo" }, "w1:p1", undefined)).toBeNull();
-    expect(await loadChatTail({ host: "bruno" }, "w1:p1", undefined)).toBeNull();
-    expect(await loadChatTail(undefined, "w1:p2", undefined)).toBeNull();
+    await saveChatTail(undefined, "w1:p1", [entry("a", 1, "hi")], "1d", clock);
+    expect(await loadChatTail({ session: "demo" }, "w1:p1")).toBeNull();
+    expect(await loadChatTail({ host: "bruno" }, "w1:p1")).toBeNull();
+    expect(await loadChatTail(undefined, "w1:p2")).toBeNull();
   });
 
   it("answers only the session instance that wrote it, and treats a missing identity as its own", async () => {
-    await saveChatTail(undefined, "w1:p1", "aaaa", [entry("a", 1, "hi")], "1d", clock);
+    await saveChatTail(undefined, "w1:p1", [entry("a", 1, "hi")], "1d", clock, "aaaa");
     expect((await loadChatTail(undefined, "w1:p1", "aaaa"))?.entries[0]?.uuid).toBe("a");
     expect(await loadChatTail(undefined, "w1:p1", "bbbb")).toBeNull();
     expect(await loadChatTail(undefined, "w1:p1", undefined)).toBeNull();
     // A record from before identity was kept never answers a pane that now has one.
-    await saveChatTail(undefined, "w1:p2", undefined, [entry("b", 1, "hi")], "1d", clock);
+    await saveChatTail(undefined, "w1:p2", [entry("b", 1, "hi")], "1d", clock);
     expect(await loadChatTail(undefined, "w1:p2", "aaaa")).toBeNull();
     expect((await loadChatTail(undefined, "w1:p2", undefined))?.entries[0]?.uuid).toBe("b");
   });
 
   it("stores the entries only: no cursor, no queue, no mirror text", async () => {
-    await saveChatTail(undefined, "w1:p1", undefined, [entry("a", 1, "hi")], "1d", clock);
+    await saveChatTail(undefined, "w1:p1", [entry("a", 1, "hi")], "1d", clock);
     const record = await getRecord("chat-tail", paneScopeKey(undefined, "w1:p1"));
     expect(Object.keys(record?.value instanceof Object ? record.value : {}).toSorted()).toEqual(["entries", "v"]);
   });
@@ -91,7 +91,7 @@ describe("the Chat tail", () => {
     expect(utf8Bytes(JSON.stringify({ v: 1, entries: [exact] }))).toBe(PANE_KIND_SHARE_BYTES);
     expect(fitChatTail([exact])).toHaveLength(1);
     expect(fitChatTail([exact], "ab12")).toEqual([]);
-    expect(await saveChatTail(undefined, "w1:p1", "ab12", [exact], "1d", clock)).toBe(false);
+    expect(await saveChatTail(undefined, "w1:p1", [exact], "1d", clock, "ab12")).toBe(false);
   });
 
   it("drops turns the agent rewound past, which the Chat body never draws", () => {
@@ -102,21 +102,21 @@ describe("the Chat tail", () => {
   it("refuses an entry too big to fit whole, rather than storing half of it", async () => {
     const huge = entry("h", 1, "y".repeat(PANE_KIND_SHARE_BYTES));
     expect(fitChatTail([huge])).toEqual([]);
-    expect(await saveChatTail(undefined, "w1:p1", undefined, [huge], "1d", clock)).toBe(false);
+    expect(await saveChatTail(undefined, "w1:p1", [huge], "1d", clock)).toBe(false);
   });
 
   it("writes nothing while the setting is off", async () => {
-    expect(await saveChatTail(undefined, "w1:p1", undefined, [entry("a", 1, "hi")], "off", clock)).toBe(false);
-    expect(await loadChatTail(undefined, "w1:p1", undefined)).toBeNull();
+    expect(await saveChatTail(undefined, "w1:p1", [entry("a", 1, "hi")], "off", clock)).toBe(false);
+    expect(await loadChatTail(undefined, "w1:p1")).toBeNull();
   });
 
   it("deletes every kept tail when the setting turns off, and leaves the other kinds alone", async () => {
-    await saveChatTail(undefined, "w1:p1", undefined, [entry("a", 1, "hi")], "1d", clock);
-    await saveChatTail({ host: "bruno" }, "w1:p1", undefined, [entry("b", 1, "hi")], "1d", clock);
+    await saveChatTail(undefined, "w1:p1", [entry("a", 1, "hi")], "1d", clock);
+    await saveChatTail({ host: "bruno" }, "w1:p1", [entry("b", 1, "hi")], "1d", clock);
     await putRecord("pane-text", paneScopeKey(undefined, "w1:p1"), "mirror");
     await dropChatTails();
-    expect(await loadChatTail(undefined, "w1:p1", undefined)).toBeNull();
-    expect(await loadChatTail({ host: "bruno" }, "w1:p1", undefined)).toBeNull();
+    expect(await loadChatTail(undefined, "w1:p1")).toBeNull();
+    expect(await loadChatTail({ host: "bruno" }, "w1:p1")).toBeNull();
     expect(await getRecord("pane-text", paneScopeKey(undefined, "w1:p1"))).not.toBeNull();
   });
 
@@ -125,37 +125,37 @@ describe("the Chat tail", () => {
     expect(keepChatTtl("1d")).toBe(DAY);
     expect(keepChatTtl("7d")).toBe(7 * DAY);
 
-    await saveChatTail(undefined, "w1:p1", undefined, [entry("a", 1, "day")], "1d", clock);
-    await saveChatTail(undefined, "w1:p2", undefined, [entry("b", 1, "week")], "7d", clock);
+    await saveChatTail(undefined, "w1:p1", [entry("a", 1, "day")], "1d", clock);
+    await saveChatTail(undefined, "w1:p2", [entry("b", 1, "week")], "7d", clock);
     clock += 2 * DAY;
-    expect(await loadChatTail(undefined, "w1:p1", undefined)).toBeNull();
-    expect((await loadChatTail(undefined, "w1:p2", undefined))?.entries[0]?.uuid).toBe("b");
+    expect(await loadChatTail(undefined, "w1:p1")).toBeNull();
+    expect((await loadChatTail(undefined, "w1:p2"))?.entries[0]?.uuid).toBe("b");
     clock += 6 * DAY;
-    expect(await loadChatTail(undefined, "w1:p2", undefined)).toBeNull();
+    expect(await loadChatTail(undefined, "w1:p2")).toBeNull();
   });
 
   it("is wiped with the store when a pairing ends", async () => {
-    await saveChatTail(undefined, "w1:p1", undefined, [entry("a", 1, "hi")], "1d", clock);
+    await saveChatTail(undefined, "w1:p1", [entry("a", 1, "hi")], "1d", clock);
     await wipeDevice("unpair");
     await __storeIdle();
-    expect(await loadChatTail(undefined, "w1:p1", undefined)).toBeNull();
+    expect(await loadChatTail(undefined, "w1:p1")).toBeNull();
   });
 
   it("drops a pane's tail at a password prompt, and keeps it out for a while after", async () => {
-    await saveChatTail(undefined, "w1:p1", undefined, [entry("a", 1, "hi")], "1d", clock);
+    await saveChatTail(undefined, "w1:p1", [entry("a", 1, "hi")], "1d", clock);
     await wipeDevice("password", { scope: undefined, paneId: "w1:p1" });
     await __storeIdle();
-    expect(await loadChatTail(undefined, "w1:p1", undefined)).toBeNull();
+    expect(await loadChatTail(undefined, "w1:p1")).toBeNull();
     // A Chat poll landing between two mirror polls must not put it back.
-    expect(await saveChatTail(undefined, "w1:p1", undefined, [entry("a", 1, "hi")], "1d", Date.now())).toBe(false);
+    expect(await saveChatTail(undefined, "w1:p1", [entry("a", 1, "hi")], "1d", Date.now())).toBe(false);
     // Another pane is not held.
-    expect(await saveChatTail(undefined, "w1:p2", undefined, [entry("b", 1, "hi")], "1d", clock)).toBe(true);
+    expect(await saveChatTail(undefined, "w1:p2", [entry("b", 1, "hi")], "1d", clock)).toBe(true);
   });
 
   it("reads a record of another shape as a miss", async () => {
     await putRecord("chat-tail", paneScopeKey(undefined, "w1:p1"), { v: 1, entries: [{ uuid: 3 }] });
-    expect(await loadChatTail(undefined, "w1:p1", undefined)).toBeNull();
+    expect(await loadChatTail(undefined, "w1:p1")).toBeNull();
     await putRecord("chat-tail", paneScopeKey(undefined, "w1:p2"), { v: 2, entries: [entry("a", 1, "x")] });
-    expect(await loadChatTail(undefined, "w1:p2", undefined)).toBeNull();
+    expect(await loadChatTail(undefined, "w1:p2")).toBeNull();
   });
 });

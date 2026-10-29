@@ -10,7 +10,7 @@
 // Each database is opened read-only.
 
 import { Database } from "bun:sqlite";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -113,23 +113,35 @@ function sessionFromArgv(processes: readonly ForegroundProcess[] | undefined): s
   return null;
 }
 
+const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
+
+function canDeserializeClosedWal(dbPath: string, err: Error): boolean {
+  if (!/SQLITE_CANTOPEN|unable to open database file/i.test(err.message)) return false;
+  if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;
+  try {
+    return statSync(dbPath).size <= MAX_DESERIALIZE_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 function withDb<T>(dbPath: string, fn: (db: Database) => T): T | null {
   if (!existsSync(dbPath)) return null;
   let db: Database | undefined;
   try {
     db = new Database(dbPath, { readonly: true });
     return fn(db);
-  } catch {
+  } catch (err) {
+    if (!(err instanceof Error) || !canDeserializeClosedWal(dbPath, err)) return null;
     // Hermes opens state.db in WAL mode (header bytes 18-19 = 2, 2) and Python sqlite3 removes
     // -wal/-shm on close. Without -wal on disk, plain readonly open tries to create -shm and fails
     // with SQLITE_CANTOPEN (errno 14). Deserializing an in-memory copy with header bytes 18-19 set
-    // to 1, 1 reads the committed pages without touching the disk or relying on OS-specific URI flags.
+    // to 1, 1 reads the committed pages only when no -wal/-shm sidecar exists on disk.
     try {
       const buf = new Uint8Array(readFileSync(dbPath));
-      if (buf.length >= 20 && buf[18] === 2 && buf[19] === 2) {
-        buf[18] = 1;
-        buf[19] = 1;
-      }
+      if (buf.length < 20 || buf[18] !== 2 || buf[19] !== 2) return null;
+      buf[18] = 1;
+      buf[19] = 1;
       const mem = Database.deserialize(buf, { readonly: true });
       try {
         return fn(mem);
@@ -475,13 +487,15 @@ export class HermesTranscriptSource implements TranscriptSource {
   /**
    * Find the session running in `cwd` without a reported ref.
    *
-   * First checks the pane's foreground argv for an explicit `--resume <id>` / `-r <id>`; otherwise
-   * picks the newest `sessions` row across every `state.db` this root holds (including profiles)
-   * whose `cwd` column equals the pane's folder.
+   * First checks the pane's foreground argv for an explicit `--resume <id>` / `-r <id>`; when
+   * another Hermes pane shares the folder (`hints.shared`), returns null rather than guessing a
+   * neighbour's session (#508); otherwise picks the newest `sessions` row across every `state.db`
+   * this root holds (including profiles) whose `cwd` column equals the pane's folder.
    */
   async discoverSession(cwd: string, hints?: DiscoverHints): Promise<AgentSessionRef | null> {
     const named = sessionFromArgv(hints?.processes);
     if (named !== null) return { kind: "id", value: named };
+    if (hints?.shared === true) return null;
     if (cwd.trim() === "") return null;
     let best: { id: string; startedAt: number } | null = null;
     for (const root of this.roots) {
@@ -576,5 +590,6 @@ export function hermesJournal(roots: string | readonly string[]): JournalAdapter
     parse: parseHermesTranscript,
     reducer: createHermesReducer,
     discover: (cwd: string, hints?: DiscoverHints) => source.discoverSession(cwd, hints),
+    sharedFolderBlind: true,
   };
 }
