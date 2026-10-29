@@ -41,22 +41,39 @@ describe("nextStacked", () => {
     expect(nextStacked(true, UNSTACK_AT_LINES, STACK_THREE_AT_LINES)).toBe(false);
   });
 
-  it("stays unstacked when scrollHeight reaches 5 lines (124px) but clientHeight is capped at 72px by a short viewport", () => {
-    expect(nextStacked(false, STACK_THREE_AT_LINES, STACK_THREE_AT_LINES, 72)).toBe(false);
-    expect(nextStacked(false, STACK_AT_LINES, STACK_AT_LINES, 72)).toBe(false);
+  it("stays unstacked (and un-stacks on shrink) when clientHeight is below the 80px/124px column height", () => {
+    // R3: exact 80px (2 buttons) and 124px (3 buttons) column heights with gap-2
+    expect(nextStacked(false, STACK_AT_LINES, STACK_AT_LINES, 76)).toBe(false);
+    expect(nextStacked(false, STACK_AT_LINES, STACK_AT_LINES, 79)).toBe(false);
+    expect(nextStacked(false, STACK_AT_LINES, STACK_AT_LINES, 80)).toBe(true);
+    expect(nextStacked(false, STACK_THREE_AT_LINES, STACK_THREE_AT_LINES, 116)).toBe(false);
+    expect(nextStacked(false, STACK_THREE_AT_LINES, STACK_THREE_AT_LINES, 123)).toBe(false);
     expect(nextStacked(false, STACK_THREE_AT_LINES, STACK_THREE_AT_LINES, 124)).toBe(true);
-    expect(nextStacked(false, STACK_AT_LINES, STACK_AT_LINES, 84)).toBe(true);
+
+    // R2: already-stacked composer un-stacks when viewport shrinks and caps clientHeight below the column
+    expect(nextStacked(true, STACK_THREE_AT_LINES, STACK_THREE_AT_LINES, 72, 124)).toBe(false);
+    expect(nextStacked(true, STACK_AT_LINES, STACK_AT_LINES, 72, 84)).toBe(false);
+    // Hysteresis preserved when a 3-line draft re-wraps to 2 lines (60px, not overflowing) after stacking freed width
+    expect(nextStacked(true, 2, STACK_AT_LINES, 60, 60)).toBe(true);
 
     const textarea = document.createElement("textarea");
     textarea.style.lineHeight = "22px";
     textarea.style.paddingTop = "7px";
     textarea.style.paddingBottom = "7px";
     Object.defineProperty(textarea, "scrollHeight", { value: 124, configurable: true });
-    Object.defineProperty(textarea, "clientHeight", { value: 72, configurable: true });
+    Object.defineProperty(textarea, "clientHeight", { value: 124, configurable: true });
     expect(draftLines(textarea)).toBe(5);
 
     const field = { current: textarea };
-    const { result } = renderHook(() => useStackedActions(field, "five lines of text", STACK_THREE_AT_LINES));
+    const { result, rerender } = renderHook(
+      ({ draft }) => useStackedActions(field, draft, STACK_THREE_AT_LINES),
+      { initialProps: { draft: "five lines of text" } },
+    );
+    expect(result.current).toBe(true);
+
+    // Viewport shrinks so clientHeight is capped at 72px while scrollHeight stays 124px
+    Object.defineProperty(textarea, "clientHeight", { value: 72, configurable: true });
+    rerender({ draft: "five lines of text!" });
     expect(result.current).toBe(false);
   });
 
