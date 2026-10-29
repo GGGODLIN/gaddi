@@ -94,6 +94,7 @@ describe("nextStacked", () => {
   it("settles in at most one change for every draft length, line width, font line-height, viewport cap and starting state", () => {
     // `gained` is the width a freed button returns, as a share of a line: from a sliver to well past
     // the 40px of a real phone (about 1/6 of a line at 390px), and 80px for two freed buttons.
+    let checked = 0;
     for (const stackAt of [STACK_AT_LINES, STACK_THREE_AT_LINES]) {
       for (const lineHeight of [18, 21, 24, 27]) {
         for (const maxHeight of [72, 79, 80, 123, 124, 160]) {
@@ -101,10 +102,12 @@ describe("nextStacked", () => {
             for (const gained of [1, 3, 5, 8, perLine]) {
               for (let n = 0; n <= perLine * 12; n++) {
                 for (const start of [false, true]) {
-                  expect(
-                    settle(start, n, perLine, gained, stackAt, lineHeight, 12, maxHeight).length,
-                    `stackAt=${String(stackAt)} lh=${String(lineHeight)} maxH=${String(maxHeight)} n=${String(n)} perLine=${String(perLine)} gained=${String(gained)} start=${String(start)}`,
-                  ).toBeLessThanOrEqual(2);
+                  checked += 1;
+                  if (settle(start, n, perLine, gained, stackAt, lineHeight, 12, maxHeight).length > 2) {
+                    throw new Error(
+                      `stackAt=${String(stackAt)} lh=${String(lineHeight)} maxH=${String(maxHeight)} n=${String(n)} perLine=${String(perLine)} gained=${String(gained)} start=${String(start)}`,
+                    );
+                  }
                 }
               }
             }
@@ -112,5 +115,6 @@ describe("nextStacked", () => {
         }
       }
     }
+    expect(checked).toBeGreaterThan(100_000);
   });
 });
