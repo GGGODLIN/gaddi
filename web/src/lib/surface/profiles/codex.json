@@ -37,6 +37,9 @@
     },
     "placeholders": {
       "texts": [],
+      "patterns": [
+        "^Ask Codex to do anything$"
+      ],
       "sgr": 2
     },
     "volatile": {

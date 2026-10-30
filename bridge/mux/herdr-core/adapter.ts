@@ -23,7 +23,8 @@
 // ── WHAT IS DECLARED, AND WHAT IS NOT ────────────────────────────────────────────────────────────
 //
 // Declared, each from a probe: the grid (plain text, a derived revision), scrollback, agent
-// detection from the program's own OSC 7501 report, typing (a framed attach, see client.ts), keys,
+// detection (the program's own OSC 7501 report; where a program sends none, an exact, known foreground
+// program name from the same table is a provisional identity with status `unknown`, never a status word), typing (a framed attach, see client.ts), keys,
 // closing a pane, a new tab (a shell carrying herdr-app's labels), and both push channels.
 // Declined: focus, every rename, closing a tab, a new space, worktrees, sessions, and an agent
 // session ref. The core has no verb for any of them, and the layout belongs to herdr-app, which
@@ -61,12 +62,14 @@ import {
   type MuxWorktreeOpened,
   type MuxWorktreeScope,
 } from "../types.ts";
-import { DEFAULT_HC_TIMEOUT_MS, defaultHcSocket, HC_GENERATION, HcClient, HcError, type HcRpc, type WireLayout, type WireTerminal } from "./client.ts";
+import { DEFAULT_HC_TIMEOUT_MS, defaultHcSocket, HC_GENERATION, HcClient, HcError, type HcRpc, type WireLayout, type WireRead, type WireTerminal } from "./client.ts";
 import { routeEvent } from "./events.ts";
 import { herdrCoreBeaconMatcher } from "./markers.ts";
 import { HERDR_CORE_LOGO_SVG } from "./logo.ts";
 import { HC_UNSENDABLE_KEYS, toHcKey, type HcKey } from "./keys.ts";
 import { IMPLICIT_SPACE_ID, isLocalAddress, SPACE_LABEL, TAB_LABEL, toSnapshot } from "./layout.ts";
+
+type MutableGrid = { -readonly [K in keyof MuxGrid]: MuxGrid[K] };
 
 /** The registry name this adapter answers to, and the value of {@link HerdrCoreMux.mux}. */
 export const HERDR_CORE_MUX = "herdr-core";
@@ -90,7 +93,7 @@ const HERDR_CORE_CAPABILITIES = declareCapabilities({
   notes: {
     paneGrid: "herdr-core hands out the screen as plain text, so the mirror shows no colour.",
     agentDetection:
-      "herdr-core names the agent in a terminal from the agent's own status report. A program that sends no report reads as a shell.",
+      "herdr-core names the agent in a terminal from the agent's own status report. A program that sends no report is named from the process in the foreground, through the same table (omp sends none), and then has no status. A shell, or a process Collie has no harness for, reads as a shell.",
     agentSessionRef: "herdr-core keeps an agent's status but not its conversation id. The agent's own hook supplies it: install the hooks with `collie hooks install claude`.",
     sendKeys:
       "herdr-core presses keys by name. A Super or Command chord, Ctrl+Enter, and a modified key it has no name for (such as Ctrl+$) are refused.",
@@ -143,6 +146,23 @@ interface PaneRevision {
 /** At most this many read views are remembered per pane; the oldest is forgotten first. */
 const MAX_VIEWS_PER_PANE = 8;
 
+/**
+ * How long a read with scrollback may take before the screen alone answers it. A read with `lines`
+ * above 0 is the core's history read (`how: history`, or `how: stitched` for a full-screen app,
+ * HC_API.md § terminal.read), and it can hang: while a pi dialog stood, `lines: 60` gave no answer in
+ * 30 s and the plain screen read (`lines: 0`) answered in 0.1 s (M78 spec 03, pi cases 2 and 3). The
+ * client's own call budget is 5 s, so the pane read as unreadable and the dialog never reached the
+ * phone. The screen read runs beside the history read; past this budget its rows answer, marked
+ * `truncated` (the scrollback above them was cut), and the history read's late answer is dropped.
+ */
+export const HISTORY_READ_BUDGET_MS = 2000;
+
+/** What a test may change about the adapter: the history read's budget, and where its log lines go. */
+export interface HerdrCoreOptions {
+  readonly historyBudgetMs?: number;
+  readonly log?: (line: string) => void;
+}
+
 export class HerdrCoreMux implements MuxAdapter {
   readonly mux = HERDR_CORE_MUX;
   readonly capabilities = HERDR_CORE_CAPABILITIES;
@@ -153,10 +173,19 @@ export class HerdrCoreMux implements MuxAdapter {
   /** Whether the core on the socket was last seen speaking our generation. `null`: not asked yet. */
   private compatible: boolean | null = null;
 
+  /** Panes whose history read ran past its budget and were logged; one line per pane until it answers again. */
+  private readonly slowHistory = new Set<string>();
+  private readonly historyBudgetMs: number;
+  private readonly log: (line: string) => void;
+
   constructor(
     private readonly rpc: HcRpc,
     private readonly home: string = homedir(),
-  ) {}
+    options: HerdrCoreOptions = {},
+  ) {
+    this.historyBudgetMs = options.historyBudgetMs ?? HISTORY_READ_BUDGET_MS;
+    this.log = options.log ?? ((line) => console.log(line));
+  }
 
   /** Is a core answering, at generation 1? A core at another generation reads as unreachable. */
   async reachable(): Promise<boolean> {
@@ -198,24 +227,66 @@ export class HerdrCoreMux implements MuxAdapter {
    * One pane's rendered screen, as plain text: the core gives no colour, so `preserve` and `strip`
    * read the same text, which carries no escape at all. A `recent` read asks for `lines` lines of
    * history and keeps the last `lines` lines of what comes back.
+   *
+   * A read the core calls incomplete (`complete: false`, HC_API.md § terminal.read: part of it may be
+   * missing while a full-screen app works) is handed over with `partial` set, on any read: the mirror
+   * shows it, and the Send Protocol takes it as no read and decides nothing on it.
+   *
+   * A `recent` read whose history read has not answered within {@link HISTORY_READ_BUDGET_MS} is
+   * answered with the screen's rows, read beside it, and marked `truncated`.
    */
   async readGrid(paneId: string, request: MuxGridRequest): Promise<MuxOutcome<MuxGrid>> {
     const remote = remoteRefusal(paneId);
     if (remote !== null) return remote;
     const lines = Math.max(1, request.lines);
+    const view = `${request.scope}:${String(request.scope === "viewport" ? 0 : lines)}`;
     try {
-      const read = await this.rpc.readTerminal(paneId, request.scope === "viewport" ? 0 : lines);
-      const rows = read.text.replace(/\n$/u, "").split("\n");
-      const text = (request.scope === "viewport" ? rows : rows.slice(-lines)).join("\n");
-      return muxOk({
-        paneId,
-        text,
-        truncated: !read.complete,
-        revision: this.revisionFor(paneId, `${request.scope}:${String(request.scope === "viewport" ? 0 : lines)}`, text),
-      });
+      if (request.scope === "viewport") return muxOk(this.gridOf(paneId, view, await this.rpc.readTerminal(paneId, 0), { keep: null, truncated: false }));
+      const answered = await this.historyOrScreen(paneId, lines);
+      return muxOk(this.gridOf(paneId, view, answered.read, { keep: lines, truncated: answered.truncated }));
     } catch (err) {
       return refusalFor(err);
     }
+  }
+
+  /**
+   * The history read of `lines`, or the screen read beside it when the history read runs past the
+   * budget. A history read that fails inside the budget fails the read, as it always did; a late answer
+   * of either kind is dropped.
+   */
+  private async historyOrScreen(paneId: string, lines: number): Promise<{ read: WireRead; truncated: boolean }> {
+    const history = this.rpc.readTerminal(paneId, lines);
+    const screen = this.rpc.readTerminal(paneId, 0);
+    // Whichever is not used must not surface as an unhandled rejection.
+    history.catch(() => undefined);
+    screen.catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), this.historyBudgetMs);
+    });
+    try {
+      const read = await Promise.race([history, late]);
+      if (read !== null) {
+        this.slowHistory.delete(paneId);
+        return { read, truncated: false };
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!this.slowHistory.has(paneId)) {
+      this.slowHistory.add(paneId);
+      this.log(`[herdr-core] the history read of ${paneId} gave no answer in ${String(this.historyBudgetMs)} ms; its screen answers without scrollback until it does`);
+    }
+    return { read: await screen, truncated: true };
+  }
+
+  /** One read as a grid: its rows (the last `keep` of them, when set), its derived revision, `partial` when the core says so. */
+  private gridOf(paneId: string, view: string, read: WireRead, cut: { keep: number | null; truncated: boolean }): MuxGrid {
+    const rows = read.text.replace(/\n$/u, "").split("\n");
+    const text = (cut.keep === null ? rows : rows.slice(-cut.keep)).join("\n");
+    const grid: MutableGrid = { paneId, text, truncated: cut.truncated, revision: this.revisionFor(paneId, view, text) };
+    if (!read.complete) grid.partial = true;
+    return grid;
   }
 
   /** Literal text, written to the terminal as raw input through a framed attach, submitting nothing. */
@@ -423,6 +494,9 @@ export class HerdrCoreMux implements MuxAdapter {
     const live = new Set(snapshot.panes.map((pane) => pane.paneId));
     for (const paneId of this.revisions.keys()) {
       if (!live.has(paneId)) this.revisions.delete(paneId);
+    }
+    for (const paneId of this.slowHistory) {
+      if (!live.has(paneId)) this.slowHistory.delete(paneId);
     }
   }
 }

@@ -43,6 +43,9 @@
         "/loop 10m <prompt> schedules a recurring prompt",
         "Paste an image with Ctrl+V — file paths and URLs work too"
       ],
+      "patterns": [
+        "^Press \\? on an empty composer to see keyboard shortcuts$"
+      ],
       "sgr": 2,
       "fg": [
         "rgb(175,177,179)"

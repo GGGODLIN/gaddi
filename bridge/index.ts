@@ -1674,6 +1674,9 @@ const makeSession: SessionFactory = (name, endpoint, isPrimary) => {
   // The held sends (M56 spec 15) ride the same poll: once the Surface has read the panes, a pane that
   // reads free releases its oldest held request, and the queue ends what expired or lost its pane.
   // `send` is declared below; the poll's first update comes after `engine.start()`.
+  // The screen wins for an ask (M78 spec 07): a pane whose last read shows an ask is `blocked` on the
+  // phone and in the push, also where the multiplexer says `working` (herdr-core with pi's question).
+  if (surface !== undefined) engine.liftScreenAsks((paneId) => surface.askOnScreen(paneId));
   if (surface !== undefined) {
     engine.onUpdate((s) => {
       void surface.observe(s.agents).then(() => {
@@ -1685,11 +1688,13 @@ const makeSession: SessionFactory = (name, endpoint, isPrimary) => {
         }
         // A queued send whose text a read shows back in the box (ADR 0122): its card says so.
         send?.tickQueued(name, (paneId) => surface.boxOf(paneId));
-        // The box text rides along: a box that holds only Collie's own probe characters is no draft.
+        // The box text rides along: a box that holds only Collie's own probe characters is no draft. So
+        // does whether the read carried no styling: there a draft may be the placeholder (M78 spec 06).
         return send?.tickHolds(
           name,
           (paneId) => surface.surfaceOf(paneId),
           (paneId) => surface.boxOf(paneId)?.box ?? null,
+          (paneId) => surface.boxOf(paneId)?.plain === true,
         );
       });
     });
