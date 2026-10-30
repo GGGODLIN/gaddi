@@ -7,7 +7,8 @@
 <p align="center"><b>English</b> · <a href="./README.zh-TW.md">繁體中文</a></p>
 
 Gaddi puts the AI coding agents in your terminal on your phone. Claude Code, Codex and the rest keep
-running in Herdr, tmux or zellij on your computer, and the phone shows which one is waiting on you.
+running in Herdr, the experimental Herdr core (`herdr-core`), tmux or zellij on your computer,
+and the phone shows which one is waiting on you.
 You answer with a tap, not a terminal keyboard.
 
 It runs on your own machine and reaches your phone over your Tailscale network. Gaddi has no account
@@ -157,6 +158,9 @@ upstream install, say), the clone stops there and nothing is built over it; move
 `--single-branch` fetches `main` alone, and later updates keep to it. `start` runs
 `tailscale serve` for you and prints the HTTPS address.
 
+Without `COLLIE_MUX`, `collie start` detects Herdr, tmux and zellij and prompts for your choice.
+It offers the experimental Herdr core only on a machine without the Herdr TUI.
+
 Then put it on the phone. The commands below run in `~/.local/share/collie`; `bin/collie link`
 puts `collie` on your PATH if you want the short form.
 
@@ -234,7 +238,7 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | | |
 | --- | --- |
 | [**Sessions**](./docs/sessions.md) | What a session is, where sessions come from, a terminal or a durable agent, and what the phone shows for each |
-| [**Terminals**](./docs/multiplexers.md) | Pointing Collie at Herdr, tmux, zellij, tuios or Tern, what each can answer, and agent beacons. Experimental for tmux, zellij, tuios and Tern; bug reports wanted |
+| [**Terminals**](./docs/multiplexers.md) | Pointing Collie at Herdr, the Herdr core (`herdr-core`), tmux, zellij, tuios or Tern, what each can answer, two Collies on one machine, and agent beacons. Experimental for the Herdr core, tmux, zellij, tuios and Tern; bug reports wanted |
 
 ### Durable agents
 
@@ -258,8 +262,8 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | [**Themes**](./docs/themes.md) | The four looks Collie ships, picking one in Settings, importing a theme file after a preview, exporting one to edit, and writing your own: the 43 colour tokens, the shape and look words, the terminal palette, and what a theme cannot change |
 | [**Changes**](./docs/changes.md) | The Files screen: a workspace's folder with its changes marked, the changed files and their diffs, and the last commit, from the pane or the dashboard's Files tab. Read-only git, nested repos, and the two settings that decide how far it looks |
 | [**Deployment**](./docs/deployment.md) | Front doors other than the default: an identity-aware proxy, a reverse proxy with no Tailscale, an off-host ingress, several Collies on one host (one per user, or several instances for one user), and a crew's standby door |
-| [**Commands**](./docs/commands.md) | Every `collie` verb, putting `collie` on your PATH, and the Herdr actions that mirror the verbs on a Herdr-managed install |
-| [**Crews**](./docs/crew.md) | Several machines' Collies behind one URL: invite, join, deputy, failover |
+| [**Commands**](./docs/commands.md) | Every `collie` verb, the census verbs that show what a Collie knows (`status`, `mux list`, `sessions`, `crew status`), putting `collie` on your PATH, and the Herdr actions that mirror the verbs on a Herdr-managed install |
+| [**Crews**](./docs/crew.md) | Several machines' Collies behind one URL: invite, join, deputy, failover, and a machine that runs several Collies |
 | [**Walky talky**](./docs/walky-talky.md) | Messages between agent sessions: `collie walky who`, `send`, `reply`, `inbox` and `status`, pane tokens, receipts, how a message crosses a crew and how its outcome comes back, the phone's cards and composer, installing the skill into your agents, and the limits |
 | [**Voice input and Web Push**](./docs/voice-and-push.md) | The microphone in the composer, and notifications when an agent is waiting on you |
 | [**Manage & update**](./docs/upgrading.md) | Update from the phone or the terminal, roll back, update a crew, cross a major, stop, uninstall, and upgrading a 0.x install to 1.0 |
