@@ -89,6 +89,10 @@ describe("parity with the old walk on the real corpus", () => {
     // inside the frame is draft text (ADR 0048 addendum 2026-09-26).
     "claude--v2283-draft-prompt.txt",
     "claude--v2283-draft-rule.txt",
+    // Claude Code 2.1.312: a two-paragraph draft whose upload path stays text on its own row (lab 2026-10-30).
+    "claude--v2312-draft-upload-path--w100.txt",
+    // Claude Code 2.1.312: a fresh empty box with the usage row under its footer (live check 2026-10-30).
+    "claude--v2312-weekly-limit-row--w120.txt",
     // Claude Code 2.1.283 after the `/plugin` Marketplaces tab applied an update: the menu closed and
     // the chat holds "✔ Updated 1 marketplace" above an ordinary box, in both renderers.
     "claude--v2283-fullscreen-plugin-marketplaces-updated--w120.txt",
@@ -162,6 +166,18 @@ describe("parity with the old walk on the real corpus", () => {
     "claude--v2303-titled-edge-working--w160.txt",
     // The survey's transcript question, 2.1.306 (captured 2026-10-21): the box stands under it.
     "claude--v2306-transcript-survey--w153.txt",
+    "claude--v2307-auth-refresh-before-output--w61.txt",
+    "claude--v2307-auth-refresh-output--w61.txt",
+    "claude--v2309-auth-refresh-locked--w120.txt",
+    "claude--v2309-auth-refresh-locked--w52.txt",
+    "claude--v2309-auth-refresh-locked--w80.txt",
+    "claude--v2309-auth-refresh-output--w40.txt",
+    "claude--v2309-auth-refresh-output--w52.txt",
+    "claude--v2309-auth-refresh-output--w64.txt",
+    "claude--v2309-auth-refresh-output--w120.txt",
+    "claude--v2310-auth-refresh-before-output-spinner--w52.txt",
+    "claude--v2310-auth-refresh-output-spinner--w52.txt",
+    "claude--v2310-auth-refresh-output-spinner-timer--w52.txt",
     "claude--working-esc-to-interrupt.txt",
     "claude--working.txt",
   ]);

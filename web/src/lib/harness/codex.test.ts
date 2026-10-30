@@ -91,9 +91,18 @@ const PINNED = [
   "codex--v0164-steer-after-now--w120.txt",
   "codex--v0164-steer-done--w120.txt",
   "codex--v0164-steer-typed--w120.txt",
-  // Issue 615, derived (not captured): the empty and draft composers with `»` for `›` (Ultra effort).
+  // Issue 615: two derived (the empty and draft composers with `»` for `›`) and two real captures from the reporter (`--w170`).
+  "codex--v0165-ultra-draft--w170.txt",
   "codex--v0165-ultra-draft.txt",
   "codex--v0165-ultra-empty--w120.txt",
+  "codex--v0165-ultra-empty--w170.txt",
+  // 0.166.0, harness lab drift: the braille logo over an empty box on a pane of 32 rows or more, gone at the
+  // first character and back after Backspace; and the footer's `⚠ 1 warning · f2 to view` that any `-c` draws.
+  "codex--v0166-art-backspace--w120.txt",
+  "codex--v0166-art-empty--w120.txt",
+  "codex--v0166-art-typed--w120.txt",
+  "codex--v0166-warning-art-empty--w120.txt",
+  "codex--v0166-warning-typed--w120.txt",
   "codex--working.txt",
 ];
 
@@ -159,6 +168,29 @@ describe("composerReady — the gate the reply path pre-flights on", () => {
   });
 });
 
+describe("Codex 0.166.0: the logo over an empty box and the lone warning row (harness lab drift, 2026-10-29)", () => {
+  it.each([
+    ["codex--v0166-art-empty--w120.txt", null],
+    ["codex--v0166-art-typed--w120.txt", "x"],
+    ["codex--v0166-art-backspace--w120.txt", null],
+    ["codex--v0166-warning-art-empty--w120.txt", null],
+    ["codex--v0166-warning-typed--w120.txt", "x"],
+  ] as const)("%s: the box is found on the same row, and its draft reads back", (name, draft) => {
+    const lines = fixtureLines(name);
+    expect(codexAdapter.composerReady!(lines)).toBe(true);
+    expect(codexAdapter.extractInputDraft(lines)).toBe(draft);
+    expect(locateComposer(lines)?.promptRow).toBe(locateComposer(fixtureLines("codex--v0166-art-empty--w120.txt"))?.promptRow);
+  });
+
+  it("the logo lifts no block and no dialog", () => {
+    for (const name of ["codex--v0166-art-empty--w120.txt", "codex--v0166-warning-art-empty--w120.txt"]) {
+      expect(detectApprovalRegion(fixtureLines(name)), name).toBeNull();
+      expect(detectAskRegion(fixtureLines(name)), name).toBeNull();
+      expect(detectTrustRegion(fixtureLines(name)), name).toBeNull();
+    }
+  });
+});
+
 describe("the Ultra prompt glyph (issue 615)", () => {
   it("promptText reads every glyph of PROMPT_GLYPHS and nothing else", () => {
     for (const glyph of PROMPT_GLYPHS) {
@@ -175,6 +207,12 @@ describe("the Ultra prompt glyph (issue 615)", () => {
       ["codex--v0164-queue-done--w120.txt", "codex--v0165-ultra-empty--w120.txt", null],
       ["codex--v0156-headless-draft.txt", "codex--v0165-ultra-draft.txt", "hello from the phone probe"],
     ] as const;
+    // The reporter's real Codex 0.165.0 Ultra captures (issue 615, 170 columns).
+    for (const [name, draft] of [["codex--v0165-ultra-empty--w170.txt", null], ["codex--v0165-ultra-draft--w170.txt", "Hello, test draft"]] as const) {
+      expect(locateComposer(fixtureLines(name)), name).not.toBeNull();
+      expect(codexAdapter.composerReady!(fixtureLines(name)), name).toBe(true);
+      expect(codexAdapter.extractInputDraft(fixtureLines(name)), name).toBe(draft);
+    }
     for (const [original, ultra, draft] of pairs) {
       expect(locateComposer(fixtureLines(ultra)), ultra).not.toBeNull();
       expect(locateComposer(fixtureLines(ultra))?.promptRow, ultra).toBe(locateComposer(fixtureLines(original))?.promptRow);
@@ -191,7 +229,7 @@ describe("the Ultra prompt glyph (issue 615)", () => {
       const extra = splitLines(parseAnsi([glyphLine, "» Bonjour, dit-il.", "› 1. Yes, proceed (y)"].join("\n")));
       return { box, shifted: locateComposer([...lines.slice(0, box.top), ...extra, ...lines.slice(box.top)]), by: extra.length };
     };
-    for (const name of ["codex--v0164-queue-done--w120.txt", "codex--v0165-ultra-empty--w120.txt", "codex--v0156-headless-draft.txt", "codex--v0165-ultra-draft.txt"]) {
+    for (const name of ["codex--v0164-queue-done--w120.txt", "codex--v0165-ultra-empty--w120.txt", "codex--v0156-headless-draft.txt", "codex--v0165-ultra-draft.txt", "codex--v0165-ultra-empty--w170.txt", "codex--v0165-ultra-draft--w170.txt"]) {
       const { box, shifted, by } = withLines(name, "» ~/src/collie main \u2713");
       expect(shifted, name).not.toBeNull();
       expect(shifted!.promptRow, name).toBe(box.promptRow + by);

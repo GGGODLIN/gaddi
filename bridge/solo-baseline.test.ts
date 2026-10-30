@@ -278,6 +278,8 @@ const SESSION_SUMMARY_KEYS = {
   working: true,
   blocked: true,
   host: true,
+  // NOT a crew dimension, the operator's display label from spaces.toml, absent without the file.
+  label: true,
 } satisfies Record<keyof SessionSummary, true>;
 
 const PANE_WIRE_KEYS = {
@@ -489,12 +491,15 @@ describe("solo zero-tax — wire shapes carry no crew dimension", () => {
     ]);
   });
 
-  test("SessionSummary gained `host` and nothing else", () => {
+  // `label` is the operator's spaces.toml display label: not a crew dimension, and absent from
+  // every body here because no baseline writes the file.
+  test("SessionSummary gained `host` as its one crew dimension, and the optional `label`", () => {
     expect(Object.keys(SESSION_SUMMARY_KEYS).toSorted()).toEqual([
       "agents",
       "blocked",
       "host",
       "isPrimary",
+      "label",
       "name",
       "reachable",
       "working",
@@ -982,6 +987,8 @@ describe("solo zero-tax — routes", () => {
 const CONFIG_KEYS = {
   mux: true,
   muxEndpoint: true,
+  muxPickedBecause: true,
+  muxNotPickedBecause: true,
   tmuxBin: true,
   zellijBin: true,
   ternBin: true,
@@ -1000,6 +1007,7 @@ const CONFIG_KEYS = {
   retellFile: true,
   clipboardFile: true,
   cacheRulesFile: true,
+  spacesFile: true,
   maxUploadBytes: true,
   port: true,
   host: true,
@@ -1068,6 +1076,8 @@ describe("solo zero-tax — config", () => {
       "multiSession",
       "mux",
       "muxEndpoint",
+      "muxNotPickedBecause",
+      "muxPickedBecause",
       "notifyDelayMs",
       "notifyDescription",
       "pollIdleMs",
@@ -1082,6 +1092,7 @@ describe("solo zero-tax — config", () => {
       "sent",
       "skipServe",
       "socketPath",
+      "spacesFile",
       "stateDir",
       "submitKeys",
       "surfaceShadow",
@@ -1122,7 +1133,7 @@ describe("solo zero-tax — config", () => {
   // Read from `bridge/config-schema.ts` rather than by grepping `config.ts`'s source, because the
   // schema is now the single declaration of what every setting is (ADR 0040). The rows that carry a
   // `configField` are exactly the settings `loadConfig` resolves, which is the list §11 pins. A
-  // CONFIG FILE ADDS NO ENV KEY, so this list is the 38 names it has always been plus `COLLIE_BASE_PATH` (ADR 0052), `COLLIE_MUSE_ROOT`, `COLLIE_OPENCLAW_ROOT` (#401), `COLLIE_KIRO_ROOT`, the two `COLLIE_ACCESS_*` keys (ADR 0081) `COLLIE_SENT` (ADR 0107) and `COLLIE_ACCOUNT_WINDOWS` (ADR 0118) — the two
+  // CONFIG FILE ADDS NO ENV KEY, so this list is the 38 names it has always been plus `COLLIE_BASE_PATH` (ADR 0052), `COLLIE_MUSE_ROOT`, `COLLIE_OPENCLAW_ROOT` (#401), `COLLIE_KIRO_ROOT`, `COLLIE_DSH_ROOT`, the two `COLLIE_ACCESS_*` keys (ADR 0081) `COLLIE_SENT` (ADR 0107) and `COLLIE_ACCOUNT_WINDOWS` (ADR 0118) — the two
   // `COLLIE_MUX_ENDPOINT_<NAME>` rows collapse back to the prefix the old grep saw, because the env
   // name is built at the call site and the file key must not be.
   test("the schema names exactly today's COLLIE_* env keys — no crew enrollment key", () => {
@@ -1147,6 +1158,7 @@ describe("solo zero-tax — config", () => {
       "COLLIE_CODEX_ROOT",
       "COLLIE_DEVICE_ALLOWLIST",
       "COLLIE_DEVICE_HEADER",
+      "COLLIE_DSH_ROOT",
       "COLLIE_GROK_ROOT",
       "COLLIE_HERDR_DIAL",
       "COLLIE_HERMES_ROOT",
@@ -1610,6 +1622,7 @@ describe("solo zero-tax — notifications", () => {
       body: "demo · /home/you",
       paneId: "p1",
       renotify: true,
+      badge: 1,
     });
     sink.clear();
     expect(sent).toEqual([
@@ -1621,6 +1634,7 @@ describe("solo zero-tax — notifications", () => {
         tag: "collie:herd",
         paneId: "p1",
         renotify: true,
+        badge: 1,
       },
       { type: "clear", tag: "collie:herd" },
     ]);

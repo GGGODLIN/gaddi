@@ -37,7 +37,7 @@ describe("the status strip never doubles a row the blocks still show", () => {
   });
 
   // The check below passes trivially for a strip that is always empty, so each adapter must still
-  // show its strip somewhere, and Muse on its ready composer in particular (review on PR #108).
+  // show its strip somewhere, and Muse on its ready composer in particular.
   it("still shows the strip on at least one captured screen of every adapter", () => {
     const stripped = new Set(
       fixtures

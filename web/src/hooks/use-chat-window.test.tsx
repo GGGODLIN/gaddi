@@ -475,6 +475,35 @@ describe("useChatWindow — the saved Chat tail", () => {
     await waitFor(() => expect(same.result.current.window.entries.map((e) => e.uuid)).toEqual(["a"]));
   });
 
+  /** The props of a hook rendered with and without a session instance. */
+  interface InstanceProps {
+    instance?: string;
+  }
+  const NO_INSTANCE: InstanceProps = {};
+
+  it("keeps the held window when a pane gains its first instance, as a just-opened pane does", async () => {
+    recordChat([firstPage]);
+    const { result, rerender } = renderHook(
+      ({ instance }: InstanceProps) => useChatWindow({ paneId: "w1:p1", instance, enabled: true }),
+      { initialProps: NO_INSTANCE },
+    );
+    await waitFor(() => expect(result.current.window.entries).toHaveLength(1));
+    const held = result.current.window.entries.map((e) => e.uuid);
+    // The snapshot names the pane's instance: the same session, so the window stays as it was.
+    rerender({ instance: "aaaa" });
+    expect(result.current.window.entries.map((e) => e.uuid)).toEqual(held);
+    expect(result.current.tried).toBe(true);
+    // And it is written through under the instance it now knows.
+    await waitFor(async () => expect(await loadChatTail(undefined, "w1:p1", "aaaa")).not.toBeNull());
+    // A pane that drops the instance again for a render is still that session.
+    rerender({ instance: undefined });
+    expect(result.current.window.entries.map((e) => e.uuid)).toEqual(held);
+    // Only another known instance resets it.
+    failChat();
+    rerender({ instance: "bbbb" });
+    expect(result.current.window.entries).toEqual([]);
+  });
+
   it("ignores an in-flight read from an older session instance after the instance changes", async () => {
     const resolves: ((response: Response) => void)[] = [];
     server.use(

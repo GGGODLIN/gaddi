@@ -11,12 +11,13 @@ import {
   narrowPeerBody,
   parsePeerSnapshot,
   SWEEP_VIEW,
+  type MergeContext,
   type PeerContribution,
   type PeerSnapshotBody,
   type SnapshotPlan,
 } from "./merge.ts";
-import { parsePeerVersion, sweepPeers, type CrewLink, type PeerOutcome } from "./peer-client.ts";
-import type { HostResolution, HostSelector, CrewRegistry, PeerState } from "./registry.ts";
+import { parsePeerStatus, parsePeerVersion, sweepPeers, type CrewLink, type PeerOutcome } from "./peer-client.ts";
+import type { HostResolution, HostSelector, CrewRegistry, PeerHealth, PeerState } from "./registry.ts";
 import { PAIRING_LABEL_COLLISION } from "./router.ts";
 import {
   pairingPushNeeded,
@@ -136,6 +137,9 @@ export const CONTACT_RESET_FLOOR_MS = 10_000;
  */
 export const MAX_CONTACT_RESETS = 5;
 
+/** How often one member's dropped stale replies make a journal line. Every drop still happens. */
+export const STALE_DIAL_LOG_REPEAT_MS = 60_000;
+
 /**
  * `memory` with its incompatible backoff forgotten — pure, and the only shape a reset may take.
  *
@@ -223,6 +227,13 @@ export interface CrewLeadDeps {
   >;
   /** This collie's member id and label — the `servers[0]` entry (§9.2). */
   readonly self: { readonly id: string; readonly name: string };
+  /**
+   * The registry name of the multiplexer this lead drives, read on every merge (the primary session
+   * can change under a running bridge). The same source `hello` states; `null` or absent when none.
+   */
+  readonly selfMux?: () => string | null;
+  /** This lead's own host name for its `servers` row (M77 spec 01); `null` or absent when the OS gives none. */
+  readonly selfHost?: () => string | null;
   /**
    * Called with a body **that just parsed on this sweep** — never with a retained last-good one.
    * That distinction is the whole contract: `PeerNotifier` derives transitions by diffing successive
@@ -466,6 +477,8 @@ export class CrewLead {
    * owns that word (`registry.ts`, `warrant.ts`), and these two must never be read as the same thing.
    */
   private readonly dialGenerations = new Map<string, number>();
+  /** Per member: when {@link staleDial} last wrote its line. See {@link STALE_DIAL_LOG_REPEAT_MS}. */
+  private readonly staleLogged = new Map<string, number>();
 
   constructor(private readonly deps: CrewLeadDeps) {
     this.now = deps.now ?? Date.now;
@@ -492,6 +505,12 @@ export class CrewLead {
   private staleDial(memberId: string, dialGeneration: number, what: string): boolean {
     const current = this.dialGenerations.get(memberId) ?? 0;
     if (dialGeneration >= current) return false;
+    // A patient hello overtaken by the next sweep is routine under host load, so the LINE is
+    // rate-limited per member. The drop above it is not.
+    const now = this.now();
+    const last = this.staleLogged.get(memberId);
+    if (last !== undefined && now - last < STALE_DIAL_LOG_REPEAT_MS) return true;
+    this.staleLogged.set(memberId, now);
     this.log(`[crew] ${memberId}: dropped a stale ${what} reply, dial ${dialGeneration} of ${current}`);
     return true;
   }
@@ -525,6 +544,7 @@ export class CrewLead {
         this.loggedState.delete(id);
         this.contactResets.delete(id);
         this.dialGenerations.delete(id);
+        this.staleLogged.delete(id);
         this.deps.onPeerGone?.(id);
       }
 
@@ -587,7 +607,7 @@ export class CrewLead {
         // SAFETY: `value` is a peer's HTTP body after `res.json()` — a JsonValue by construction,
         // the same cast and the same reason as `foldPeerMemory`'s below.
         const seen = outcome.ok ? parsePeerVersion(outcome.value as JsonValue) : null;
-        this.deps.registry.record(memberId, outcome, seen === null ? undefined : { version: seen });
+        const recorded = this.deps.registry.record(memberId, outcome, seen === null ? undefined : { version: seen });
         // A sweep that died on its OWN clock has learned nothing about the machine (§10.4). Re-ask on
         // the patient budget, off this tick — never awaited, so the strict budget still bounds the
         // poll exactly as §10.1 requires. A refusal, a reset or a DNS failure is skipped: those are
@@ -617,6 +637,10 @@ export class CrewLead {
           // the same cast and the same reason as `foldPeerMemory`'s. `parsePeerPreflight` re-checks
           // every field, and anything half-formed reads as `null`, which is unknown and blocks.
           this.deps.registry.recordPreflight(memberId, parsePeerPreflight(outcome.value as JsonValue));
+          // M76 spec 04: its multiplexer name and pane count, off the same answer and for the same reason.
+          // SAFETY: the same cast and the same reason as the line above; `parsePeerStatus` re-checks
+          // both fields and answers `null` for anything it cannot trust.
+          this.deps.registry.recordStatus(memberId, parsePeerStatus(outcome.value as JsonValue));
           // ADR 0084: that member's own load, off the same answer, stamped on THIS lead's clock.
           // SAFETY: the same cast and the same reason as the line above; `parsePeerMachineStats`
           // re-checks every field and answers `null` for anything it cannot trust.
@@ -632,7 +656,7 @@ export class CrewLead {
         // The question the reset counter exists to ask is now settled for this member: it answered a
         // real dial. Whatever it took to get here, the ladder starts from zero again (M20/02).
         if (outcome.ok) this.contactResets.delete(memberId);
-        this.logVerdict(memberId, outcome, previous, next);
+        this.logVerdict(memberId, outcome, previous, next, recorded.health);
         // Identity, not equality: `parsePeerSnapshot` mints a fresh object on every success and the
         // fold RETAINS the old one on every failure, so `!==` is exactly "this poll produced a body".
         // An unchanged peer still yields a new object each poll — a diff of nothing, which is what
@@ -750,7 +774,12 @@ export class CrewLead {
     outcome: PeerOutcome<unknown>,
     previous: PeerMemory | undefined,
     next: PeerMemory,
+    health: PeerHealth,
   ): void {
+    // A miss the registry HELD (UNREACHABLE_AFTER_SWEEPS) is not a transition: the verdict is still
+    // `reachable`, so it writes nothing and leaves the key alone. A blip and its recovery are then
+    // silent, and a real outage still writes one pair, on its second miss and on its return.
+    if (!outcome.ok && health === "reachable") return;
     // The runs count is part of the key: each step of the ladder is its own transition, and the
     // operator needs the step it reached, not just that it is on one.
     const key = outcome.ok
@@ -1218,6 +1247,14 @@ export class CrewLead {
     );
   }
 
+  /** This lead's id and label, plus the multiplexer it drives and its host name when it names them. */
+  private selfWithMux(): MergeContext["self"] {
+    const mux = this.deps.selfMux?.() ?? null;
+    const host = this.deps.selfHost?.() ?? null;
+    const withMux = mux === null || mux === "" ? this.deps.self : { ...this.deps.self, mux };
+    return host === null || host === "" ? withMux : { ...withMux, host };
+  }
+
   /**
    * Fold the lead's own body into the merged one. The only re-serialisation on a crew link (§9.2).
    *
@@ -1228,7 +1265,7 @@ export class CrewLead {
    */
   merge(local: SnapshotResponse, plan: SnapshotPlan): SnapshotResponse {
     return mergeSnapshot(local, {
-      self: this.deps.self,
+      self: this.selfWithMux(),
       peers: this.contributions().map((c) =>
         Object.assign({}, c, { body: narrowPeerBody(c.body, plan.peer(c.state.memberId)) }),
       ),

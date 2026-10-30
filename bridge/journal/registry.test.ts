@@ -24,6 +24,7 @@ const roots = {
   grok: ["/g"],
   hermes: ["/h"],
   kiro: ["/k"],
+  "dsh-tui": ["/d"],
   muse: ["/m"],
   openclaw: ["/oc"],
 };
@@ -34,6 +35,7 @@ describe("buildJournalRegistry", () => {
       "agy",
       "claude",
       "codex",
+      "dsh-tui",
       "grok",
       "hermes",
       "kiro",
@@ -66,7 +68,7 @@ describe("sendQueuedNow", () => {
 describe("adapterFor", () => {
   const registry = buildJournalRegistry(roots);
 
-  test.each(["agy", "claude", "codex", "pi", "opencode", "grok", "hermes", "kiro", "muse", "openclaw"])("resolves %s", (agent) => {
+  test.each(["agy", "claude", "codex", "pi", "opencode", "grok", "hermes", "kiro", "muse", "openclaw", "dsh-tui"])("resolves %s", (agent) => {
     expect(adapterFor(registry, agent)?.agent).toBe(agent);
   });
 

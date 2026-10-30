@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { statSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -176,6 +177,36 @@ describe("AGY read-only source and exact discovery", () => {
         parts: [{ kind: "text", text: "The streamed reply is complete." }],
       });
       expect(db.query("select count(*) as n from steps").get()).toEqual({ n: 2 });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("a poll on an unchanged database reads nothing, and any commit reads the tail again", async () => {
+    const root = await home();
+    const { path, db } = database(root);
+    try {
+      const source = new AgyTranscriptSource(root);
+      const key = (await source.resolve({ kind: "id", value: ID }))!;
+      const first = await source.readSince(key, NO_CURSOR);
+      expect(first.lines).toHaveLength(2);
+      expect(first.cursor).not.toBe(NO_CURSOR);
+      // Nothing moved: no rows, no reset, the same cursor.
+      expect(await source.readSince(key, first.cursor)).toEqual({ lines: [], cursor: first.cursor, reset: false, fromStart: false });
+      // A commit inside the same millisecond, the file the same size, still moves the version (the
+      // header's change counter), so the edit is read.
+      const size = statSync(path).size;
+      db.run("update steps set step_payload = ? where idx = 1", [step(15, field(20, field(1, "Another reply.")))]);
+      expect(statSync(path).size).toBe(size);
+      const again = await source.readSince(key, first.cursor);
+      expect(again.reset).toBe(true);
+      expect(again.lines).toHaveLength(2);
+      expect(again.cursor).not.toBe(first.cursor);
+      // A cursor from another database is never taken for this one's.
+      const other = database(root, "11111111-2222-4333-8444-555555555555");
+      other.db.close();
+      const otherKey = (await source.resolve({ kind: "id", value: "11111111-2222-4333-8444-555555555555" }))!;
+      expect((await source.readSince(otherKey, again.cursor)).reset).toBe(true);
     } finally {
       db.close();
     }

@@ -20,7 +20,6 @@
 // output; the ref's kind and a short prefix of its value are printed, never a turn of a transcript.
 
 import { Database } from "bun:sqlite";
-import { existsSync, readFileSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -32,6 +31,7 @@ import { loadConfig } from "../bridge/config.ts";
 import { isGrokSessionId } from "../bridge/journal/grok.ts";
 import { kiroSessionIdOf } from "../bridge/journal/kiro-sessions.ts";
 import { adapterFor, buildJournalRegistry } from "../bridge/journal/registry.ts";
+import { readSqlite } from "../bridge/journal/sqlite-read.ts";
 import type { AgentSessionRef, JournalAdapter, TranscriptEntry } from "../bridge/journal/types.ts";
 
 /**
@@ -242,27 +242,11 @@ async function agyCandidates(root: string): Promise<{ refs: AgentSessionRef[]; t
   } catch {
     // no conversations dir
   }
-  found.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const newest = found.toSorted((a, b) => b.mtimeMs - a.mtimeMs);
   return {
-    refs: found.slice(0, MAX_CANDIDATES).map((f) => ({ kind: "id", value: f.id })),
+    refs: newest.slice(0, MAX_CANDIDATES).map((f) => ({ kind: "id", value: f.id })),
     total: found.length,
   };
-}
-
-const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
-const CLOSED_WAL_OPEN_ERROR =
-  /\b(?:SQLITE_CANTOPEN(?:_\w+)?|SQLITE_READONLY(?:_\w+)?|SQLITE_IOERR_SHM\w*)\b|unable to open database file|attempt to write a readonly database|disk I\/O error/i;
-
-function canDeserializeClosedWal(dbPath: string, err: Error & { readonly code?: string }): boolean {
-  if (!CLOSED_WAL_OPEN_ERROR.test(`${err.code ?? ""} ${err.message}`)) {
-    return false;
-  }
-  if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;
-  try {
-    return statSync(dbPath).size <= MAX_DESERIALIZE_BYTES;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -282,36 +266,12 @@ async function hermesCandidates(root: string): Promise<{ refs: AgentSessionRef[]
   }
   const refs: AgentSessionRef[] = [];
   for (const path of dbs) {
-    if (!existsSync(path)) continue;
-    let db: Database | undefined;
-    try {
-      db = new Database(path, { readonly: true });
-      const rows = db
-        .query<{ id: string }, [number]>("select id from sessions order by started_at desc limit ?")
-        .all(MAX_CANDIDATES);
-      for (const r of rows) refs.push({ kind: "id", value: r.id });
-    } catch (err) {
-      if (!(err instanceof Error) || !canDeserializeClosedWal(path, err)) continue;
-      try {
-        const buf = new Uint8Array(readFileSync(path));
-        if (buf.length < 20 || buf[18] !== 2 || buf[19] !== 2) continue;
-        buf[18] = 1;
-        buf[19] = 1;
-        const mem = Database.deserialize(buf, { readonly: true });
-        try {
-          const rows = mem
-            .query<{ id: string }, [number]>("select id from sessions order by started_at desc limit ?")
-            .all(MAX_CANDIDATES);
-          for (const r of rows) refs.push({ kind: "id", value: r.id });
-        } finally {
-          mem.close();
-        }
-      } catch {
-        // a database of another shape: the adapter's own resolve says so when it is asked
-      }
-    } finally {
-      db?.close();
-    }
+    // A closed WAL database in a folder this user cannot write still reads (bridge/journal/sqlite-read.ts).
+    // A database of another shape answers null: the adapter's own resolve says so when it is asked.
+    const rows = readSqlite(path, (db) =>
+      db.query<{ id: string }, [number]>("select id from sessions order by started_at desc limit ?").all(MAX_CANDIDATES),
+    );
+    for (const r of rows ?? []) refs.push({ kind: "id", value: r.id });
   }
   return { refs, total: refs.length };
 }

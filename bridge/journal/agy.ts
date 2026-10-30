@@ -5,14 +5,12 @@
 // when no populated `.db` exists (excluding `.pb` fixed-key decryption). Session discovery binds to
 // the running process's held `<root>/presence/<uuid>.lock` via `lsof`, never guessing from the newest
 // conversation in a shared folder.
-import { Database } from "bun:sqlite";
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
 import type { JsonValue } from "../json.ts";
-import { NO_CURSOR, type Cursor, type ReadSince } from "./cursor.ts";
+import { decodeCursor, encodeCursor, NO_CURSOR, type Cursor, type ReadSince } from "./cursor.ts";
 import {
   containedRealpath,
   FIRST_TAIL_BYTES,
@@ -31,6 +29,7 @@ import {
   type Reduction,
   type RowReducer,
 } from "./reduce.ts";
+import { readSqlite } from "./sqlite-read.ts";
 import { clamp, MAX_RESULT_CHARS, MAX_TEXT_CHARS, stripAnsi, summarizeToolInput } from "./text.ts";
 import { classifyToolCall } from "./tool-call.ts";
 import type {
@@ -304,54 +303,28 @@ export function parseAgyTranscript(text: string): TranscriptEntry[] {
 
 type StepRow = { idx: number; type: number; format: number; payload: Uint8Array };
 
-const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
-const CLOSED_WAL_OPEN_ERROR =
-  /\b(?:SQLITE_CANTOPEN(?:_\w+)?|SQLITE_READONLY(?:_\w+)?|SQLITE_IOERR_SHM\w*)\b|unable to open database file|attempt to write a readonly database|disk I\/O error/i;
-
-function canDeserializeClosedWal(dbPath: string, err: Error & { readonly code?: string }): boolean {
-  if (!CLOSED_WAL_OPEN_ERROR.test(`${err.code ?? ""} ${err.message}`)) {
-    return false;
-  }
-  if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;
-  try {
-    return statSync(dbPath).size <= MAX_DESERIALIZE_BYTES;
-  } catch {
-    return false;
-  }
-}
-
-function withDb<T>(path: string, read: (db: Database) => T): T | null {
-  if (!existsSync(path)) return null;
-  let db: Database | undefined;
-  try {
-    db = new Database(path, { readonly: true });
-    return read(db);
-  } catch (err) {
-    if (!(err instanceof Error) || !canDeserializeClosedWal(path, err)) return null;
-    // AGY removes its WAL on close but leaves WAL mode (header bytes 18-19 = 2, 2) in the header.
-    try {
-      const buf = new Uint8Array(readFileSync(path));
-      if (buf.length < 20 || buf[18] !== 2 || buf[19] !== 2) return null;
-      buf[18] = 1;
-      buf[19] = 1;
-      const mem = Database.deserialize(buf, { readonly: true });
-      try {
-        return read(mem);
-      } finally {
-        mem.close();
-      }
-    } catch {
-      return null;
-    }
-  } finally {
-    db?.close();
-  }
-}
-
 function isJsonlTranscriptPath(path: string): boolean {
   const normalized = path.replaceAll("\\", "/");
   const match = /\/([0-9a-f-]{36})\/\.system_generated\/logs\/transcript\.jsonl$/i.exec(normalized);
   return match !== null && SESSION_ID.test(match[1]!);
+}
+
+/**
+ * The database's version, as a string that moves on every commit, or null when it cannot be read.
+ * SQLite bumps the file change counter (header bytes 24-27) on every commit in rollback mode. In WAL
+ * mode a commit appends frames to `-wal`, so its size grows, and a WAL restart rewrites the WAL
+ * header's salts (bytes 16-23). Sizes and mtimes ride along. Two header reads, no SQLite open.
+ */
+async function dbVersion(path: string): Promise<string | null> {
+  const [db, wal] = await Promise.all([statFile(path), statFile(`${path}-wal`)]);
+  if (db === null) return null;
+  try {
+    const head = await Bun.file(path).slice(24, 28).bytes();
+    const walHead = wal === null ? new Uint8Array() : await Bun.file(`${path}-wal`).slice(0, 32).bytes();
+    return [path, db.size, db.mtimeMs, Buffer.from(head).toString("hex"), wal?.size ?? -1, wal?.mtimeMs ?? -1, Buffer.from(walHead).toString("hex")].join("\u0000");
+  } catch {
+    return null;
+  }
 }
 
 export class AgyTranscriptSource implements TranscriptSource {
@@ -365,7 +338,7 @@ export class AgyTranscriptSource implements TranscriptSource {
     if (ref.kind !== "id" || !SESSION_ID.test(ref.value)) return null;
     for (const root of this.roots) {
       const dbPath = await containedRealpath(join(root, "conversations", `${ref.value}.db`), root);
-      if (dbPath !== null && withDb(dbPath, (db) => db.query("select idx from steps limit 1").get()) !== null) {
+      if (dbPath !== null && readSqlite(dbPath, (db) => db.query("select idx from steps limit 1").get()) !== null) {
         return dbPath;
       }
       for (const candidate of [
@@ -404,7 +377,7 @@ export class AgyTranscriptSource implements TranscriptSource {
   private async readDb(path: string, cap: number, limit: number) {
     const meta = await this.stat(path);
     if (meta === null) return null;
-    const data = withDb(path, (db) => {
+    const data = readSqlite(path, (db) => {
       const lines: string[] = [];
       const total = db.query<{ total: number }, []>("select count(*) as total from steps").get()?.total ?? 0;
       let size = 0;
@@ -438,9 +411,27 @@ export class AgyTranscriptSource implements TranscriptSource {
     const path = await this.contained(key);
     if (path === null) return { lines: [], cursor: cursor || NO_CURSOR, reset: false, fromStart: false };
     if (path.endsWith(".jsonl")) return readSinceFile(path, cursor);
+    // THE CURSOR IS A VERSION, NOT A STEP ID. agy rewrites a step in place while it streams (the
+    // "in-place streaming edit" test), so a cursor past the newest `idx` would freeze a step at its
+    // first written state. What a poll can skip is the read when nothing moved: the cursor is keyed
+    // on the database's version (see `dbVersion`), and an unchanged database answers "nothing new"
+    // without opening SQLite or re-reducing the tail. Any change still reads the whole bounded tail
+    // and resets, which is the one answer that carries an edited step.
+    const held: ReadSince = { lines: [], cursor, reset: false, fromStart: false };
+    const before = await dbVersion(path);
+    if (before === null) return held;
+    if (decodeCursor(cursor, "updated", before) !== null) return held;
     const data = await this.readDb(path, FIRST_TAIL_BYTES, FIRST_TAIL_ROWS);
+    // The version is read again after the rows: a write between the two keys the cursor to a version
+    // these rows may not hold, so it is not kept, and the next poll reads again.
+    const after = await dbVersion(path);
     return data
-      ? { lines: data.lines, cursor: NO_CURSOR, reset: true, fromStart: data.complete }
+      ? {
+          lines: data.lines,
+          cursor: after === before ? encodeCursor("updated", before, data.size) : NO_CURSOR,
+          reset: true,
+          fromStart: data.complete,
+        }
       : { lines: [], cursor: cursor || NO_CURSOR, reset: false, fromStart: false };
   }
 }

@@ -125,7 +125,7 @@ Without this setting, the UI will load as an empty page. See
 ## Your own slash commands
 
 Put machine-specific commands, such as a Herdr plugin `/fork-in-herdr` or a custom `/deploy`, in
-`commands.toml`. This is one of six config files that share the same reader and load pattern:
+`commands.toml`. This is one of seven config files that share the same reader and load pattern:
 
 | file | scope | confirm/danger flag | live reload |
 | --- | --- | --- | --- |
@@ -135,6 +135,7 @@ Put machine-specific commands, such as a Herdr plugin `/fork-in-herdr` or a cust
 | `theme.toml` | none, the faces are a device setting | none | yes, on the next page reload |
 | `launchers.toml` | none, matched by exact command instead; `[phone]` switches the rows a phone adds | none | yes, but an already-open tab re-reads the rows only on its next load |
 | `cache-rules.toml` | none, matched by exact rule id instead | none | yes, no restart needed |
+| `spaces.toml` | none, matched by exact registry name instead | none | yes, within a few seconds |
 
 These files are unchanged by the config file. They share the instance `config.toml`'s
 directory, they keep their own formats and their own live reload, and nothing merges them into it.
@@ -240,8 +241,23 @@ becomes Undo, which puts the text and the attachments back. Undo stays until you
 keystroke, an attachment, a send, a tap on another belt button, or leaving the pane. Scrolling the
 belt keeps it.
 
-Left-handed? Set **Settings → Appearance → Hand** to **Left**. The belt turns round: the Switch button
-and the X move to its left end, still above Send, and Keys becomes the rightmost button, with the rest
+A Zoom button, a magnifier with a plus, sits just left of the Switch button. It opens the pane's
+output alone, over the whole screen. The text keeps updating while the view is open.
+
+Pinch with two fingers to make the text bigger, up to six times. Drag with one finger to move around
+it. Double-tap a line to zoom in on it, and double-tap again to return to the normal size. The minus
+and plus buttons at the top do the same in steps, and the number between them resets the zoom.
+
+The zoomed output never wraps, whatever **Wrap** says. Each terminal line stays one line, so a pinch
+only makes the text bigger and never reflows it. Drag sideways to read past the edge of the screen.
+The pane view keeps your Wrap setting.
+
+The X at the top, the Back button at the bottom on a phone, and the phone's own back gesture all
+close the zoomed output. Zooming changes nothing on the computer. The pane keeps its size in the
+terminal.
+
+Left-handed? Set **Settings → Appearance → Hand** to **Left**. The belt turns round: the Switch, Zoom
+and X buttons move to its left end, still above Send, and Keys becomes the rightmost button, with the rest
 scrolling off toward the left. Send and Attach move to the left of the reply box. The setting is per
 device and applies the next time you open a pane.
 
@@ -497,7 +513,7 @@ On a crew (several machines, one phone-facing lead), each machine reads its own 
 a row launches on whichever machine's dashboard or pane you tapped it from, not on the lead.
 
 The **Agent** select on the New page is Collie's own list: Claude Code, Codex, opencode, pi, omp,
-Grok, Hermes, Kiro, Muse and Antigravity. Kiro starts with its tool permissions left as you set
+Grok, Hermes, Kiro, Muse, Antigravity and dsh-TUI. Kiro starts with its tool permissions left as you set
 them. An agent that is not on the machine's login `PATH` stays in the list, disabled, marked "not
 installed". For another terminal agent, declare a row for it as above: it shows in the **Command**
 select under **Shell**, starts in a pane like any command, and Collie shows no status for it.
@@ -978,6 +994,60 @@ config root, switchable from the header. Setting `COLLIE_MULTI_SESSION=off` serv
 Herdr session. Every discovered Herdr session is accessible through the same URL, including private or sandbox
 sessions. [Security](security.md) lists this behavior as a sharp edge.
 
+### Your own space labels
+
+Give a space a label of your own in `spaces.toml`, next to `keys.toml`:
+
+```bash
+cp spaces.toml.example ~/.config/collie/spaces.toml
+```
+
+The phone calls a terminal grouping a space. Herdr calls the same thing a session, and its registry
+names one by the folder its socket lives in, so `<config root>/sessions/project-yt/` shows as
+`project-yt`. In Collie's own words a session is one agent conversation, which is why the file is
+called `spaces.toml`. A label replaces the registry name in the space
+switcher, on its trigger, on the space tag of a row in **All sessions**, and on a durable agent's
+row. The switcher keeps the registry name under the label.
+
+```toml
+[labels]
+"project-yt" = "Video"
+default = "Home"
+```
+
+The key is the Herdr session name the switcher shows today, and `default` is the primary space. Quote
+a name that holds anything but letters, digits, `-` and `_`.
+
+> **Note.** A label is display-only. Links (`?s=`), notifications, the crew and the terminal keep
+> using the registry name, so a label can change at any time without breaking a bookmark.
+
+Collie applies a few rules to every row:
+
+| rule | what happens |
+| --- | --- |
+| a name no space has | the row is kept and never shown |
+| a value that is not a string, or is blank | the row is dropped and logged |
+| a control or invisible format character, tab or line break | replaced by a space |
+| more than 48 characters | cut to 48 and logged |
+
+A dropped row never costs you the rest of the file. Edits show within a few seconds, with no
+restart. In a crew, each machine labels its own spaces in its own `spaces.toml`.
+
+### A folder for each space
+
+When each space is one project, a launch from the dashboard should start in that project, not in
+your home folder. Name the folder in the same file, under the same registry name:
+
+```toml
+[folders]
+"project-yt" = "~/projects/yt"
+```
+
+A launcher row with no `cwd`, or a new space with an empty Where field, opens in the space's
+folder. A row's own `cwd`, a folder typed in Where, and a pane's own folder all still win. The folder
+is absolute or starts with `~/`; a row with a `..` segment or a control character is dropped and
+logged. A folder that is not on disk at launch time falls back to home.
+
 ## Usage windows
 
 The dots beside the model show your 5-hour and 7-day limits for Claude and Codex, with no setup.
@@ -1194,6 +1264,21 @@ Kiro needs no Herdr integration either: Herdr names a `kiro-cli` pane agent `kir
 the pane's session by the lock the running Kiro holds in it. Collie reads Kiro V3 sessions, started
 with `--v3` or `--agent-engine v3`, or with V3 set as the engine in Kiro's own settings. A V1 or V2
 session has no Chat or History. Set `kiro_root` when Kiro keeps its sessions somewhere else.
+
+dsh-tui needs no Herdr integration for Chat. It reports its state to Herdr itself, but Herdr does
+not pass its session on, so Collie asks the kernel which session lock (`session.lock`, held with
+`flock`) the pane's foreground dsh process holds, and reads that session's log under
+`$DSH_HOME/sessions`, or `~/.dsh/sessions`, compressed or plain. This works on Linux only, where
+`/proc/locks` lists every lock and who holds it; elsewhere a dsh-tui pane keeps its terminal view.
+Set `dsh_root` when dsh keeps its sessions somewhere else.
+
+Antigravity CLI (`agy`, which Herdr may also call `antigravity`) needs no Herdr integration for Chat
+either. Collie asks `lsof` which `presence/<uuid>.lock` file the pane's foreground agy process holds,
+and reads that conversation from `conversations/<uuid>.db` under `~/.gemini/antigravity-cli`,
+read-only, or from its `transcript.jsonl` when the database is empty. It never guesses the newest
+conversation in a folder. This needs `lsof` on the machine, so it works on Linux and macOS, not on
+Windows; without it an agy pane keeps its terminal view. Set `agy_root`, or `COLLIE_AGY_ROOT`, when
+Antigravity keeps its home somewhere else.
 
 `herdr integration status` shows which integrations are installed. A hook is read when the agent
 starts, so an agent that was already running when you installed it needs a restart. Oh My Pi is the

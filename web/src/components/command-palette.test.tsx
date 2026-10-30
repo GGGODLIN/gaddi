@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 
@@ -197,6 +197,44 @@ describe("CommandPalette", () => {
     server.use(http.get("/api/pane/w1%3Ap1/claude-commands", () => new HttpResponse(null, { status: 501 })));
     render(<CommandPalette open onClose={vi.fn()} agent="claude" paneId="w1:p1" onInsert={vi.fn()} />);
     expect(await screen.findByText("/status")).toBeInTheDocument();
+  });
+
+  it("finds a Codex pane's own skills too, spelled the way Codex mentions them, and stages on tap", async () => {
+    server.use(
+      http.get("/api/pane/w1%3Ap1/claude-commands", () =>
+        HttpResponse.json({ commands: [{ command: "$my-skill", description: "Mine", argHint: "" }] }),
+      ),
+    );
+    const onInsert = vi.fn();
+    const user = userEvent.setup();
+    render(<CommandPalette open onClose={vi.fn()} agent="codex" paneId="w1:p1" onInsert={onInsert} />);
+    await user.type(screen.getByPlaceholderText(/Search \d+ commands/), "my-skill");
+    const item = await screen.findByText("$my-skill");
+    await user.click(item);
+    expect(onInsert).toHaveBeenCalledExactlyOnceWith("$my-skill");
+  });
+
+  it("asks the bridge for any agent pane, and not for a pane with no agent", async () => {
+    let calls = 0;
+    server.use(
+      http.get("/api/pane/w1%3Ap1/claude-commands", () => {
+        calls += 1;
+        return HttpResponse.json({ commands: [] });
+      }),
+    );
+    const { rerender } = render(
+      <CommandPalette open onClose={vi.fn()} agent="hermes" paneId="w1:p1" onInsert={vi.fn()} />,
+    );
+    await waitFor(() => expect(calls).toBe(1));
+    // An empty answer leaves the shipped catalog (none for hermes) and the sheet intact.
+    expect(screen.getByPlaceholderText(/Search \d+ commands/)).toBeInTheDocument();
+
+    for (const shell of [null, undefined, ""]) {
+      rerender(<CommandPalette open onClose={vi.fn()} agent={shell} paneId="w1:p1" onInsert={vi.fn()} />);
+    }
+    // Let any stray request settle before counting.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls).toBe(1);
   });
 
   it("clears previously discovered rows when a later refresh fails, and skips the fetch when operator rows replace the palette", async () => {

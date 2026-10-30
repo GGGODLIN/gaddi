@@ -38,10 +38,10 @@ vi.mock("@/lib/liveness", async (importOriginal) => ({
   useLive: () => true,
 }));
 
-// The real editor loads Konva. These cases pin the composer's decision to upload, not the canvas.
-// `mode: "auto"` confirms immediately so existing chip tests still reach an upload; the image-edit
-// describe below sets `manual` and clicks. jsdom has no 2D context, so canvasAvailable is stubbed
-// here; image-edit.test.ts covers the real check.
+// The canvas editor is covered in image-editor.test.tsx. These cases pin the composer's decision
+// to upload. `mode: "auto"` confirms immediately so existing chip tests still reach an upload; the
+// image-edit describe below sets `manual` and clicks. jsdom has no 2D context, so canvasAvailable
+// is stubbed here; image-edit.test.ts covers the real check.
 const canvasGate = vi.hoisted(() => ({ available: true }));
 
 vi.mock("@/lib/image-edit", async (importOriginal) => {
@@ -68,6 +68,7 @@ const imageEditHarness = vi.hoisted(() => {
 vi.mock("@/components/image-editor", () => ({
   ImageEditor: (props: {
     file: File;
+    startInEdit?: boolean;
     onConfirm: (file: File) => void;
     onCancel: () => void;
     onFail: (reason: "unavailable" | "failed") => void;
@@ -84,7 +85,12 @@ vi.mock("@/components/image-editor", () => ({
     }
     if (imageEditHarness.mode !== "manual") return null;
     return (
-      <div role="dialog" aria-label="Edit image">
+      <div role="dialog" aria-label="Edit image" data-start-in-edit={props.startInEdit === true ? "yes" : "no"}>
+        <span data-testid="editor-file">{props.file.name}</span>
+        {/* What the real editor does for Attach, and for "Use this image" with nothing changed. */}
+        <button type="button" onClick={() => props.onConfirm(props.file)}>
+          Attach
+        </button>
         <button
           type="button"
           onClick={() => props.onConfirm(new File(["EDITED-BYTES"], "edited.png", { type: "image/png" }))}
@@ -4256,6 +4262,132 @@ describe("Composer — an image is edited before it uploads", () => {
     }
   });
 
+  it("Attach uploads the picked file itself, once, and closes the sheet", async () => {
+    const user = userEvent.setup();
+    const uploads = watchUploads();
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/upload$/, () => HttpResponse.json({ ok: true, path: "/tmp/shot.png" })),
+    );
+    try {
+      renderComposerWithStatus();
+      const original = png("shot.png");
+      pick(original);
+      expect(await screen.findByRole("dialog", { name: "Edit image" })).toHaveAttribute("data-start-in-edit", "no");
+      expect(uploads).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: "Attach" }));
+
+      await waitFor(() => expect(uploads).toHaveBeenCalledTimes(1));
+      expect(uploads.mock.calls[0]?.[1]).toBe(original);
+      expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "Remove shot.png" })).toBeInTheDocument();
+    } finally {
+      uploads.mockRestore();
+    }
+  });
+
+  describe("the chip's Edit", () => {
+    // The thumbnail (and so the Edit button on it) needs object URLs, which jsdom lacks.
+    beforeEach(() => {
+      let n = 0;
+      Object.defineProperty(URL, "createObjectURL", { value: () => `blob:edit/${String(++n)}`, configurable: true, writable: true });
+      Object.defineProperty(URL, "revokeObjectURL", { value: () => undefined, configurable: true, writable: true });
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(URL, "createObjectURL");
+      Reflect.deleteProperty(URL, "revokeObjectURL");
+    });
+    async function attachOne(user: ReturnType<typeof userEvent.setup>, uploads: ReturnType<typeof watchUploads>) {
+      renderComposerWithStatus();
+      const original = png("shot.png");
+      pick(original);
+      await user.click(await screen.findByRole("button", { name: "Attach" }));
+      await screen.findByRole("button", { name: "Remove shot.png" });
+      expect(uploads).toHaveBeenCalledTimes(1);
+      return original;
+    }
+
+    it("opens the sheet on the attachment's own file, on the tools", async () => {
+      const user = userEvent.setup();
+      const uploads = watchUploads();
+      server.use(
+        http.post(/\/api\/pane\/[^/]+\/upload$/, () => HttpResponse.json({ ok: true, path: "/tmp/shot.png" })),
+      );
+      try {
+        await attachOne(user, uploads);
+        await user.click(screen.getByRole("button", { name: "Edit" }));
+        const dialog = await screen.findByRole("dialog", { name: "Edit image" });
+        expect(dialog).toHaveAttribute("data-start-in-edit", "yes");
+        expect(screen.getByTestId("editor-file")).toHaveTextContent("shot.png");
+      } finally {
+        uploads.mockRestore();
+      }
+    });
+
+    it("an unchanged edit closes with no upload and leaves the chip", async () => {
+      const user = userEvent.setup();
+      const uploads = watchUploads();
+      server.use(
+        http.post(/\/api\/pane\/[^/]+\/upload$/, () => HttpResponse.json({ ok: true, path: "/tmp/shot.png" })),
+      );
+      try {
+        await attachOne(user, uploads);
+        await user.click(screen.getByRole("button", { name: "Edit" }));
+        await user.click(await screen.findByRole("button", { name: "Attach" })); // the mock's "unchanged"
+        await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument());
+        expect(uploads).toHaveBeenCalledTimes(1);
+        expect(screen.getByRole("button", { name: "Remove shot.png" })).toBeInTheDocument();
+      } finally {
+        uploads.mockRestore();
+      }
+    });
+
+    it("a crop uploads once and replaces the chip, keeping its number and its marker", async () => {
+      const user = userEvent.setup();
+      const uploads = watchUploads();
+      server.use(
+        http.post(/\/api\/pane\/[^/]+\/upload$/, () =>
+          HttpResponse.json({ ok: true, path: uploads.mock.calls.length > 1 ? "/tmp/edited.png" : "/tmp/shot.png" }),
+        ),
+      );
+      try {
+        await attachOne(user, uploads);
+        // SAFETY: getByPlaceholderText returns the composer textarea, which is an HTMLTextAreaElement.
+        const box = screen.getByPlaceholderText(/type a reply/i) as HTMLTextAreaElement;
+        expect(box.value).toContain("[Image #1]");
+        await user.click(screen.getByRole("button", { name: "Edit" }));
+        await user.click(await screen.findByRole("button", { name: "Use this image" }));
+
+        await waitFor(() => expect(uploads).toHaveBeenCalledTimes(2));
+        expect(uploads.mock.calls[1]?.[1].name).toBe("edited.png");
+        expect(await screen.findByRole("button", { name: "Remove edited.png" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Remove shot.png" })).not.toBeInTheDocument();
+        expect(screen.getAllByRole("button", { name: /^Remove / })).toHaveLength(1);
+        expect(box.value).toContain("[Image #1]");
+        expect(box.value).not.toContain("[Image #2]");
+      } finally {
+        uploads.mockRestore();
+      }
+    });
+
+    it("cancel leaves the chip and uploads nothing", async () => {
+      const user = userEvent.setup();
+      const uploads = watchUploads();
+      server.use(
+        http.post(/\/api\/pane\/[^/]+\/upload$/, () => HttpResponse.json({ ok: true, path: "/tmp/shot.png" })),
+      );
+      try {
+        await attachOne(user, uploads);
+        await user.click(screen.getByRole("button", { name: "Edit" }));
+        await user.click(await screen.findByRole("button", { name: "Cancel edit" }));
+        expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument();
+        expect(uploads).toHaveBeenCalledTimes(1);
+        expect(screen.getByRole("button", { name: "Remove shot.png" })).toBeInTheDocument();
+      } finally {
+        uploads.mockRestore();
+      }
+    });
+  });
+
   it("cancel adds no chip and does not upload or change the original file", async () => {
     const user = userEvent.setup();
     let uploads = 0;
@@ -4314,7 +4446,7 @@ describe("Composer — an image is edited before it uploads", () => {
     }
   });
 
-  it("says the browser cannot edit and still uploads a non-image", async () => {
+  it("without a canvas the image uploads as it is, with no sheet, and a non-image uploads too", async () => {
     canvasGate.available = false;
     const uploads = watchUploads();
     try {
@@ -4330,14 +4462,15 @@ describe("Composer — an image is edited before it uploads", () => {
       );
       renderComposerWithStatus();
       await waitFor(() => expect(screen.getByTestId("attach-files")).toHaveAttribute("accept", "image/*,.png,.md"));
+      // No canvas: no editor, and the picture goes up as it is, the way it did before the editor.
       pick(png("shot.png"));
-      await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(/can't edit images/));
+      await waitFor(() => expect(uploads).toHaveBeenCalledTimes(1));
+      expect(uploads.mock.calls[0]?.[1].name).toBe("shot.png");
       expect(screen.queryByRole("dialog", { name: "Edit image" })).not.toBeInTheDocument();
-      expect(uploads).not.toHaveBeenCalled();
 
       pick(new File(["# hi"], "notes.md", { type: "text/markdown" }), "attach-files");
-      await waitFor(() => expect(uploads).toHaveBeenCalledTimes(1));
-      expect(uploads.mock.calls[0]?.[1].name).toBe("notes.md");
+      await waitFor(() => expect(uploads).toHaveBeenCalledTimes(2));
+      expect(uploads.mock.calls[1]?.[1].name).toBe("notes.md");
     } finally {
       canvasGate.available = true;
       uploads.mockRestore();
@@ -5708,3 +5841,63 @@ describe("Composer — a tall draft stacks attach over the primary action", () =
   });
 });
 
+
+
+describe("Composer — known launch startup send-lock", () => {
+  it("keeps a local draft editable and blocks button, keyboard and Quick without a request", async () => {
+    const user = userEvent.setup();
+    const typed = vi.fn();
+    server.use(...replyHandler(typed));
+    const props = renderComposer({ starting: true });
+    const box = screen.getByPlaceholderText(/type a reply/i);
+    expect(box).not.toBeDisabled();
+    await user.type(box, "keep this draft");
+    expect(screen.getByText("Starting…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Send$/ })).toBeDisabled();
+    fireEvent.keyDown(box, { key: "Enter", ctrlKey: true });
+    await user.click(screen.getByRole("button", { name: "Quick" }));
+    await user.click(screen.getByRole("button", { name: "continue" }));
+    expect(typed).not.toHaveBeenCalled();
+    expect(props.onSent).not.toHaveBeenCalled();
+    expect(box).toHaveValue("keep this draft");
+    expect(loadDraft(undefined, props.paneId)).toBe("keep this draft");
+    expect(screen.getByRole("button", { name: "Type into terminal" })).not.toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Keys" }));
+    expect(screen.getByRole("button", { name: "Esc" })).not.toBeDisabled();
+  });
+
+  it("startup never unlocks a genuine read-only or unreachable composer", () => {
+    renderComposer({ starting: true, readOnly: true });
+    expect(screen.getByPlaceholderText(/read.only/i)).toBeDisabled();
+    cleanup();
+    renderComposer({ starting: true, surface: { ...FREE, composer: "unreachable" }, unreachableNote: "Sending is off" });
+    expect(screen.getByPlaceholderText("Sending is off")).toBeDisabled();
+  });
+
+  it("startup also blocks an already-offered protocol commit without losing its draft", async () => {
+    const user = userEvent.setup();
+    const typed = vi.fn();
+    server.use(...replyHandler(typed, undefined, (request) => sendAnswer(request.id, "refused", "unconfirmed", { offers: ["commit"], rowsHash: "abc", surface: { ...FREE, composer: "unknown", modal: "unknown", reason: "no-match" } })));
+    let lock = () => {};
+    function View() {
+      const [starting, setStarting] = useState(false);
+      lock = () => setStarting(true);
+      return <Composer paneId="offer:p1" agent="kiro" isShell={false} gone={false} readOnly={false} surface={FREE} starting={starting}
+        text="pane output" terminalDraft={null} rawTerminalDraft={null}
+        prefs={{ wrap: true, fontSize: 11, draftFontSize: 14, chatFontSize: 14, fontFamily: "system", rawTerminal: false, tapToFocus: true, expandClippedReply: true, stretchText: false }}
+        display={{ open: false, onToggle: vi.fn() }} onSent={vi.fn()} />;
+    }
+    const router = createMemoryRouter([{ path: "/", element: <View /> }]);
+    render(<RouterProvider router={router} />);
+    const box = screen.getByRole("textbox");
+    await user.type(box, "offered draft");
+    await user.click(screen.getByRole("button", { name: /^Send$/ }));
+    await screen.findByRole("button", { name: "Type here" });
+    act(lock);
+    const commit = screen.getByRole("button", { name: "Type here" });
+    expect(commit).toBeDisabled();
+    await user.click(commit);
+    expect(typed).toHaveBeenCalledOnce();
+    expect(box).toHaveValue("offered draft");
+  });
+});

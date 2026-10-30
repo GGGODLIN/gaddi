@@ -1106,10 +1106,26 @@ describe("real corpus — pinned so any change to the walk shows up as a diff", 
     { fixture: "v2303-titled-edge-survey--w160", statusRows: 3, draft: null, stripped: 11 },
     { fixture: "v2303-titled-edge-working--w160", statusRows: 3, draft: null, stripped: 11 },
     { fixture: "v2306-transcript-survey--w153", statusRows: 5, draft: null, stripped: 9 },
+    { fixture: "v2307-auth-refresh-before-output--w61", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2307-auth-refresh-output--w61", statusRows: 2, draft: null, stripped: 7 },
+    { fixture: "v2309-auth-refresh-locked--w120", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2309-auth-refresh-locked--w52", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2309-auth-refresh-locked--w80", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2309-auth-refresh-output--w40", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2309-auth-refresh-output--w52", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2309-auth-refresh-output--w64", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2309-auth-refresh-output--w120", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2310-auth-refresh-before-output-spinner--w52", statusRows: 3, draft: null, stripped: 8 },
+    { fixture: "v2310-auth-refresh-output-spinner--w52", statusRows: 2, draft: null, stripped: 7 },
+    { fixture: "v2310-auth-refresh-output-spinner-timer--w52", statusRows: 2, draft: null, stripped: 7 },
     { fixture: "v2304-ask-no-question-mark--w135", statusRows: 0, draft: null, stripped: 0 },
     { fixture: "v2304-ask-no-question-mark-plain--w135", statusRows: 0, draft: null, stripped: 0 },
     { fixture: "v2304-ask-chip-question-mark", statusRows: 0, draft: null, stripped: 0 },
     { fixture: "v2304-ask-two-paragraph--w80", statusRows: 0, draft: null, stripped: 0 },
+    // Claude Code 2.1.312: a two-paragraph paste with an upload path kept as text on its own row (M62 field case, 2026-10-29).
+    { fixture: "v2312-draft-upload-path--w100", statusRows: 2, draft: "also mobile looks off /home/ope", stripped: 10 },
+    // Claude Code 2.1.312: a fresh pane's usage row under the footer (`You've used 75% of your weekly limit`, live check 2026-10-30).
+    { fixture: "v2312-weekly-limit-row--w120", statusRows: 2, draft: null, stripped: 6 },
     { fixture: "v2304-select-preview-cjk", statusRows: 0, draft: null, stripped: 0 },
     { fixture: "v2304-select-preview-cjk-moved", statusRows: 0, draft: null, stripped: 0 },
     { fixture: "wizard-multiselect-checked", statusRows: 0, draft: null, stripped: 0 },
@@ -1173,6 +1189,11 @@ describe("a session name in the box's top edge (2.1.303, 160 columns)", () => {
   });
 });
 
+// The shapes below are hand-built from the field report in PR 616 (@GGGODLIN), the case the
+// RIGHT_FIELD_PADDING comment in chrome.ts dates 2026-10-06: a 59-column footer the terminal clipped
+// right after a whole hint or its separator, and a wide footer whose last hint is padded out to a
+// field Claude right-aligns ("0% until auto-compact", "/rc", an update notice). No capture of either
+// is in the corpus yet; replace these with captures when the lab draws one.
 describe("status hints clipped at 59 columns or followed by a right-aligned field", () => {
   const CLIPPED_W59 = [
     "\u001b[38;5;244m───────────────────────────────────────────────────────────",
@@ -1227,6 +1248,10 @@ describe("status hints clipped at 59 columns or followed by a right-aligned fiel
     "Enter to select · Esc to cancel ·…",
     "↓ to manage      Esc to cancel",
     "esc to interrupt ·…   Esc to cancel",
+    // A real modal footer padded out to a right-aligned field: the split on two spaces must not
+    // turn its key into a status hint.
+    "Esc to cancel  0% until auto-compact",
+    "Enter to select · Esc to cancel  /rc",
   ])("still takes %j for a modal footer", (row) => {
     expect(namesAModalKey(row)).toBe(true);
   });

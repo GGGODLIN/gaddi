@@ -430,6 +430,8 @@ export const en = {
   "composer.imageEdit.discard": "Discard changes?",
   "composer.imageEdit.discardHint": "Closing discards this edit. The original photo is left as it was.",
   "composer.imageEdit.loading": "Loading…",
+  "composer.imageEdit.attach": "Attach",
+  "composer.imageEdit.edit": "Edit",
   "composer.noEcho.title": "Password prompt, nothing echoes",
   "composer.noEcho.noLiveTyped":
     "What you typed is already in the pane but unsubmitted. This view isn't live, so nothing can be sent from here. Answer it at the terminal.",
@@ -794,7 +796,6 @@ export const en = {
   "chat.card.diff.less": "Show less",
   // One journal part that is a picture, drawn as a notice because there is no image block in the
   // stream. `{url}` is the journal's own reference and is shown as it stands.
-  "chat.card.image": "Image: {url}",
   // --- chat.run (a fold over several steps) ---
   // Each pair is counted on its own and the parts are joined with a comma, so each one has to read
   // as a standalone noun phrase.
@@ -1647,6 +1648,9 @@ export const en = {
   "crew.health.unreachable": "unreachable",
   "crew.health.incompatible": "incompatible",
   "crew.health.conflicted": "conflicted",
+  "crew.machine.degraded": "degraded",
+  "crew.machine.unreachable": "{instances} unreachable",
+  "crew.summary.instancesReachable": "{reachable} of {total} instances reachable",
   "crew.role.deputy": "deputy",
   "crew.sheet.goTo": "Go to this machine",
   "crew.formation.aria": "Crew formation: {machines}",
@@ -1749,6 +1753,8 @@ export const en = {
   "dialog.backToOptions": "Back to the options",
   "dialog.endsQuestionsSuffix": "(ends the questions)",
   "dialog.autocomplete.title": "Slash commands",
+  "dialog.authBox.label": "Login output",
+  "dialog.authBox.waiting": "The login command has not printed anything yet.",
   "dialog.menu.moveUp": "Move up",
   "dialog.menu.moveDown": "Move down",
   "dialog.menu.noticeDraft": "Empty the box first: a digit would join the text there.",
@@ -2489,6 +2495,13 @@ export const en = {
 
   // --- changes (ADR 0065) ---
   "chat.changes.label": "Files",
+  // The output, zoomed (components/output-zoom.tsx): the belt pill's name, the view's own name,
+  // its two step buttons, and the scale readout that resets it. `{scale}` is the readout ("2.5×").
+  "zoom.open": "Zoom output",
+  "zoom.title": "Zoomed output",
+  "zoom.in": "Zoom in",
+  "zoom.out": "Zoom out",
+  "zoom.reset": "Reset zoom ({scale})",
   // What a screen reader says for the small model label above the belt; {name} is the harness's own.
   "chat.model.aria": "Model {name}",
   "chat.usage.context": "ctx",
@@ -3082,6 +3095,8 @@ export const en = {
   "report.sheet.copied": "Report copied.",
   "report.sheet.search": "Already reported?",
   "report.sheet.cutScreen": "The screen was cut to fit the link. Copy report has all of it.",
+  "report.sheet.cutDoctor.one": "{count} doctor row was left out of the setup to fit the link. Copy report has all of it.",
+  "report.sheet.cutDoctor.other": "{count} doctor rows were left out of the setup to fit the link. Copy report has all of it.",
   "report.sheet.cutSends.one": "{count} older send was left out to fit the link. Copy report has all of it.",
   "report.sheet.cutSends.other": "{count} older sends were left out to fit the link. Copy report has all of it.",
   "report.sheet.cutNote": "Your words were cut to fit the link. Copy report has all of them.",
