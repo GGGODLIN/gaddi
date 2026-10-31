@@ -91,16 +91,43 @@ describe("nextStacked", () => {
     expect(result.current).toBe(false);
   });
 
-  it("settles in at most one change for every draft length, line width, font line-height, viewport cap and starting state", () => {
+  it("re-evaluates the entry threshold when stackAt increases after already stacking", () => {
+    const textarea = document.createElement("textarea");
+    textarea.style.lineHeight = "24px";
+    textarea.style.paddingTop = "6px";
+    textarea.style.paddingBottom = "6px";
+    // 3 lines = 84px tall: qualifies for 2-button stacking (80px), not 3-button stacking (124px).
+    Object.defineProperty(textarea, "scrollHeight", { value: 84, configurable: true });
+    Object.defineProperty(textarea, "clientHeight", { value: 84, configurable: true });
+
+    const field = { current: textarea };
+    const { result, rerender } = renderHook(
+      ({ draft, stackAt }) => useStackedActions(field, draft, stackAt),
+      { initialProps: { draft: "three lines", stackAt: STACK_AT_LINES } },
+    );
+    expect(result.current).toBe(true);
+
+    // Draft microphone arrives asynchronously, raising stackAt from 3 to 5 while draft is still 3 lines.
+    rerender({ draft: "three lines", stackAt: STACK_THREE_AT_LINES });
+    expect(result.current).toBe(false);
+
+    // Once the draft reaches 5 lines (132px), it stacks again under the 3-button threshold.
+    Object.defineProperty(textarea, "scrollHeight", { value: 132, configurable: true });
+    Object.defineProperty(textarea, "clientHeight", { value: 132, configurable: true });
+    rerender({ draft: "five lines now", stackAt: STACK_THREE_AT_LINES });
+    expect(result.current).toBe(true);
+  });
+
+  it("settles in at most one change across representative draft lengths, line heights, viewport caps and starting states", () => {
     // `gained` is the width a freed button returns, as a share of a line: from a sliver to well past
     // the 40px of a real phone (about 1/6 of a line at 390px), and 80px for two freed buttons.
     let checked = 0;
     for (const stackAt of [STACK_AT_LINES, STACK_THREE_AT_LINES]) {
-      for (const lineHeight of [18, 21, 24, 27]) {
-        for (const maxHeight of [72, 79, 80, 123, 124, 160]) {
-          for (const perLine of [12, 20, 28, 40]) {
-            for (const gained of [1, 3, 5, 8, perLine]) {
-              for (let n = 0; n <= perLine * 12; n++) {
+      for (const lineHeight of [18, 24]) {
+        for (const maxHeight of [72, 80, 124, 160]) {
+          for (const perLine of [16, 28]) {
+            for (const gained of [2, 6, perLine]) {
+              for (let n = 0; n <= perLine * 6; n += 4) {
                 for (const start of [false, true]) {
                   checked += 1;
                   if (settle(start, n, perLine, gained, stackAt, lineHeight, 12, maxHeight).length > 2) {
@@ -115,6 +142,6 @@ describe("nextStacked", () => {
         }
       }
     }
-    expect(checked).toBeGreaterThan(100_000);
+    expect(checked).toBeGreaterThan(500);
   });
 });

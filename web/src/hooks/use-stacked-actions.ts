@@ -98,12 +98,20 @@ export function useStackedActions(
   draft: string,
   stackAt = STACK_AT_LINES,
 ): boolean {
-  const [stacked, setStacked] = useState(false);
+  const [state, setState] = useState({ stacked: false, stackAt });
   const measure = useCallback(() => {
     const el = field.current;
     if (el === null) return;
     const lines = draftLines(el);
-    setStacked((was) => nextStacked(was, lines, stackAt, el.clientHeight, el.scrollHeight));
+    setState((prev) => {
+      // When `stackAt` rises (e.g. the draft microphone appears after `/api/config` loads, raising
+      // the threshold from 3 to 5 lines), a column that entered under the lower 2-button threshold
+      // must re-qualify against the taller 3-button threshold so a 124px column never props a 3-line
+      // draft taller.
+      const base = stackAt > prev.stackAt ? false : prev.stacked;
+      const next = nextStacked(base, lines, stackAt, el.clientHeight, el.scrollHeight);
+      return next === prev.stacked && stackAt === prev.stackAt ? prev : { stacked: next, stackAt };
+    });
   }, [field, stackAt]);
   useLayoutEffect(measure, [measure, draft]);
   useEffect(() => {
@@ -113,5 +121,5 @@ export function useStackedActions(
     observer.observe(el);
     return () => observer.disconnect();
   }, [field, measure]);
-  return stacked;
+  return state.stacked;
 }

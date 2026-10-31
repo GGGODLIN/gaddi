@@ -232,18 +232,18 @@ describe("hermesJournal discover", () => {
     const defaultDb = new Database(join(root, "state.db"));
     schema(defaultDb);
     defaultDb.close();
-    const profileDir = join(root, "profiles", "shiro");
+    const profileDir = join(root, "profiles", "assistant");
     await mkdir(profileDir, { recursive: true });
     const profileDb = new Database(join(profileDir, "state.db"));
     schema(profileDb);
     profileDb.run("insert into sessions (id, source, started_at, cwd) values (?, 'cli', 1, ?)", [
-      "20261011_004220_164149",
+      "20261001_000001_bbbbbb",
       "/work",
     ]);
     profileDb.close();
 
     const adapter = hermesJournal([root]);
-    await expect(adapter.discover?.("/work")).resolves.toEqual({ kind: "id", value: "20261011_004220_164149" });
+    await expect(adapter.discover?.("/work")).resolves.toEqual({ kind: "id", value: "20261001_000001_bbbbbb" });
     await rm(root, { recursive: true, force: true });
   });
 
@@ -256,7 +256,7 @@ describe("hermesJournal discover", () => {
       "/shared",
     ]);
     defaultDb.close();
-    const profileDir = join(root, "profiles", "shiro");
+    const profileDir = join(root, "profiles", "assistant");
     await mkdir(profileDir, { recursive: true });
     const profileDb = new Database(join(profileDir, "state.db"));
     schema(profileDb);

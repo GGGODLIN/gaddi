@@ -9,8 +9,7 @@
 // and every database path is confined to the configured root, after symlinks, before it is opened.
 // Each database is opened read-only.
 
-import { Database } from "bun:sqlite";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import type { Database } from "bun:sqlite";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -38,6 +37,7 @@ import {
   MAX_TRANSCRIPT_BYTES,
   rootList,
 } from "./files.ts";
+import { readSqlite } from "./sqlite-read.ts";
 import { clamp, MAX_TEXT_CHARS, stripAnsi, summarizeToolInput } from "./text.ts";
 import { classifyToolCall } from "./tool-call.ts";
 import type {
@@ -76,7 +76,7 @@ export function splitHermesKey(key: string): { dbPath: string; sessionId: string
  * process is not Hermes. Handles both a direct `hermes` argv[0] and the Python `-c` launcher
  * (`python3 -I -c "...from hermes_cli.main import main..." "$@"`) Hermes's wrapper script execs into.
  */
-export function hermesArgs(argv: readonly string[]): readonly string[] | null {
+function hermesArgs(argv: readonly string[]): readonly string[] | null {
   if (argv.length === 0) return null;
   const base = (argv[0]!.split(/[/\\]/).pop() ?? "").replace(/\.exe$/i, "").toLowerCase();
   if (base === "hermes") return argv.slice(1);
@@ -111,53 +111,6 @@ function sessionFromArgv(processes: readonly ForegroundProcess[] | undefined): s
     }
   }
   return null;
-}
-
-const MAX_DESERIALIZE_BYTES = 64 * 1024 * 1024;
-const CLOSED_WAL_OPEN_ERROR =
-  /\b(?:SQLITE_CANTOPEN(?:_\w+)?|SQLITE_READONLY(?:_\w+)?|SQLITE_IOERR_SHM\w*)\b|unable to open database file|attempt to write a readonly database|disk I\/O error/i;
-
-function canDeserializeClosedWal(dbPath: string, err: Error & { readonly code?: string }): boolean {
-  if (!CLOSED_WAL_OPEN_ERROR.test(`${err.code ?? ""} ${err.message}`)) {
-    return false;
-  }
-  if (existsSync(`${dbPath}-wal`) || existsSync(`${dbPath}-shm`)) return false;
-  try {
-    return statSync(dbPath).size <= MAX_DESERIALIZE_BYTES;
-  } catch {
-    return false;
-  }
-}
-
-function withDb<T>(dbPath: string, fn: (db: Database) => T): T | null {
-  if (!existsSync(dbPath)) return null;
-  let db: Database | undefined;
-  try {
-    db = new Database(dbPath, { readonly: true });
-    return fn(db);
-  } catch (err) {
-    if (!(err instanceof Error) || !canDeserializeClosedWal(dbPath, err)) return null;
-    // Hermes opens state.db in WAL mode (header bytes 18-19 = 2, 2) and Python sqlite3 removes
-    // -wal/-shm on close. Without -wal on disk, plain readonly open tries to create -shm and fails
-    // with SQLITE_CANTOPEN (errno 14). Deserializing an in-memory copy with header bytes 18-19 set
-    // to 1, 1 reads the committed pages only when no -wal/-shm sidecar exists on disk.
-    try {
-      const buf = new Uint8Array(readFileSync(dbPath));
-      if (buf.length < 20 || buf[18] !== 2 || buf[19] !== 2) return null;
-      buf[18] = 1;
-      buf[19] = 1;
-      const mem = Database.deserialize(buf, { readonly: true });
-      try {
-        return fn(mem);
-      } finally {
-        mem.close();
-      }
-    } catch {
-      return null;
-    }
-  } finally {
-    db?.close();
-  }
 }
 
 interface MessageRow {
@@ -479,7 +432,7 @@ export class HermesTranscriptSource implements TranscriptSource {
       for (const candidate of await sessionDbs(root)) {
         const path = await containedRealpath(candidate, root);
         if (path === null) continue;
-        const found = withDb(path, (db) =>
+        const found = readSqlite(path, (db) =>
           db.query<{ id: string }, [string]>("select id from sessions where id = ?").get(ref.value),
         );
         if (found !== null && found !== undefined) return hermesKey(path, ref.value);
@@ -506,7 +459,7 @@ export class HermesTranscriptSource implements TranscriptSource {
       for (const candidate of await sessionDbs(root)) {
         const path = await containedRealpath(candidate, root);
         if (path === null) continue;
-        const hit = withDb(path, (db) =>
+        const hit = readSqlite(path, (db) =>
           db
             .query<{ id: string; started_at: number }, [string]>(
               "select id, started_at from sessions where cwd = ? order by started_at desc limit 1",
@@ -523,14 +476,14 @@ export class HermesTranscriptSource implements TranscriptSource {
   async stat(key: string): Promise<{ size: number; mtimeMs: number } | null> {
     const parts = splitHermesKey(key);
     if (parts === null) return null;
-    return withDb(parts.dbPath, (db) => sessionMeta(db, parts.sessionId));
+    return readSqlite(parts.dbPath, (db) => sessionMeta(db, parts.sessionId));
   }
 
   async load(key: string): Promise<{ text: string; complete: boolean; size: number; mtimeMs: number }> {
     const empty = { text: "", complete: true, size: 0, mtimeMs: 0 };
     const parts = splitHermesKey(key);
     if (parts === null) return empty;
-    return withDb(parts.dbPath, (db) => {
+    return readSqlite(parts.dbPath, (db) => {
       const meta = sessionMeta(db, parts.sessionId);
       const clipped = clipLines(composeLines(db, parts.sessionId));
       return { ...clipped, ...meta };
@@ -551,7 +504,7 @@ export class HermesTranscriptSource implements TranscriptSource {
     if (parts === null) return { lines: [], cursor: NO_CURSOR, reset: false, fromStart: false };
     const at = decodeCursor(cursor, "rowid", key);
     return (
-      withDb(parts.dbPath, (db) => {
+      readSqlite(parts.dbPath, (db) => {
         const rows =
           at === null
             ? db

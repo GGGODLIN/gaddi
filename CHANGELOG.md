@@ -224,6 +224,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A dialog on herdr-core reaches the phone when the core's scrollback read hangs.** While a pi dialog stood, the core gave no answer to a read with scrollback, so after 5 s the pane read as unreadable and no card showed. Collie now reads the screen beside it and, after 2 s, shows the screen's rows with the scrollback marked as cut, and logs the hang once per pane. ([be55f2f](https://github.com/AltanS/collie/commit/be55f2f))
 - **A refused tap on a card leaves a line in the bridge log.** The phone showed the refusal and its reason, but the log had nothing, so a field report could not be traced. The line names the ask id, the pane and the reason. ([02b8450](https://github.com/AltanS/collie/commit/02b8450))
 - **A crew member's pane the lead cannot read leaves a line in the lead's log.** The phone kept its last mirror and the log said nothing. The line names the member, the pane and the status, once while the read keeps failing. ([6f9534f](https://github.com/AltanS/collie/commit/6f9534f))
+- **A three-line draft un-stacks when the draft microphone arrives, and Hermes journal discovery uses the shared SQLite reader.** `useStackedActions` re-evaluates its entry threshold when `stackAt` rises from three to five lines, `HerdrMux` drops the per-pane Hermes process poll during `snapshot()`, and `HermesTranscriptSource` uses `readSqlite` from `bridge/journal/sqlite-read.ts`.
 
 ### Docs
 

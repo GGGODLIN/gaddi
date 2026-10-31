@@ -5839,6 +5839,38 @@ describe("Composer — a tall draft stacks attach over the primary action", () =
     const buttons = [...group().querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
     expect(buttons).toEqual(["Attach file", "Record a voice message", "Send"]);
   });
+
+  it("un-stacks a 3-line draft when the draft microphone arrives asynchronously from /api/config", async () => {
+    installFakeMediaRecorder();
+    let releaseConfig: () => void = () => {};
+    server.use(
+      http.get("/api/config", async () => {
+        await new Promise<void>((resolve) => {
+          releaseConfig = resolve;
+        });
+        return HttpResponse.json({
+          push: false,
+          vapidPublicKey: "",
+          stt: { provider: "openai-compatible", available: true },
+        });
+      }),
+    );
+    renderStyled();
+
+    // Before /api/config resolves, only 2 buttons are shown, so a 3-line draft stacks at 80px.
+    fireEvent.change(field(), { target: { value: draft(3) } });
+    await waitFor(() => expect(stackedNow()).toBe(true));
+
+    // When /api/config resolves and the draft microphone appears (raising stackAt to 5), the 3-line
+    // draft un-stacks back into the row so the 124px 3-button column does not jump the box taller.
+    act(() => releaseConfig());
+    await screen.findByRole("button", { name: /record a voice message/i });
+    await waitFor(() => expect(stackedNow()).toBe(false));
+
+    // Extending the draft to 5 lines stacks all three buttons cleanly.
+    fireEvent.change(field(), { target: { value: draft(5) } });
+    await waitFor(() => expect(stackedNow()).toBe(true));
+  });
 });
 
 
