@@ -166,6 +166,52 @@ function readBudgetEnv(env: Record<string, string | undefined>, key: string): st
  */
 export const WRITE_BUDGET_MS = 5000;
 
+/**
+ * How long a **forwarded read of a pane's screen** (`GET /api/pane/:id`) may take before the lead gives up
+ * on it. The same arithmetic as {@link WRITE_BUDGET_MS}, from the other side: the member, not the lead's
+ * sweep, decides how long that read takes.
+ *
+ * ── WHY (measured, 2026-10-30, M79 spec 04) ───────────────────────────────────
+ * A read with scrollback on a member that runs herdr-core can take 2.4 s: hc 0.1.14 spends that long on
+ * the FIRST history read of a pi terminal after its screen changed (`hc read t2 --lines 1`, 2.38 s; the
+ * same read again, 0 s; a plain screen read and a shell terminal, 0 s). The member's adapter gives the
+ * history read `HISTORY_READ_BUDGET_MS` (2 s) and then answers with the screen alone, marked
+ * `truncated`. That answer arrives at about 2.1 s, so the lead's 1200 ms poll budget refused every
+ * first read of a changed pane with `host_unreachable` (503, "pane/t2: timed out after 1200ms") over a
+ * pane the member would have shown a moment later, and every read after it, inside the member's 30 s
+ * screen-only window, answered. The crew leg's cases 13 and 21 read the pi pane once, so each stopped
+ * on that 503.
+ *
+ * A pane read is one operator's one request, awaited on its own path: it stalls no sweep, and the phone's
+ * poll deadline (6 s) still fires after this one. 5000 ms is the member's 2 s history budget plus a TLS
+ * round trip with room to spare. It equals the default cold-link patient budget, so naming it loses the
+ * bootstrap credit (an explicit budget spends none) without making a cold read less patient.
+ *
+ * Lead-local, never on the wire, so moving it needs no protocol bump.
+ */
+export const PANE_READ_BUDGET_MS = 5000;
+
+/**
+ * How long a **forwarded write to a pane** (`POST /api/pane/:id/reply`, `keys`, `abort`, `clear`, ...) may
+ * take before the lead gives up on it and tells the phone `write_outcome_unknown`. {@link WRITE_BUDGET_MS}
+ * still covers every write that is not addressed to a pane (a launch, a tab, a folder star).
+ *
+ * ── WHY (measured, 2026-10-30, M79 spec 04, crew case 19) ─────────────────────
+ * A send on a member that runs herdr-core costs about 6.4 s: hc 0.1.14 answers a key press about 3 s after
+ * a raw write to the same terminal, and a `reply` to a pi pane writes the text and then presses Enter, so it
+ * waits for the core twice. The member delivered the reply and answered, but past the lead's 5 s, so the
+ * phone read 504 `write_outcome_unknown` over a reply that had gone in.
+ *
+ * 15000 ms is two sends' worth on the core. The lead never dials a write twice (a second dial would be a
+ * second key), so a short budget cannot be retried away; it has to be long enough the first time. It stays
+ * inside the phone's own 20 s mutation budget (`web/src/lib/api.ts` `MUTATION_TIMEOUT_MS`), so the lead's
+ * deadline still fires first and the phone still gets §10.3's legible refusal. A member that is truly gone
+ * is not slower to report: the connect and handshake fail on their own, long before this deadline.
+ *
+ * Lead-local, never on the wire, so moving it needs no protocol bump.
+ */
+export const PANE_WRITE_BUDGET_MS = 15000;
+
 /** How long a `hello` PROBE may take before the lead calls a member gone (§10.4), by default. */
 export const DEFAULT_CREW_HELLO_TIMEOUT_MS = 5000;
 /** Operator override for the probe budget. A crew key, so it lives here and not on `Config`. */

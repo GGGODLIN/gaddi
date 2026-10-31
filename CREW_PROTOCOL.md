@@ -1462,14 +1462,15 @@ never crosses a crew link.
   multiplexer build a tab. Measured in the VM lab on 2026-09-08, that took about 2 s on a zellij
   member and straddled the 1200 ms poll budget in roughly two tries out of three — so the phone read
   `write_outcome_unknown` over a tab that had in fact been created, which is the one outcome §10.3
-  exists to keep rare, produced by arithmetic rather than by a fault. Every write route in §5's table
-  therefore dials on `WRITE_BUDGET_MS` (`bridge/crew/peer-client.ts`, **5000 ms**), and every
-  forwarded **read** keeps the poll budget exactly, bootstrap credit and all. The write budget is
-  passed as an explicit deadline, so it spends no bootstrap credit (§10.4) and never enters the
-  sweep's budget accounting. It sits well inside the phone's own 20 s mutation deadline
-  (`web/src/lib/api.ts`), so the deadline that fires first is still the lead's and the phone still
-  gets §10.3's legible answer rather than a dead socket. Lead-local, never on the wire, so it is not
-  a version-negotiated value (§7.1).
+  exists to keep rare, produced by arithmetic rather than by a fault. Writes to a pane now dial on
+  `PANE_WRITE_BUDGET_MS` (**15000 ms**), because a herdr-core member can take longer than 5 s to
+  deliver a reply; every other write uses `WRITE_BUDGET_MS` (**5000 ms**). A forwarded read of
+  exactly `pane/<id>` uses `PANE_READ_BUDGET_MS` (**5000 ms**); every other forwarded read keeps
+  the poll budget and bootstrap credit. These constants live in `bridge/crew/peer-client.ts`,
+  selected by `budgetOf` in `bridge/crew/forward.ts`. An explicit deadline spends no bootstrap
+  credit (§10.4) and never enters the sweep's budget accounting. The pane budgets sit inside the
+  phone's 20 s mutation and 6 s poll deadlines (`web/src/lib/api.ts`), so the lead answers first.
+  All budgets are lead-local, never on the wire, and need no protocol version change (§7.1).
 
 ### 10.2 Four distinct states, never conflated *(a fourth added 2026-08-20)*
 

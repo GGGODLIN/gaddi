@@ -1372,6 +1372,31 @@ class HerdrCodexPane extends FakePane {
   }
 }
 
+describe("a pane too short to draw its input box (2026-10-30)", () => {
+  test("a read of fewer rows than the box takes is refused unconfirmed with the short_pane cause and the rows named; a read of enough rows keeps the plain line", async () => {
+    const pane = new FakePane("claude");
+    // A Claude Code pane squeezed to two rows by the splits beside it draws only its status rows.
+    pane.fixed = ["  [Fable 5.1 (1000K) effort:high thinking] ▓░░░░░░░░░ 18% | $0,00 | 5h:2% 7d:39%", "  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 4 agents"].join("\n");
+    const { send } = rig({ pane });
+    const short = await send("do it");
+    expect(short.receipt).toMatchObject({ outcome: "refused", reason: "unconfirmed", keys: [] });
+    expect(short.cause).toBe("short_pane");
+    expect(short.offers).toEqual(["commit", "keys"]);
+    expect(short.rowsHash).toBeDefined();
+    expect(short.detail).toBe(
+      "The read holds 2 rows, and the claude input box takes at least 3. The pane may be too short to draw it: zoom or resize it on the desktop, or close the panes beside it in its tab, then send again.",
+    );
+    expect(pane.calls).toEqual([]);
+    // Three rows with no box: enough for the box, so the screen is one Collie cannot read, not a short pane.
+    pane.fixed = ["⏺ Done.", "  [Fable 5.1 (1000K) effort:high thinking] ▓░░░░░░░░░ 18% | $0,00 | 5h:2% 7d:39%", "  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 4 agents"].join("\n");
+    const tall = await send("do it");
+    expect(tall.receipt).toMatchObject({ outcome: "refused", reason: "unconfirmed" });
+    expect(tall.cause).toBeUndefined();
+    expect(tall.detail).toBe("Gaddi cannot read this screen. Check the pane, then tap Type here.");
+    expect(pane.calls).toEqual([]);
+  });
+});
+
 describe("a manual send compares less (M56 send drill, 2026-10-16)", () => {
   test("Codex hides its hint row once the box holds a character: the manual Send passes the probe and is sent", async () => {
     const pane = new CodexPane();
@@ -1379,7 +1404,7 @@ describe("a manual send compares less (M56 send drill, 2026-10-16)", () => {
     const first = await send("reply with one word: ok");
     expect(first.receipt).toMatchObject({ outcome: "refused", reason: "unconfirmed", profileId: FRAMELESS, keys: [] });
     // The same words as the phone's catalog line printed above it.
-    expect(first.detail).toBe("Collie cannot read this screen. Check the pane, then tap Type here.");
+    expect(first.detail).toBe("Gaddi cannot read this screen. Check the pane, then tap Type here.");
     const answer = await send("reply with one word: ok", { rowsHash: first.rowsHash! });
     expect(answer.receipt).toMatchObject({ outcome: "sent", keys: ["probe", "Backspace", "Enter"] });
     expect(pane.calls).toEqual([`type:${GENERIC_PROBE}`, "type:reply with one word: ok"]);
@@ -4265,9 +4290,12 @@ describe("real screens from the fixture corpus", () => {
   // notice path. The field record: ~/.local/state/collie-next/surface/examples/01792385882274-*.json.
   const SURVEY_ROWS = ["● How is Claude doing this session? (optional)", "  1: Bad    2: Fine   3: Good   0: Dismiss"];
   const UPDATE_ROW = `${" ".repeat(40)}✔ Update installed · Restart to update`;
+  // 2026-10-31, Claude Code 2.1.314: where it offers the `/restart` command, the row names it, and a
+  // send under the survey was refused `unconfirmed` (single-key cue, modal unreadable) again.
+  const RESTART_COMMAND_ROW = `${" ".repeat(40)}✔ Update installed · /restart to apply`;
 
   test("on the rating survey over the update row: a sentence goes on one tap, with or without a blank row between", async () => {
-    for (const between of [[UPDATE_ROW], ["", UPDATE_ROW]]) {
+    for (const between of [[UPDATE_ROW], ["", UPDATE_ROW], [RESTART_COMMAND_ROW]]) {
       const { pane, send } = rig();
       pane.over = [...SURVEY_ROWS, ...between];
       const answer = await send("ok merge the five, running the crew update now");
@@ -4278,11 +4306,11 @@ describe("real screens from the fixture corpus", () => {
   });
 
   test("on the rating survey over the update row: a digit takes the notice path and answers the survey without Enter", async () => {
-    for (const digit of ["0", "1", "2", "3"]) {
+    for (const [digit, update] of ["0", "1", "2", "3"].flatMap((d) => [UPDATE_ROW, RESTART_COMMAND_ROW].map((row) => [d, row] as const))) {
       const { pane, send } = rig();
-      pane.over = [...SURVEY_ROWS, UPDATE_ROW];
+      pane.over = [...SURVEY_ROWS, update];
       const first = await send(digit);
-      expect(first.receipt, digit).toMatchObject({ outcome: "refused", reason: "unconfirmed", keys: [] });
+      expect(first.receipt, `${digit} ${update.trim()}`).toMatchObject({ outcome: "refused", reason: "unconfirmed", keys: [] });
       expect(first.cause).toBe("notice_key");
       expect(first.offers).toEqual(["commit", "keys"]);
       pane.afterInput = answersDigit;
