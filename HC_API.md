@@ -380,7 +380,7 @@ Each line is a thing the core could do that would close a gap Collie cannot clos
   fact that a harness paints and does not write: about 100 dialog readings on pi, opencode and omp
   (the pointer row, the stepper chip, the selected tab) are colour only, so a dialog of those three
   whose pointer is colour only cannot be answered from the phone. Claude, Codex and the placeholders
-  have a text twin and are done.
+  have a text twin and are done. Filed as [herdrdev/herdr-core#68](https://github.com/herdrdev/herdr-core/issues/68).
 - **A history read that answers, and keys that do not wait for it.** `terminal.read` with `lines`
   above 0 did not answer in 30 s on a pi that showed a permission or question dialog, while the
   viewport read (`lines: 0`) answered in 0.1 s. Waited out, one such read took 25.03 s and answered
