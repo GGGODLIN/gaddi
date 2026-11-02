@@ -12,6 +12,10 @@
 // once the Claude process was held for two seconds around each send, and none while it ran freely: the
 // footer itself never kept a probe out of the box.
 //
+// Since M80 spec 09 (2026-11-01) a probe that shows nowhere on an idle pane reads on for the late-probe
+// window (LATE_PROBE): an agent that draws the probe inside it takes the first send, and one busy past it
+// gives the report's receipts as before, each probe gap now at least the window.
+//
 // The screen is the reporter's own bottom rows (web/src/fixtures/surface/claude--v2-1-314-agents-footer-
 // late-probes--w282.txt), over a box the fake pane draws. A busy pane keeps every text and key in the
 // terminal's buffer and draws them, in order, once it is free again.
@@ -25,7 +29,7 @@ import { profileFor } from "../../web/src/lib/surface/profile.ts";
 import { STALE_SCREEN, type SendAnswer } from "../../web/src/lib/surface/send.ts";
 import { KeyGate } from "./key-gate.ts";
 import { PROBE_MARKER } from "./probe-marker.ts";
-import { RowRing, SendProtocol, SessionLocks, type SendRequest } from "./protocol.ts";
+import { LATE_PROBE, RowRing, SendProtocol, SessionLocks, type SendRequest } from "./protocol.ts";
 import { RequestStore } from "./requests.ts";
 
 const SURFACE = join(import.meta.dir, "..", "..", "web", "src", "fixtures", "surface");
@@ -177,22 +181,34 @@ describe("Claude Code 2.1.314 under its agents footer, a box that shows keys lat
     expect(pane.submitted).toEqual(["hello there"]);
   });
 
-  test("the four receipts of the report: three empty boxes, then the late probes, and the last one says to wait, not to redraw", async () => {
+  test("with the late-probe window the report's first send lands: the agent drew its probe 2 s late (M80 spec 09)", async () => {
     const { pane, clock, send } = rig("");
-    pane.busyUntil = clock.now + 10_000;
+    pane.busyUntil = clock.now + 2_000;
+    const answer = await send("hello there");
+    expect(answer.receipt).toMatchObject({ outcome: "sent", keys: ["probe", "Backspace", "Enter"] });
+    expect(answer.receipt?.gapsMs.probe).toBeGreaterThan(2_000);
+    expect(pane.submitted).toEqual(["hello there"]);
+    expect(pane.box).toBe("");
+  });
+
+  test("the four receipts of the report, on an agent busy past the window: three empty boxes, then the late probes, and the last one says to wait, not to redraw", async () => {
+    const { pane, clock, send } = rig("");
+    // Longer than the late-probe window: each of the three sends reads on for it, then refuses.
+    pane.busyUntil = clock.now + 30_000;
     // 11:51:30, :34 and :37: the probe does not show while it reads, and nothing else is typed.
     for (const gap of [0, 3_400, 3_100]) {
       clock.now += gap;
       const answer = await send("hello there");
       expect(answer.receipt).toMatchObject({ outcome: "refused", reason: "probe_failed", keys: ["probe"], saw: { turn: "idle", modal: "none", composer: "empty" } });
       expect(answer.receipt?.detail).toContain("The probe character did not show in the box.");
+      expect(answer.receipt?.gapsMs.probe).toBeGreaterThanOrEqual(LATE_PROBE.ms);
       expect(answer.cause).toBeUndefined();
     }
     // 11:51:41: the agent drew the three probes by now, then went busy again before this send.
     clock.now = pane.busyUntil;
     expect((await send("", { mode: "prepare" })).surface).toMatchObject({ composer: "draft" });
     expect(pane.box).toBe(`${P}${P}${P}`);
-    pane.busyUntil = clock.now + 10_000;
+    pane.busyUntil = clock.now + 30_000;
     const fourth = await send("hello there");
     expect(fourth.receipt).toMatchObject({ outcome: "refused", reason: "probe_failed", keys: ["probe"], saw: { turn: "idle", modal: "none", composer: "draft" } });
     expect(fourth.cause).toBe("late_keys");
