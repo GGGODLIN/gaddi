@@ -31,6 +31,7 @@ import {
   type ChangeRef,
   type DiffViewCommentProps,
 } from "@/components/changes-view";
+import { BackBar, BackButton, PHONE_QUERY, type BackControl } from "@/components/back-bar";
 import { BottomBar } from "@/components/ui/bottom-bar";
 import { BranchLabel } from "@/components/ui/branch-label";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,6 @@ import { Segmented } from "@/components/ui/segmented";
 import { BottomSheet, TALL_SHEET_CLEARANCE } from "@/components/ui/sheet";
 import { useDashPrefs } from "@/hooks/use-dash-prefs";
 import { handOf, useDisplayPrefs, type Hand } from "@/hooks/use-display-prefs";
-import { useKeyboardOpen } from "@/hooks/use-keyboard";
 import { useLocale } from "@/hooks/use-locale";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useNav } from "@/hooks/use-nav";
@@ -93,7 +93,6 @@ import {
   changesCommitPath,
   changesPath,
   changesSettingsPath,
-  decodedPath,
   filesParent,
   filesPath,
   historyIdx,
@@ -113,6 +112,10 @@ import {
   type FilesAt,
 } from "@/lib/nav";
 import { markInAppBack } from "@/lib/nav-entry";
+import { stepsBackToPane } from "@/lib/back-to-pane";
+import { clearDiffComments } from "@/lib/diff-comment-store";
+import { findPane, paneRowKey } from "@/lib/hosts";
+import { useDiffComments } from "@/hooks/use-diff-comments";
 import { navTrail } from "@/lib/nav-trail";
 import { useHoldReload } from "@/lib/reload-guard";
 import { useRootData } from "@/lib/route-data";
@@ -280,50 +283,6 @@ function RootSegment({ folder, label }: { folder: string | null; label: string }
     <span className="max-w-full shrink-0 truncate font-mono text-xs leading-tight text-muted-foreground" data-slot="files-root-folder" title={folder}>
       · {segment}
     </span>
-  );
-}
-
-/**
- * A phone, as this screen draws it: under Tailwind's `md` (768px), where the column stops filling
- * the width and caps at `md:max-w-screen-md`. From there up the header arrow is in reach and the
- * bottom Back is not drawn.
- */
-const PHONE_QUERY = "(max-width: 767.98px)";
-
-/**
- * The screen's one Back: what the header arrow does and what it is called, at the level on screen.
- * The header arrow and the bottom Back (a phone's thumb cannot reach the header) both take this
- * object, so the two cannot drift apart; a level that changes its way back changes both at once.
- */
-export interface BackControl {
-  /** ALREADY TRANSLATED. Where the tap lands, the arrow's accessible name. */
-  label: string;
-  go: () => void;
-}
-
-/** The Back button of the bottom bar: the header arrow's act and name, plus the word. */
-function BackButton({ back, className }: { back: BackControl; className?: string }) {
-  return (
-    <Button variant="outline" className={cn("h-11", className)} onClick={back.go} aria-label={back.label}>
-      <ArrowLeft className="size-4" />
-      {t("files.back")}
-    </Button>
-  );
-}
-
-/**
- * The bar under a level that has no Previous / Next: Back alone, on the side of the hand that holds
- * the phone, as wide as its word and not the row. Gone while the on-screen keyboard is up, which only
- * a filter field raises on this screen: the bar would ride up over the keys and cost the list
- * a row's height it needs to show what is being typed.
- */
-export function BackBar({ back, hand }: { back: BackControl; hand: Hand }) {
-  const keyboard = useKeyboardOpen();
-  if (keyboard) return null;
-  return (
-    <BottomBar className={cn("flex", hand === "left" ? "justify-start" : "justify-end")}>
-      <BackButton back={back} className="min-w-28" />
-    </BottomBar>
   );
 }
 
@@ -1030,8 +989,9 @@ function ChangesScreen() {
     diffText: "",
     keys: [],
   });
-  const [comments, setComments] = useState<DiffComment[]>([]);
-  const nextCommentId = useRef(1);
+  // Held in sessionStorage per scope and target, so leaving Changes and coming back in this tab
+  // restores the batch; staging it into a draft clears it (lib/diff-comment-store.ts).
+  const { comments, setComments, nextId: nextCommentId } = useDiffComments(scope, targetKey);
   const [commentSheet, setCommentSheet] = useState<
     | {
         mode: "new";
@@ -1047,12 +1007,14 @@ function ChangesScreen() {
   >(null);
   const [commentText, setCommentText] = useState("");
   const [basketOpen, setBasketOpen] = useState(false);
-  const [chosenPaneId, setChosenPaneId] = useState<string>("");
+  // The picked agent as a ROW (`paneRowKey`): on a crew two machines can both hold `w6:p1`. The bare
+  // id rides along only to name the pick in the button when that agent has exited.
+  const [chosen, setChosen] = useState<{ rowKey: string; paneId: string } | null>(null);
 
   useHoldReload("changes-comments", comments.length > 0 || commentSheet !== null);
 
   const askingAgentPane =
-    target.kind === "pane" ? root.agents.find((a) => a.paneId === paneId) : undefined;
+    target.kind === "pane" ? findPane(root.agents, paneId, scope, root.servers, root.sessions) : undefined;
   const spaceAgentPanes = useMemo(
     () =>
       root.agents.filter(
@@ -1064,11 +1026,11 @@ function ChangesScreen() {
   const targetPane =
     target.kind === "pane"
       ? askingAgentPane
-      : chosenPaneId !== ""
-        ? spaceAgentPanes.find((p) => p.paneId === chosenPaneId)
+      : chosen !== null
+        ? spaceAgentPanes.find((p) => paneRowKey(p) === chosen.rowKey)
         : spaceAgentPanes[0];
   const targetAgentName =
-    targetPane?.agent ?? targetPane?.paneLabel ?? targetPane?.paneId ?? (chosenPaneId || paneId);
+    targetPane?.agent ?? targetPane?.paneLabel ?? targetPane?.paneId ?? (chosen?.paneId || paneId);
 
   const currentDiffText = shownDiff && !shownDiff.binary && !shownDiff.directory ? shownDiff.diff : "";
   const currentParsed = useMemo(
@@ -1182,7 +1144,7 @@ function ChangesScreen() {
       return;
     }
     const entry: DiffComment = {
-      id: nextCommentId.current++,
+      id: nextCommentId(),
       fileKey: commentSheet.fileKey,
       repo: commentSheet.repo,
       path: commentSheet.path,
@@ -1213,25 +1175,17 @@ function ChangesScreen() {
     if (!targetPane || comments.length === 0) return;
     const dest = panePath(targetPane.paneId, scope);
     stageDiffCommentsToDraft(scope, targetPane.paneId, comments);
-    setComments([]);
+    // Cleared here as well as by the hook's write: the navigation below can unmount the screen
+    // before that write runs, and a batch left in storage would come back after it was staged.
+    clearDiffComments(scope, targetKey);
+    setComments(() => []);
     setBasketOpen(false);
     if (target.kind === "pane") {
-      const idx = historyIdx();
-      const entries = navTrail.entries();
-      const destPath = decodedPath(pathOnly(dest));
-      const changesPrefix = `${destPath}/changes`;
-      if (idx !== undefined) {
-        for (let stepIdx = idx - 1; stepIdx >= 0; stepIdx--) {
-          const href = entries.get(stepIdx);
-          if (href === undefined) break;
-          const p = decodedPath(pathOnly(href));
-          if (p === destPath) {
-            markInAppBack(pathOnly(dest));
-            void navigate(-(idx - stepIdx));
-            return;
-          }
-          if (p !== changesPrefix && !p.startsWith(`${changesPrefix}/`)) break;
-        }
+      const steps = stepsBackToPane(dest, historyIdx(), navTrail.entries());
+      if (steps !== null) {
+        markInAppBack(pathOnly(dest));
+        void navigate(-steps);
+        return;
       }
       nav.upTo(dest);
       return;
@@ -1559,12 +1513,13 @@ function ChangesScreen() {
                   {spaceAgentPanes.map((p) => {
                     const sub = p.paneLabel ?? p.sessionName ?? p.paneId;
                     const label = p.agent ? `${p.agent} · ${sub}` : sub;
-                    const active = p.paneId === targetPane?.paneId;
+                    const rowKey = paneRowKey(p);
+                    const active = targetPane !== undefined && rowKey === paneRowKey(targetPane);
                     return (
                       <button
-                        key={p.paneId}
+                        key={rowKey}
                         type="button"
-                        onClick={() => setChosenPaneId(p.paneId)}
+                        onClick={() => setChosen({ rowKey, paneId: p.paneId })}
                         className={cn(
                           "flex items-center justify-between rounded-md border px-3 py-2 text-left text-xs transition-colors",
                           active
@@ -1594,7 +1549,7 @@ function ChangesScreen() {
                       type="button"
                       onClick={() => {
                         const remaining = comments.filter((item) => item.id !== c.id);
-                        setComments(remaining);
+                        setComments(() => remaining);
                         if (remaining.length === 0) setBasketOpen(false);
                       }}
                       className="text-muted-foreground hover:text-foreground"

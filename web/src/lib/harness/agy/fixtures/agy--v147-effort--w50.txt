@@ -9,7 +9,7 @@
   [0m[1m[38;5;12mAntigravity CLI 1.4.7[0m
   [0m[38;5;8muser@example.com[0m
   [0m[38;5;8mGemini 4 Argon (High)[0m
-  [0m[38;5;8m/tmp/collie-agy-verify[0m
+  [0m[38;5;8m/tmp/project[0m
 
 [0m[38;5;8m──────────────────────────────────────────────────[0m
 [0m[38;5;12m> [0m[38;5;8mAuto mode: edits & safe commands auto-approv...[0m

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { SearchField } from "@/components/ui/search-field";
 import { BottomSheet } from "@/components/ui/sheet";
 import { AgentIcon } from "@/components/agent-icon";
-import { commandsFor, FOUND_AGENTS, type AgentCommand } from "@/lib/agent-commands";
+import { commandsFor, type AgentCommand } from "@/lib/agent-commands";
 import { fetchClaudeCommands, type ClaudeCommand } from "@/lib/api";
 import { canonicalAgent, rowsFor } from "@/lib/operator-scope";
 import type { Scope } from "@/lib/scope";
@@ -45,7 +45,7 @@ export function useClaudeCommands(
     rows: [],
   });
   const family = canonicalAgent(agent?.toLowerCase().trim() ?? "");
-  const readsFound = FOUND_AGENTS.has(family);
+  const readsFound = family !== "";
   const replacedByOperator = family !== "claude" && rowsFor(mine, agent, (row) => row.command).length > 0;
   const host = scope?.host ?? "";
   const session = scope?.session ?? "";

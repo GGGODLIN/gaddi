@@ -9,6 +9,8 @@ import { detectAgyModalRegion } from "./modals";
 import { detectModelRegion } from "./model";
 import { detectPromptSelectRegionIn, parseOptionRow, trailingMenuRows } from "./prompt-select";
 
+// Rows under the bottom border. A custom `statusLine` command prints as many rows as the user wrote,
+// so this matches the Claude reader's ceiling (the Claude profile's `idle.volatile.below.maxRows`).
 const MAX_STATUS_LINES = 8;
 const MAX_DRAFT_LINES = 100;
 const PROMPT_REGEX = /^[❯›>]\s*/;
@@ -18,12 +20,22 @@ const BACKGROUND_TASK_ROW = /^ {2}● \[\d{2}:\d{2}:\d{2}\] .+ running$/;
 const MAX_TASK_FOOTER_ROWS = 15;
 const AGY_IDLE = requireProfile("agy").idle;
 
+// The slash-command completion popup (agy 1.3.5, live 2026-10-15) paints UNDER the box's bottom rule:
+// suggestion rows, the highlighted one led by `>` (`> /model  Set a model…`) and the rest by two
+// spaces, then `↓ 1 more` or `No matches`, then its own footer `↑/↓ Navigate · enter Select · tab
+// Complete` and an `esc to cancel` row. The box above stays live: typing still lands in it. The popup
+// is named by that whole footer row and by every row between the rule and it being one the popup
+// paints. The phrase `tab Complete` alone is not enough: a modal's hint row may say `tab Complete
+// search` (review, 2026-10-15), and taking it for the popup would skip the modal check. 1.4.x adds a
+// command's aliases in brackets after it (`> /config (settings)`).
 const COMPLETION_FOOTER = /^\s*↑\/↓ Navigate · enter Select · tab Complete\s*$/;
 const COMPLETION_POINTED = /^>\s+(\/\S+)(?:\s+\(([^()]+)\))?/;
 const COMPLETION_POINTED_ALIAS = /^(>\s+)(\/\S+)\s+\(([^()]+)\)(\s{2,}.*)?$/;
 const COMPLETION_ROW = /^(?:> | {2})\/\S+(?:\s+\([^()]+\))?(?:\s{2,}\S.*)?$/;
 const COMPLETION_MORE = /^\s*[↑↓] \d+ more$/;
 const COMPLETION_NONE = /^\s*No matches$/;
+// The popup's own rows on top of the status rows: five suggestions, a `↓ n more`, an `↑ n more` once
+// scrolled, the footer, with margin.
 const MAX_POPUP_LINES = 10;
 
 function parseAliases(raw: string | undefined): string[] {
@@ -182,6 +194,16 @@ function isPopupRow(text: string): boolean {
   return t === "" || COMPLETION_ROW.test(t) || COMPLETION_MORE.test(t) || COMPLETION_NONE.test(t);
 }
 
+// What a dialog paints under its rule and a status line never does: a footer hint, `esc to cancel`,
+// or a numbered menu (rows 1., 2. …, as `trailingMenuRows` reads one). Idle and working composers
+// print `? for shortcuts` under the box (every capture in the corpus), so any of these under a rule
+// means that rule belongs to a modal. 1.4.x panels add a `Keyboard:` hint row, an `esc close` hint and
+// the `Models & Quota` / `Context Usage` panel foot. One numbered item alone is not enough: a custom
+// `statusLine` may print `1. build ok  2. tests ok` (claude-lab--statusline-numbered-rows--w82.txt),
+// and that is still a live box. Under an open completion popup the rows below its footer get the same
+// check, so a modal painted there is still a modal (second review, 2026-10-16). `ownEsc` is the first
+// status row, the one row that may say `esc to cancel` without being a modal: the popup's own row, and
+// since 1.4.x the working composer's status row (`OWN_ESC_STATUS`).
 function dialogUnder(texts: string[], bottomBorder: number, end: number, ownEsc = -1): boolean {
   const options: { n: number }[] = [];
   for (let j = bottomBorder + 1; j < end; j++) {
@@ -261,6 +283,7 @@ export function locateInputBox(texts: string[], end: number): LocatedBox | null 
   const taskBox = locateBackgroundTaskBox(texts, bot, end);
   if (taskBox !== null) return taskBox;
 
+  // 1. Look for bottom border within MAX_STATUS_LINES from the tail (allowing status/hint lines below)
   let bottomBorder = -1;
   const statusEnd = end;
   let reach = MAX_STATUS_LINES;
@@ -275,6 +298,10 @@ export function locateInputBox(texts: string[], end: number): LocatedBox | null 
     }
   }
 
+  // The window is wide enough (8 rows) to reach the rule under a dialog's `Question` label. A short
+  // `select-menu` dialog (one real option and a write-in) puts that rule inside it, and the echoed
+  // user message `> …` above it then reads as an idle prompt. A modal under the rule, or a prompt
+  // grammar claiming the screen, means no composer: fail closed, like step 2.
   const footer = bottomBorder === -1 ? -1 : completionFooter(texts, bottomBorder, end);
   if (bottomBorder !== -1) {
     const statusBase = footer === -1 ? bottomBorder : footer;
@@ -287,6 +314,10 @@ export function locateInputBox(texts: string[], end: number): LocatedBox | null 
     let walk = 0;
     while (p >= 0 && walk < MAX_DRAFT_LINES) {
       const t = texts[p]!;
+      // The box's own rules start at column 0 (every capture in the corpus). A rule the operator
+      // typed or pasted sits behind the draft's two-space gutter, so it is draft text; reading it as
+      // the top border refused the composer while that draft sat there (harness canary
+      // 2026-10-12, agy 1.3.3, draft 15-rule).
       if (isBoxBorder(t) && !/^\s/.test(t)) return null;
       if (PROMPT_REGEX.test(t)) {
         let top = p - 1;
@@ -310,9 +341,27 @@ export function locateInputBox(texts: string[], end: number): LocatedBox | null 
     }
   }
 
+  // 2. No fallback. AGY's composer is ALWAYS boxed — a top rule, the `>` row, a bottom rule, then
+  // the `? for shortcuts …` status row (every capture in the corpus). A bare `>` row with nothing
+  // anchoring it is a TRANSCRIPT row, not a composer: AGY echoes each submitted message as `> …`
+  // and paints its ask_user_question selection the same way (see agy--done.txt). Claiming those
+  // would report a live composer over a busy agent, hand the echo back as the operator's draft, and
+  // authorise a reply the pane cannot receive. Failing closed costs a refused send; failing open
+  // types into a running turn.
   return null;
 }
 
+/**
+ * The draft under an open completion popup. Enter runs the HIGHLIGHTED suggestion, so the typed text
+ * verifies only when that suggestion is the typed command itself, one of its bracketed aliases, or
+ * when the popup says `No matches` (an argument typed). On partial input (`/mo` over `> /model`) the
+ * highlighted row is folded in, so the reply guard cannot match and refuses, rather than bless a
+ * command nobody typed. A popup listing suggestions with none highlighted is not measured, so its
+ * rows are folded in the same way: not finding the highlight is not the same as the popup saying
+ * there is none. The whole popup is read before any answer: `No matches` beside a suggestion, or two
+ * highlighted rows, is a screen nobody measured, and the first row that looked right must not decide
+ * it (second review, 2026-10-16).
+ */
 function completedDraft(texts: string[], bottomBorder: number, footer: number, typed: string | null): string | null {
   if (typed === null) return null;
   const rows = texts

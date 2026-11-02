@@ -24,6 +24,8 @@ import { useNoPromptsGuard } from "@/hooks/use-no-prompts-guard";
 import { buzz } from "@/lib/haptics";
 import { handOf, mirrorFont, paneNavOf, useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useChatWindow } from "@/hooks/use-chat-window";
+import { useStartupReadiness } from "@/hooks/use-startup-readiness";
+import type { AgentLaunch } from "@/lib/agent-startup";
 import { useChatReady } from "@/hooks/use-chat-ready";
 import { usePaneStart } from "@/hooks/use-pane-start";
 import { useHandover, useHeldBody } from "@/hooks/use-handover";
@@ -54,6 +56,7 @@ import { RouteHeader } from "@/components/app-header";
 import { HeaderStatus } from "@/components/header-status";
 import { AgentStart } from "@/components/agent-start";
 import { AnsiOutput } from "@/components/ansi-output";
+import { OutputZoom } from "@/components/output-zoom";
 import { CardDock, hasDialogCard } from "@/components/card-dock";
 import { HookHoldCard } from "@/components/hook-hold-card";
 import { MIRROR_SPACE, MIRROR_INVERT, MUSE_MIRROR, segmentStyle } from "@/components/mirror-space";
@@ -126,12 +129,12 @@ import type { PromptBlockAction } from "@/components/prompt-select-block";
 import type { PreviewBlockAction } from "@/components/preview-select-block";
 import type { MenuBlockAction } from "@/components/menu-block";
 import { locateReply, settleText } from "@/lib/latest-reply";
-import { canGrowRequestedLines, growRequestedLines } from "@/lib/loaders";
+import { askOlderRows, canGrowRequestedLines, getRequestedLines, growRequestedLines } from "@/lib/loaders";
 import { paneName, panePlaceParts } from "@/lib/pane-name";
 import { paneHeaderLine, paneProgress, paneSubtitle } from "@/lib/pane-marks";
 import { panesOfTab } from "@/lib/pane-ordinal";
 import { ExperimentalBadge } from "@/components/experimental-badge";
-import { useMuxCapability } from "@/lib/mux-capability";
+import { paneSessionLog, useMuxCapability } from "@/lib/mux-capability";
 import { paneInRepo } from "@/lib/branch-off";
 import { useOptionalRootData } from "@/lib/route-data";
 import { hasJournalAdapter, reportsSessionOnFirstPrompt } from "@/lib/journal-agents";
@@ -163,6 +166,10 @@ interface AgentChatProps {
   /** Which machine + which named session this pane lives in — scopes every read/write + the safety chip. */
   scope?: Scope;
   agent: AgentView | undefined;
+  /** A launch this phone started, scoped to this pane: Send stays gated until its first screen is read. */
+  agentLaunch?: AgentLaunch;
+  /** Retires {@link agentLaunch} once its gate opens. Sends nothing. */
+  onLaunchReady?: () => void;
   agents: AgentView[];
   shellPanes: AgentView[];
   tabs: TabView[];
@@ -175,6 +182,15 @@ interface AgentChatProps {
   logicalText?: string;
   /** The scrollback window `text` was fetched with — tells a grown fetch from a stale in-flight poll. */
   requestedLines?: number;
+  /**
+   * The multiplexer cut the scrollback above `text`. Only herdr-core sets it: its poll reads the
+   * screen alone, and Load older is how its rows above the screen are asked for (M79 spec 01).
+   */
+  truncated?: boolean;
+  /** `text` answers a Load older tap, not the poll (`PaneData.olderRead`). Only such a result is adopted after a tap. */
+  olderRead?: boolean;
+  /** Why that Load older came back without older rows, in the multiplexer's words. */
+  olderNote?: string | undefined;
   /** The pane's `revision` for `text` — the race guard checks a tapped menu against this. */
   revision?: number;
   /** Per-device auth from the snapshot; an unauthorised device drops the composer to read-only. */
@@ -208,6 +224,12 @@ interface AgentChatProps {
    * `onBack` and never glides.
    */
   onBackArrow?: () => void;
+  /**
+   * The output, zoomed (components/output-zoom.tsx): `open` while the route is `/pane/:id/zoom`,
+   * `onOpen` the belt's Zoom pill (a step down), `onClose` its ✕ (an up). Absent, no pill and no view:
+   * a caller that is not the pane route, as in this component's own tests.
+   */
+  zoom?: { open: boolean; onOpen: () => void; onClose: () => void };
   onSelect: (paneId: string) => void;
   /**
    * Drawn as the focused column of a large screen's strip (ADR 0120): the view fills the column it is
@@ -255,6 +277,8 @@ export function AgentChat({
   paneId,
   scope,
   agent,
+  agentLaunch,
+  onLaunchReady,
   agents,
   shellPanes,
   tabs,
@@ -262,6 +286,9 @@ export function AgentChat({
   text,
   logicalText,
   requestedLines = 0,
+  truncated = false,
+  olderRead = false,
+  olderNote,
   revision = 0,
   device,
   bridge = "connected",
@@ -272,6 +299,7 @@ export function AgentChat({
   noSavedCopy = false,
   onBack,
   onBackArrow,
+  zoom,
   onSelect,
   inStrip = false,
   tabletop = false,
@@ -742,6 +770,16 @@ export function AgentChat({
   // badge its row wears in the Spaces list. A terminal session's header is untouched.
   const experimental = wearsExperimental(useSessionCard(scope));
   const gridless = !paneGrid.capable;
+  const paneLive = useLive(paneId, scope);
+  // A launch this phone started: Send waits for the bridge to read the agent's first screen, the read
+  // that also ends the bridge's launch window, so the button never offers a send the bridge refuses.
+  const startup = useStartupReadiness({
+    launch: gridless ? undefined : agentLaunch,
+    agent: agent?.agent,
+    surface: agent?.surface,
+    live: paneLive && !connecting && !stale && !noSavedCopy && hostBlock === undefined,
+    onReady: onLaunchReady,
+  });
   // In a large screen's strip the space header holds the tabs and the sidebar the panes (ADR 0120).
   const stripsExist = !inStrip && !gridless && (canFold || tabPanes.length > 1);
   const folded = canFold && stripsFolded;
@@ -799,17 +837,19 @@ export function AgentChat({
   // Leaving the pane hands the flag back to its "nothing is open" value. Without this, closing a
   // pane you had scrolled up in would leave the poller believing nobody is following anything.
   useEffect(() => () => publishFollowing(true), []);
-  const [shown, setShown] = useState({ text, revision, logicalText });
+  // `truncated` rides along: it says whether the text on display has its scrollback cut, which is
+  // what offers Load older on a multiplexer that cannot say how deep its scrollback is (herdr-core).
+  const [shown, setShown] = useState({ text, revision, logicalText, truncated });
   useEffect(() => {
     if (!following) return;
     // Functional update that returns the previous object when nothing changed keeps React's
     // Object.is bailout — no re-render per poll while the pane is quiet.
     setShown((prev) =>
-      prev.text === text && prev.revision === revision && prev.logicalText === logicalText
+      prev.text === text && prev.revision === revision && prev.logicalText === logicalText && prev.truncated === truncated
         ? prev
-        : { text, revision, logicalText },
+        : { text, revision, logicalText, truncated },
     );
-  }, [text, revision, logicalText, following]);
+  }, [text, revision, logicalText, truncated, following]);
   const display = shown.text;
   const hasNew = !following && display !== text;
 
@@ -999,7 +1039,9 @@ export function AgentChat({
   // session", which is a per-pane answer an operator can act on by starting an agent; this one says
   // "nothing here will ever name one", which is a property of the multiplexer and needs saying out
   // loud. Hiding it is what leaves someone wondering whether Collie is broken.
-  const sessionLog = useMuxCapability("agentSessionRef", scope);
+  // A pane that already has a session (a harness that finds its own by folder) reads its log whatever
+  // the multiplexer names (lib/mux-capability.ts paneSessionLog).
+  const sessionLog = paneSessionLog(useMuxCapability("agentSessionRef", scope), agent?.hasSession);
   const historyAvailable = Boolean(agent?.hasSession) && sessionLog.capable;
   // "Plain" / "lost" retellings (ADR 9005): the host's own sidecar reads this host's transcripts, so
   // only a local Claude pane with a session qualifies, and the route is a write because each one is
@@ -1219,12 +1261,17 @@ export function AgentChat({
   // Scrollback has its own capability, and it is a genuinely different one: a multiplexer can keep
   // screen history while knowing nothing about agents. Hidden rather than explained when absent —
   // "there is nothing older to load" is not a fact anyone comes looking for.
+  //
+  // Two ways to know there is more. A multiplexer that reports `readableLines` says how deep the
+  // scrollback is, and the window grows toward it. herdr-core reports no depth, and its poll reads
+  // the screen alone (`truncated`), so there Load older stands while the text on display is cut, and
+  // each tap is one read of the rows above the screen.
   const scrollback = useMuxCapability("gridScrollback", scope);
   const moreScrollback =
     scrollback.capable &&
-    agent?.readableLines !== undefined &&
-    requestedLines < agent.readableLines &&
-    canGrowRequestedLines(paneId, scope);
+    (agent?.readableLines !== undefined
+      ? requestedLines < agent.readableLines && canGrowRequestedLines(paneId, scope)
+      : shown.truncated);
 
   // The newest reply, REPLACING the mirror rows that could only hold its end.
   //
@@ -1295,31 +1342,41 @@ export function AgentChat({
   const olderAnchor = useRef<{ height: number; top: number } | null>(null);
   const adoptTarget = useRef<number | null>(null); // the requestedLines a pending grow is waiting on
   const pendingRestore = useRef(false); // re-anchor scroll after the enlarged display paints
+  // Why the last Load older brought no older rows (herdr-core: the agent waits on you, or the core
+  // still reads them). Shown under the button until the next tap.
+  const [olderHeld, setOlderHeld] = useState<string | null>(null);
   function loadOlder() {
-    if (loadingOlder || !canGrowRequestedLines(paneId, scope)) return;
+    if (loadingOlder) return;
+    const grows = canGrowRequestedLines(paneId, scope);
+    if (!grows && !shown.truncated) return;
     const el = listRef.current?.getScrollElement();
     olderAnchor.current = el ? { height: el.scrollHeight, top: el.scrollTop } : null;
     setLoadingOlder(true);
+    setOlderHeld(null);
     setFollowing(false); // stay put in history rather than snapping to the tail
-    adoptTarget.current = growRequestedLines(paneId, scope);
+    adoptTarget.current = grows ? growRequestedLines(paneId, scope) : getRequestedLines(paneId, scope);
+    // The next read asks for the rows above the screen (`?purpose=older`); every other read is the
+    // poll, which herdr-core answers from the screen alone.
+    askOlderRows(paneId, scope);
     revalidator.revalidate();
   }
-  // Adopt the enlarged buffer into the frozen display once the *grown* fetch lands — keyed on the
-  // requested line count so a stale in-flight poll (still on the old window) can't adopt early.
+  // Adopt the enlarged buffer into the frozen display once the Load older read lands — keyed on the
+  // requested line count and on `olderRead`, so a stale in-flight poll can't adopt early.
   // Adopts the whole {text, revision} pair (props from the same loader result) so the frozen
   // snapshot stays coherent for the race guard.
   useEffect(() => {
     const target = adoptTarget.current;
-    if (target === null || requestedLines < target) return;
+    if (target === null || requestedLines < target || !olderRead) return;
     adoptTarget.current = null;
     setLoadingOlder(false);
+    setOlderHeld(olderNote ?? null);
     if (text === display) {
       olderAnchor.current = null; // nothing new arrived (buffer shorter than the window)
       return;
     }
     pendingRestore.current = true;
-    setShown({ text, revision, logicalText });
-  }, [requestedLines, text, revision, logicalText, display]);
+    setShown({ text, revision, logicalText, truncated });
+  }, [requestedLines, text, revision, logicalText, truncated, olderRead, olderNote, display]);
   // After the enlarged display paints, keep the previously-visible content anchored (content grew at
   // the top, so push scrollTop down by the height delta).
   useLayoutEffect(() => {
@@ -1804,7 +1861,6 @@ export function AgentChat({
   // Resolves false when no key went out, which is the card's cue to drop its pending face at once.
   const dialogPresentRef = useRef(dialogPresent);
   dialogPresentRef.current = dialogPresent;
-  const paneLive = useLive(paneId, scope);
   // The same fact for the structural writes: the tab and pane sheets (rename, close, focus) take it
   // as `savedCopy`, and the create hook above reads it through the ref. Nothing saved can act.
   const savedCopyWrites = actsDisabledByCache || !paneLive;
@@ -2843,6 +2899,14 @@ export function AgentChat({
                       {loadingOlder ? t("chat.scrollback.loading") : t("chat.scrollback.loadOlder")}
                     </button>
                   ) : null}
+                  {/* Why the last Load older brought no older rows, in the multiplexer's own words
+                      (herdr-core: the agent waits on you, or the core still reads them). The button
+                      above stays, so a second tap asks again. */}
+                  {savedCopyLine === null && !historyAvailable && moreScrollback && olderHeld !== null ? (
+                    <p data-slot="older-note" className="mb-2 px-2 text-center text-xs text-muted-foreground">
+                      {olderHeld}
+                    </p>
+                  ) : null}
                   {/* EXPLAIN, don't hide (M10/06): on a multiplexer that keeps no agent session log,
                       "Show entire history" is not merely unavailable — it can never appear, and a
                       button that is simply absent reads as a bug. One muted line, in the ADAPTER's
@@ -3218,6 +3282,7 @@ export function AgentChat({
                   // What owns the agent's keyboard, as the bridge read it (M56 spec 06). See
                   // `composerSurface` above for the facts folded in before any read.
                   surface={composerSurface}
+                  starting={startup.starting}
                   unreachableNote={unreachableNote}
                   scope={scope}
                   stale={actsDisabledByCache}
@@ -3284,6 +3349,22 @@ export function AgentChat({
                   changesPill={
                     agent?.cwd
                       ? { onClick: () => nav.down(filesEntryPath), label: t("chat.changes.label") }
+                      : undefined
+                  }
+                  // The output, zoomed: the pill beside the switcher mark opens it full screen. A text
+                  // field gives up focus first, so the soft keyboard is not left standing over a view
+                  // with no input in it (the reason `enterZen` blurs). Any other focus stays, so the
+                  // view hands it back to the pill when it closes.
+                  zoomPill={
+                    zoom
+                      ? {
+                          onClick: () => {
+                            const active = document.activeElement;
+                            if (active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement) active.blur();
+                            zoom.onOpen();
+                          },
+                          label: t("zoom.open"),
+                        }
                       : undefined
                   }
                   draftNoticeSlot={draftNoticeSlot}
@@ -3356,7 +3437,7 @@ export function AgentChat({
                         closeDrawer();
                         // Beside THIS pane — the switcher's launch always opens a tab in this pane's
                         // Space, on this pane's own host (server.ts resolves `paneId` there).
-                        void launch(command, paneId);
+                        void launch(command, paneId, row?.kind === "agent" ? row.harness : undefined);
                       },
                     });
                   }
@@ -3566,6 +3647,24 @@ export function AgentChat({
         />
         {/* "Start without prompts?" for a Launch row that skips permission prompts. */}
         {noPromptsSheet}
+        {/* The output, zoomed (`/pane/:id/zoom`). Mounted here, a sibling of the sheets, for their
+            reason: it is a `fixed` element with no portal, so it must not sit inside the animating
+            Collapse or the sticky header. It reads the LIVE text, not the mirror's frozen `display`:
+            a reader who scrolled the mirror up still gets the pane as it is now. The grammars do not
+            run there, so a dialog the dock lifted reads in place as the rows it was. */}
+        {zoom?.open && !gridless && (
+          <OutputZoom
+            text={text}
+            logicalText={logicalText}
+            fontSize={prefs.fontSize}
+            agent={agent?.agent}
+            nativeMirror={mirrorOverride}
+            face={mirrorFace}
+            title={name}
+            hand={handOf(prefs)}
+            onClose={zoom.onClose}
+          />
+        )}
       </div>
     </CompactStripLabels>
     </LocalLinks>

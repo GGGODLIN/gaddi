@@ -396,19 +396,10 @@ describe("the leg scripts", () => {
     test(`${file} matches its golden file`, () => {
       // The generated script is LF text (a template literal normalises its line breaks). A Windows
       // checkout may translate the golden file to CRLF, which is the checkout's doing, not the script's.
-      let golden = readFileSync(join(import.meta.dir, "testdata", file), "utf8").replaceAll("\r\n", "\n");
-      if (file === "leg2-install.sh" && !golden.includes("ORIGIN=")) {
-        golden = golden
-          .replace("EXPECT='1.2.3'\n", "EXPECT='1.2.3'\nORIGIN='https://github.com/GGGODLIN/gaddi.git'\n")
-          .replace(
-            '  "$GIT" -C "$ROOT" checkout --detach "$COMMIT"\n',
-            '  "$GIT" -C "$ROOT" checkout --detach "$COMMIT"\n  case "$("$GIT" -C "$ROOT" remote get-url origin 2>/dev/null || true)" in\n    */collie-add.*/bundle) "$GIT" -C "$ROOT" remote set-url origin "$ORIGIN" ;;\n  esac\n',
-          )
-          .replace(
-            '  "$GIT" -C "$ROOT.part" checkout --detach "$COMMIT"\n',
-            '  "$GIT" -C "$ROOT.part" checkout --detach "$COMMIT"\n  "$GIT" -C "$ROOT.part" remote set-url origin "$ORIGIN"\n',
-          );
-      }
+      const recorded = readFileSync(join(import.meta.dir, "testdata", file), "utf8").replaceAll("\r\n", "\n");
+      const golden = file === "leg2-install.sh"
+        ? recorded.replace("ORIGIN='https://github.com/AltanS/collie.git'", "ORIGIN='https://github.com/GGGODLIN/gaddi.git'")
+        : recorded;
       expect(script).toBe(golden);
     });
   }
@@ -1262,7 +1253,7 @@ describe("the mux decision", () => {
     expect(h.calls).toHaveLength(0);
     expect(h.restarts).toBe(0);
     expect(text(h.io)).toContain("--mux screen is not a multiplexer this build drives");
-    expect(text(h.io)).toContain("durable, herdr, tern, tmux, tuios, zellij");
+    expect(text(h.io)).toContain("durable, herdr, herdr-core, tern, tmux, tuios, zellij");
   });
 
   test("--mux writes the name, over one the member already carries, without reading its machine", async () => {

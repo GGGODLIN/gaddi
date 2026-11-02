@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 
 import { DiffView, TokenLine, useSyntaxTokens } from "@/components/changes-view";
+import { JournalImage } from "@/components/journal-image";
 import { isPlainClick, useFileLinks } from "@/components/file-links";
 import { MarkdownText } from "@/components/markdown-text";
 import { MIRROR_INVERT, MIRROR_SPACE } from "@/components/mirror-space";
@@ -77,6 +78,7 @@ import { findFilePaths } from "@/lib/file-paths";
 import type { PendingState } from "@/lib/durable-pending";
 import { clockTime } from "@/lib/format";
 import { t, tn, type PluralKey } from "@/lib/i18n";
+import { useScope } from "@/lib/session";
 import {
   directionOf,
   parseWalkyCommand,
@@ -111,6 +113,7 @@ const HARNESS_LABELS = new Map([
   ["hermes", "Hermes Agent"],
   ["muse", "Muse"],
   ["kiro", "Kiro"],
+  ["dsh-tui", "dsh-TUI"],
 ]);
 
 /** The harness's own name for itself, or the key back when nobody has taught us one. */
@@ -183,6 +186,8 @@ export const SubagentSheetCtx = createContext<SubagentSheetHandle | null>(null);
  */
 export function standsAlone(item: ChatItem): boolean {
   if (item.kind !== "tool") return false;
+  // A picture the call returned is the reason to look at it, so it never folds out of sight.
+  if (item.image !== undefined) return true;
   if (item.tool.kind === "task" || item.tool.kind === "question") return true;
   const line = shellLineOf(item.tool);
   const walky = line === null ? null : parseWalkyCommand(line);
@@ -424,10 +429,27 @@ export const ItemView = memo(function ItemView({ item }: { item: ChatItem }) {
       return <Notice item={item} />;
     case "compacted":
       return <Compacted item={item} />;
+    case "image":
+      return <ChatImage url={item.url} alt={t("transcript.attachmentAlt")} />;
     case "tool":
-      return <ToolCard tool={item.tool} status={item.status} waiting={waiting} />;
+      if (item.image === undefined) return <ToolCard tool={item.tool} status={item.status} waiting={waiting} callId={item.id} />;
+      return (
+        <div className="flex flex-col gap-1.5">
+          <ToolCard tool={item.tool} status={item.status} waiting={waiting} callId={item.id} />
+          <ChatImage url={item.image} alt={t("transcript.toolImageAlt")} />
+        </div>
+      );
   }
 });
+
+function ChatImage({ url, alt }: { url: string; alt: string }) {
+  const scope = useScope();
+  return (
+    <div className="min-w-0">
+      <JournalImage ref_={url} alt={alt} scope={scope} />
+    </div>
+  );
+}
 
 /**
  * A text the program is still writing (WIRE.md 7.15): `data-partial` makes the stylesheet put a cursor at the end of its
@@ -817,6 +839,8 @@ function WaitingArea({ waiting, line }: { waiting?: CardWaiting; line?: boolean 
 interface ToolCardProps {
   tool: ChatToolCall;
   status: ChatToolStatus;
+  /** The chat item's id. It is the card's identity: the subagent sheet keys its state by it. */
+  callId: string;
   waiting?: CardWaiting;
   preview?: boolean;
 }
@@ -897,6 +921,7 @@ export function ToolCard(props: ToolCardProps) {
 function ToolCardBody({
   tool,
   status,
+  callId,
   waiting,
   preview,
   walky,
@@ -906,7 +931,8 @@ function ToolCardBody({
   // `data-waiting` lets a host find the card of the thing it is waiting on (scroll to it, see if it
   // is on screen).
   const anchor = waiting?.id;
-  const subagentCardKey = anchor ?? (tool.kind === "task" ? `${tool.agent ?? ""}:${tool.summary}` : "");
+  // Two calls can share an agent and a summary, so the sheet keys by the item id, never by that text.
+  const subagentCardKey = callId;
   const taskAgent = tool.kind === "task" ? tool.agent : undefined;
   const taskSummary = tool.kind === "task" ? tool.summary : "";
   const taskAgentId = tool.kind === "task" ? tool.agentId : undefined;

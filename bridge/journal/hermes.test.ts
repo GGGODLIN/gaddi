@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -163,6 +163,29 @@ describe("HermesTranscriptSource", () => {
     try {
       const source = new HermesTranscriptSource(root);
       expect(await source.resolve({ kind: "id", value: SID })).toBeNull();
+
+      // Non-open SQLite errors (e.g. SQLITE_ERROR on missing table even when header bytes are 2, 2)
+      // must not trigger Database.deserialize.
+      const schemaRoot = await mkdtemp(join(tmpdir(), "collie-hermes-wal-schema-"));
+      const schemaPath = join(schemaRoot, "state.db");
+      const schemaDb = new Database(schemaPath);
+      schemaDb.run("pragma journal_mode=wal");
+      schemaDb.run("create table unrelated (x integer)");
+      schemaDb.run("pragma wal_checkpoint(truncate)");
+      schemaDb.close();
+      await rm(`${schemaPath}-shm`, { force: true });
+      const schemaBytes = await readFile(schemaPath);
+      schemaBytes[18] = 2;
+      schemaBytes[19] = 2;
+      await writeFile(schemaPath, schemaBytes);
+      const spy = spyOn(Database, "deserialize");
+      try {
+        expect(await new HermesTranscriptSource(schemaRoot).resolve({ kind: "id", value: SID })).toBeNull();
+        expect(spy).toHaveBeenCalledTimes(0);
+      } finally {
+        spy.mockRestore();
+        await rm(schemaRoot, { recursive: true, force: true });
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -209,18 +232,18 @@ describe("hermesJournal discover", () => {
     const defaultDb = new Database(join(root, "state.db"));
     schema(defaultDb);
     defaultDb.close();
-    const profileDir = join(root, "profiles", "shiro");
+    const profileDir = join(root, "profiles", "assistant");
     await mkdir(profileDir, { recursive: true });
     const profileDb = new Database(join(profileDir, "state.db"));
     schema(profileDb);
     profileDb.run("insert into sessions (id, source, started_at, cwd) values (?, 'cli', 1, ?)", [
-      "20261011_004220_164149",
+      "20261001_000001_bbbbbb",
       "/work",
     ]);
     profileDb.close();
 
     const adapter = hermesJournal([root]);
-    await expect(adapter.discover?.("/work")).resolves.toEqual({ kind: "id", value: "20261011_004220_164149" });
+    await expect(adapter.discover?.("/work")).resolves.toEqual({ kind: "id", value: "20261001_000001_bbbbbb" });
     await rm(root, { recursive: true, force: true });
   });
 
@@ -233,7 +256,7 @@ describe("hermesJournal discover", () => {
       "/shared",
     ]);
     defaultDb.close();
-    const profileDir = join(root, "profiles", "shiro");
+    const profileDir = join(root, "profiles", "assistant");
     await mkdir(profileDir, { recursive: true });
     const profileDb = new Database(join(profileDir, "state.db"));
     schema(profileDb);

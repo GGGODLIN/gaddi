@@ -489,12 +489,13 @@ describe("commandsFor with the commands found on the pane's machine (ADR 9009)",
   it("joins the other agents with a loader too, as searchable rows (fork ADR 9011)", () => {
     const mention = { command: "$my-skill", description: "Mine", argHint: "" };
     const row = commandsFor("codex", [], [mention]).find((c) => c.command === "$my-skill");
-    expect(row).toMatchObject({ description: "Mine", common: false, dangerous: false });
+    expect(row).toMatchObject({ description: "Mine", takesArg: false, common: false, dangerous: false });
     expect(commandsFor("antigravity", [], [toSpec]).some((c) => c.command === "/to-spec")).toBe(true);
   });
 
-  it("stays out of an agent the bridge has no loader for", () => {
-    expect(commandsFor("hermes", [], [toSpec]).some((c) => c.command === "/to-spec")).toBe(false);
+  it("adds what the bridge answered for any agent, and nothing when it answered an empty list", () => {
+    expect(commandsFor("hermes", [], [toSpec]).some((c) => c.command === "/to-spec")).toBe(true);
+    expect(commandsFor("hermes", [], [])).toEqual(commandsFor("hermes"));
   });
 
   it("leaves ADR 0018's replacement rule to the operator's rows on a non-Claude pane", () => {

@@ -168,4 +168,3 @@ describe("HistoryRoute — find inside tool output", () => {
     expect(container.querySelector("pre mark")).toHaveTextContent("SECRET_TOKEN");
   });
 });
-

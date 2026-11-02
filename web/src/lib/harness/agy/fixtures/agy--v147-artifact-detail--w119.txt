@@ -27,7 +27,7 @@
 
   [0m[2m 25[0m     [0m[1m### Manual Verification[0m
 
-  [0m[2m 26[0m     • Check file exists at [0m[38;5;12m/tmp/collie-agy-sandbox/hello.txt[0m.
+  [0m[2m 26[0m     • Check file exists at [0m[38;5;12m/tmp/project/hello.txt[0m.
   [0m[2m 27[0m     • Inspect content to verify greeting text.
 
   [0m[1m[38;5;12mc[0m[38;5;8m comment · [0m[1m[38;5;12mctrl+g[0m[38;5;8m editor · [0m[1m[38;5;12mt[0m[38;5;8m outline · [0m[1m[38;5;12ml[0m[38;5;8m hide lines · [0m[1m[38;5;12m/[0m[38;5;8m search · [0m[1m[38;5;12mg/G[0m[38;5;8m top/bottom[0m

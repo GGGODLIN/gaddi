@@ -420,7 +420,8 @@ const CLIPPED_AT_SEPARATOR = /\s+·…$/;
 // Claude right-aligns a field of its own at the far end of the hint row ("0% until auto-compact",
 // "/rc"), padded out with spaces, so the last " · " segment carries it: "↓ to manage      0% until
 // auto-compact". Read whole, that segment is no status hint, its "↓" reads as a modal's key, and the
-// unread-dialog card covered a working pane (slab, 2026-10-06). A run of two or more spaces is that
+// unread-dialog card covered a working pane (2026-10-06, the field report in PR 616; chrome.test.ts
+// holds its shapes, "status hints clipped at 59 columns"). A run of two or more spaces is that
 // padding, and no hint holds one, so a segment is split there before its fields are matched.
 const RIGHT_FIELD_PADDING = /\s{2,}/;
 

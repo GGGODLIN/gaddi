@@ -584,8 +584,14 @@ export type PairFailure =
  * `reachable: false` with zeroed counts and renders greyed-out, non-clickable in the switcher.
  */
 export interface SessionSummary {
-  /** Registry name, e.g. "default", "collie-demo". */
+  /** Registry name, e.g. "default", "collie-demo". The identity: `?s=` and `?session=` carry it. */
   name: string;
+  /**
+   * The operator's display label for this session (`spaces.toml`). Display-only, print it through
+   * `sessionDisplayName` (lib/hosts.ts), never address by it. Absent from an older bridge, and from a
+   * session the operator gave no label.
+   */
+  label?: string;
   /** The `cfg.socketPath` session — all no-`?s=` requests map to it. */
   isPrimary: boolean;
   /** Whether the last poll of this session's socket succeeded. */
@@ -663,6 +669,17 @@ export interface ServerSummary {
    * keeps a new phone honest in front of an old lead (§7.1).
    */
   linkState?: "reconnecting" | "attention";
+  /**
+   * The registry name of the multiplexer this member drives, for `collie sessions`; mirrors
+   * `ServerSummary.mux` in bridge/types.ts. Absent when the member never said. The Machines sheet
+   * lists it under a machine that runs more than one instance (M77).
+   */
+  mux?: string;
+  /**
+   * The hostname the member reads itself (M77). Two rows with the same `host` are one machine
+   * (lib/machines.ts). Absent on an older member: such a row is a machine of its own.
+   */
+  readonly host?: string;
   /** Epoch ms, stamped by the LEAD on receipt — never the peer's clock (§10.2). `0` = never answered. */
   lastSeenAt: number;
 }
@@ -745,6 +762,10 @@ export interface CrewMemberStatus {
    * the word it always printed.
    */
   linkState?: "reconnecting" | "attention";
+  /** The multiplexer this member drives, by registry name (M76). Absent when it has not said. */
+  mux?: string;
+  /** The hostname the member reads itself (M77), the key the crew page groups by. Absent: its own machine. */
+  readonly host?: string;
 }
 
 /**
@@ -1301,6 +1322,12 @@ export interface PaneReadResponse {
    * URL; absent for every other pane.
    */
   logicalText?: string;
+  /**
+   * Sent only on a Load older read (`?purpose=older`) that came back without the rows above the
+   * screen: one sentence that says why, in the multiplexer's words (herdr-core: the agent waits on
+   * you, or the core still reads them). The mirror shows it under Load older.
+   */
+  olderNote?: string;
   /** Set to true by the client when the server returns 304 Not Modified. Never sent over the wire. */
   notModified?: boolean;
 }

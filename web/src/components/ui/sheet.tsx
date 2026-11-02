@@ -104,9 +104,8 @@ interface BottomSheetProps {
   pullFrom?: number;
   /**
    * Pull-down on the panel closes the sheet. Default true, so every existing caller keeps that
-   * gesture. The image editor turns it off: Konva's drag listens for `touchmove` on `window` in
-   * the bubble phase, and stopping the event on the canvas would keep the sheet still by also
-   * keeping that listener from ever seeing the stroke.
+   * gesture. The image editor turns it off so a downward crop drag or annotation stroke on the
+   * canvas never pulls the sheet closed.
    */
   dragToDismiss?: boolean;
 }
