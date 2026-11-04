@@ -486,6 +486,6 @@ describe("revoke cleanup", () => {
     // session name is dropped with its host.
     expect(resolver).toBeGreaterThan(browser);
     expect(src.indexOf("localRuntime(host.kind === \"local\" ? sessionName : undefined", resolver)).toBeGreaterThan(resolver);
-    expect(src.indexOf(": target(merge)", resolver)).toBeGreaterThan(resolver);
+    expect(src.indexOf(": target(merge, write)", resolver)).toBeGreaterThan(resolver);
   });
 });
