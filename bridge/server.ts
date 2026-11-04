@@ -3157,10 +3157,10 @@ export function startServer(opts: {
         // The phone's added rows are the crew's (ADR 0127 point 4): the lead's own store answers them
         // whichever machine `?host=` names, so they never forward. A member's `?session=` is no name
         // this registry knows, so it is dropped with the host.
-        resolve: async (merge) =>
+        resolve: async (merge, write) =>
           ADDED_LAUNCHER_PATHS.has(pathname)
             ? localRuntime(host.kind === "local" ? sessionName : undefined, req.headers.get("accept-encoding"))
-            : target(merge),
+            : target(merge, write),
         gate: browserGate,
         device: () => whois(req).device,
         audit,

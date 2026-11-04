@@ -54,7 +54,8 @@ The video and the screenshots use made-up agents.
   workspace's files and diffs, read-only.
 - **Voice input**: speak a reply instead of typing it. Whistle, Collie's own speech engine, turns
   it into text on the phone or on your computer, so a phone whose browser cannot run it can still
-  use voice, and the audio stays on your own devices ([Voice input and Web Push](./docs/voice-and-push.md)).
+  use voice, and the audio stays on your own devices. Off until you set it up
+  ([Voice input and Web Push](./docs/voice-and-push.md)).
 - **A push notification** when an agent stops and waits for you, once you turn Web Push on
   ([Voice input and Web Push](./docs/voice-and-push.md)).
 

@@ -4563,6 +4563,9 @@ describe("POST /api/launch and /api/worktree?host= — the lead's row rides the 
     expect(gate).toContain("const askReq = merge === undefined ? carried.request : new Request(askUrl, { method: req.method });");
     // The mark rides the forward as the carry's own flag, never as a header of the phone's.
     expect(gate).toContain("leadRow: carried.leadRow,");
+    const browserCaller = src.slice(src.indexOf("const sessionRouted = await serveSessionRoute(req, url, {"));
+    expect(browserCaller).toContain("resolve: async (merge, write) =>");
+    expect(browserCaller).toContain(": target(merge, write),");
   });
 });
 

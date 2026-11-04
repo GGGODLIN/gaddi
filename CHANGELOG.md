@@ -66,6 +66,8 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A pi or Oh My Pi pane started with its resume command finds its session in a shared folder.** Collie reads the resume argument from the pane's own command line first, as it does for Muse, and refuses only when the command line names nothing. On the Herdr core, Collie reads the pane's command line from the core's foreground record. Thanks @minigold92 (#675). ([a19611e](https://github.com/AltanS/collie/commit/a19611e))
 - **A Claude Code pane with its own `CLAUDE_CONFIG_DIR` shows its own 5-hour and 7-day usage windows.** Before, the bridge read only one Claude login (from its own `CLAUDE_CONFIG_DIR` or `~/.claude`) and put those windows on every Claude pane, overwriting what a session in another config directory reported through its statusLine. The beacon hooks and the statusLine wrapper now record a session's non-default `CLAUDE_CONFIG_DIR`, `AccountWindows` reads each directory's `.credentials.json` (or its hashed macOS Keychain item) on its own schedule, and a session whose directory has no login keeps the windows its own statusLine reported.
 
+- **A lead launcher row reaches the member picked on the phone.** The browser route passes the lead's row carry through its resolver to the crew forward, so a command declared only on the lead can start on a member instead of being refused as absent from that member's launchers.
+
 ## [2.11.2] - 2026-11-02
 
 ### Changed
