@@ -2793,6 +2793,7 @@ export const es: Dictionary = {
   "walky.state.onLead": "on its way, the lead reports the result",
   "walky.reason.draftPresent": "that session has unsent text",
   "walky.reason.turnRunning": "that session is busy",
+  "walky.reason.resting": "esa sesión está en reposo",
   "walky.state.delivered": "escrito en el panel",
   "walky.state.inboxOnly": "en espera en la bandeja de entrada, sin escribir",
   "walky.state.inboxOnlyBecause": "en espera en la bandeja de entrada, sin escribir: {reason}",
@@ -2856,6 +2857,10 @@ export const es: Dictionary = {
   "walky.crew.confirmBack": "Atrás",
   "walky.crew.skippedTitle": "Paneles de shell, omitidos",
   "walky.crew.skippedRow": "{label} ({address}): omitido",
+  "walky.crew.resting": "En reposo, sin despertar",
+  "walky.crew.restingWoken": "En reposo, también despertadas",
+  "walky.crew.restingRow": "{label} ({address}): en reposo",
+  "walky.crew.wake": "Despertarlas también",
   "walky.crew.refusals": "No enviado en esta máquina: {list}",
 
   "sent.button": "Sent",

@@ -2607,6 +2607,7 @@ export const tr: Dictionary = {
   "walky.state.onLead": "on its way, the lead reports the result",
   "walky.reason.draftPresent": "that session has unsent text",
   "walky.reason.turnRunning": "that session is busy",
+  "walky.reason.resting": "o oturum dinleniyor",
   "walky.state.delivered": "bölmeye yazıldı",
   "walky.state.inboxOnly": "gelen kutusunda bekliyor, yazılmadı",
   "walky.state.inboxOnlyBecause": "gelen kutusunda bekliyor, yazılmadı: {reason}",
@@ -2670,6 +2671,10 @@ export const tr: Dictionary = {
   "walky.crew.confirmBack": "Geri",
   "walky.crew.skippedTitle": "Kabuk bölmeleri, atlandı",
   "walky.crew.skippedRow": "{label} ({address}): atlandı",
+  "walky.crew.resting": "Dinlenenler, uyandırılmadı",
+  "walky.crew.restingWoken": "Dinlenenler, onlar da uyandırılır",
+  "walky.crew.restingRow": "{label} ({address}): dinleniyor",
+  "walky.crew.wake": "Onları da uyandır",
   "walky.crew.refusals": "Bu makinede gönderilmedi: {list}",
 
   "sent.button": "Sent",
