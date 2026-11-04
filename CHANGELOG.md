@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Changed
+
+- **A printed image path on a pane opens its picture in a sheet over the conversation.** Tapping a root-relative `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` or `.avif` path in Chat, a tool card or the terminal mirror now draws the picture in a bottom sheet on the pane screen (`GET /api/pane/<id>/files/image`) instead of leaving the conversation for the Files screen; middle-click and copy-link still carry the Files URL, and a path with a line number or any non-raster file still opens in Files.
+
 ### Fixed
 
 - **On Android the keyboard no longer hides when you tap a word the spellchecker marked.** The composer turns the browser's spellchecker off, as the shell composer already did, so Chrome's suggestion menu no longer takes the focus away from the keyboard. Gboard's own corrections are unchanged. ([a05ea47](https://github.com/AltanS/collie/commit/a05ea47))
