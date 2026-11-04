@@ -60,6 +60,7 @@ export const API_ERROR_CODES = [
   "launch.not_allowlisted",
   "launch.pane_unknown",
   "launch.unknown_harness",
+  "launch.row_not_from_lead",
   "launch.bad_folder",
   "launch.folder_missing",
   "launch.no_device",
@@ -103,8 +104,6 @@ export const API_ERROR_CODES = [
   // Worktrees — /api/worktree and its plan (ADR 0032, ADR 0093)
   "worktree.create_failed",
   "worktree.created_not_opened",
-  "worktree.busy",
-  "worktree.ambiguous_branch",
   "worktree.branch_required",
   "worktree.not_a_repo",
   "worktree.invalid_branch",

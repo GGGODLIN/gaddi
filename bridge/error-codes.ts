@@ -101,6 +101,12 @@ export const ERROR_CODES = {
    * the list `GET /api/launchers` answered, so nothing a phone was shown is refused (ADR 0091).
    */
   "launch.unknown_harness": "unknown agent: {harness}",
+  /**
+   * A launch named a `command` this host does not hold and carried a `row` for it, and the call did
+   * not come over the crew link from this machine's lead. Only the lead may carry a row (ADR 0127
+   * point 3), so a phone still names rows and never sends a line. Nothing ran.
+   */
+  "launch.row_not_from_lead": "a row can only come from this machine's lead",
   /** A launch's `cwd` carries a control character, a `..` segment, or `~name`. A path with no leading `/` or `~` is a folder under home. */
   "launch.bad_folder": "the folder cannot be used: no .. and no control characters",
   /** A launch's folder is not a directory on the machine that runs it. Nothing was created. */
@@ -187,18 +193,14 @@ export const ERROR_CODES = {
   "folders.favourites_full": "favourites are full ({max}); remove one first",
 
   // ── Worktrees: /api/worktree and its plan (ADR 0032, ADR 0093) ─────────────────────
-  /** Creation refused. `{reason}` is the multiplexer's own words, Git's sentence included. */
+  /** Creation refused. `{reason}` is Git's own sentence (`git worktree add`, bridge/worktree-add.ts). */
   "worktree.create_failed": "{reason}",
   /**
    * The checkout was made and could not be shown — the branch EXISTS and nothing displays it.
-   * Distinct from `create_failed` because the recovery is opposite: open it, never create it again
-   * (a second create answers `create_failed`, the path being taken). Probed on herdr 0.8.2.
+   * Distinct from `create_failed` because the recovery is opposite: the checkout stays, and the same
+   * create again finds it and only opens it (M81).
    */
   "worktree.created_not_opened": "the worktree was created but could not be opened: {reason}",
-  /** Another worktree operation is still running — herdr serialises them. Try again in a moment. */
-  "worktree.busy": "{reason}",
-  /** The branch name matched more than one thing, so the multiplexer would not guess. */
-  "worktree.ambiguous_branch": "{reason}",
   /** The request named no branch, or named one that is only whitespace. */
   "worktree.branch_required": "branch required",
   /** This space is not in a Git work tree, so it has no worktrees to show. */

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PiTranscriptSource } from "../../journal/pi.ts";
 import { HerdrCoreMux, RAW_KEY_GAP_MS } from "./adapter.ts";
+import { HcError, type RunShellRequest } from "./client.ts";
 import { FakeHcCore, ManualClock } from "./fake-core.ts";
 import { IMPLICIT_SPACE_ID } from "./layout.ts";
 
@@ -55,6 +60,53 @@ describe("HerdrCoreMux over a fake core", () => {
     expect(cwdOf(absolute)).toBe("/tmp/lab");
     expect(cwdOf(unknown)).toBe("");
     expect(cwdOf(relative)).toBe("");
+  });
+
+  test("foregroundProcesses answers the foreground leader's argv and pid, from the last snapshot (#675)", async () => {
+    const { fake, adapter } = build();
+    const argv = ["omp", "--resume", "/home/dev/.omp/sessions/--home-dev-collie--/2026-11-04T09-00-00_019f4665-7df0-7540-a64f-7068335f2101.jsonl"];
+    const omp = fake.add({ status: null, cwd: "/home/dev/collie", foreground: { name: "omp", pid: 4242, argv, cwd: "/home/dev/collie" } });
+    await adapter.snapshot();
+    expect(await adapter.foregroundProcesses(omp)).toEqual({ ok: true, value: [{ argv, pid: 4242 }] });
+  });
+
+  test("a foreground with no argv is one entry with an empty argv and no pid; no foreground is empty", async () => {
+    const { fake, adapter } = build();
+    const bare = fake.add({ status: null, foreground: { name: "omp", cwd: "/home/dev" } });
+    const none = fake.add({ status: null, foreground: null });
+    await adapter.snapshot();
+    expect(await adapter.foregroundProcesses(bare)).toEqual({ ok: true, value: [{ argv: [] }] });
+    expect(await adapter.foregroundProcesses(none)).toEqual({ ok: true, value: [] });
+  });
+
+  test("a terminal the snapshot did not list is read once; an unknown or another machine's terminal is a refusal", async () => {
+    const { fake, adapter } = build();
+    const fresh = fake.add({ status: null, foreground: { name: "pi", pid: 7, argv: ["pi", "--session", "x"], cwd: "/home/dev" } });
+    expect(await adapter.foregroundProcesses(fresh)).toEqual({ ok: true, value: [{ argv: ["pi", "--session", "x"], pid: 7 }] });
+    const unknown = await adapter.foregroundProcesses("t999");
+    expect(unknown.ok ? "ok" : unknown.reason).toBe("gone");
+    const remote = await adapter.foregroundProcesses("box/t1");
+    expect(remote.ok ? "ok" : remote.reason).toBe("gone");
+  });
+
+  test("the argv the adapter reports names the session in a shared folder (end to end with the pi adapter)", async () => {
+    const base = await realpath(await mkdtemp(join(tmpdir(), "collie-hc-argv-")));
+    const id = "019f4665-7df0-7540-a64f-7068335f2101";
+    const other = "019f4665-7df0-7540-a64f-7068335f2102";
+    const folder = join(base, "sessions", "--srv-proj--");
+    await mkdir(folder, { recursive: true });
+    const mine = join(folder, `2026-11-04T09-00-00-000Z_${id}.jsonl`);
+    const row = (sid: string) => `${JSON.stringify({ type: "session", version: 3, id: sid, timestamp: "2026-11-04T09:00:00.000Z", cwd: "/srv/proj" })}\n`;
+    await Bun.write(mine, row(id));
+    await Bun.write(join(folder, `2026-11-04T10-00-00-000Z_${other}.jsonl`), row(other));
+    const { fake, adapter } = build();
+    const pane = fake.add({ status: null, cwd: "/srv/proj", foreground: { name: "omp", pid: 4242, argv: ["omp", "--resume", mine], cwd: "/srv/proj" } });
+    await adapter.snapshot();
+    const processes = await adapter.foregroundProcesses(pane);
+    if (!processes.ok) throw new Error("no foreground");
+    const src = new PiTranscriptSource(join(base, "sessions"), { home: join(base, "home"), tmp: join(base, "tmp") });
+    expect(await src.discoverSession("/srv/proj", { shared: true, processes: processes.value })).toEqual({ kind: "id", value: id });
+    await rm(base, { recursive: true, force: true });
   });
 
   test("a core at another generation is unreachable, and the snapshot says what to update", async () => {
@@ -122,6 +174,80 @@ describe("HerdrCoreMux over a fake core", () => {
     expect(created.value.cwd).toBe("/tmp");
     const missing = await adapter.createTab({ spaceId: "spnothere" });
     expect(missing.ok ? "ok" : missing.reason).toBe("gone");
+  });
+
+  /** Record what `terminal.run` is asked for, and let the fake core answer as before. */
+  function recordShells(fake: FakeHcCore): RunShellRequest[] {
+    const asked: RunShellRequest[] = [];
+    const run = fake.runShell.bind(fake);
+    fake.runShell = (request) => {
+      asked.push(request);
+      return run(request);
+    };
+    return asked;
+  }
+
+  test("a new space starts one shell with fresh space and tab labels, and the next snapshot shows it", async () => {
+    const { fake, adapter } = build();
+    const asked = recordShells(fake);
+    const before = await adapter.snapshot();
+    const created = await adapter.createSpace({ cwd: "/home/dev/lab", label: "ignored" });
+    if (!created.ok) throw new Error(created.detail);
+    expect(asked).toHaveLength(1);
+    const labels = asked[0]?.labels ?? {};
+    const spaceLabel = labels["herdr.space"] ?? "";
+    const tabLabel = labels["herdr.tab"] ?? "";
+    expect(Object.keys(labels).toSorted()).toEqual(["herdr.space", "herdr.tab"]);
+    expect(spaceLabel).toMatch(/^sp[0-9a-f]{32}$/u);
+    expect(tabLabel).toMatch(/^tb[0-9a-f]{32}$/u);
+    expect(before.spaces.map((space) => space.spaceId)).not.toContain(spaceLabel);
+    expect(before.tabs.map((tab) => tab.tabId)).not.toContain(tabLabel);
+    expect(asked[0]?.cwd).toBe("/home/dev/lab");
+    expect(created.value.spaceId).toBe(spaceLabel);
+    expect(created.value.tabId).toBe(tabLabel);
+    expect(created.value.cwd).toBe("/home/dev/lab");
+
+    const after = await adapter.snapshot();
+    const space = after.spaces.find((candidate) => candidate.spaceId === created.value.spaceId);
+    expect(space).toBeDefined();
+    expect(space?.label).toBe(created.value.spaceLabel);
+    expect(created.value.spaceLabel).toBe("lab");
+    expect(after.spaces).toHaveLength(before.spaces.length + 1);
+    const tabs = after.tabs.filter((tab) => tab.spaceId === created.value.spaceId);
+    expect(tabs.map((tab) => tab.tabId)).toEqual([created.value.tabId]);
+    const panes = after.panes.filter((pane) => pane.spaceId === created.value.spaceId);
+    expect(panes.map((pane) => pane.paneId)).toEqual([created.value.paneId]);
+  });
+
+  test("two new spaces get different ids, and a blank cwd sends no cwd to the core", async () => {
+    const { fake, adapter } = build();
+    const asked = recordShells(fake);
+    const first = await adapter.createSpace({ cwd: "" });
+    const second = await adapter.createSpace({ cwd: "" });
+    if (!first.ok || !second.ok) throw new Error("a create failed");
+    expect(asked).toHaveLength(2);
+    expect(asked.every((request) => request.cwd === undefined)).toBe(true);
+    expect(first.value.spaceId).not.toBe(second.value.spaceId);
+    expect(first.value.tabId).not.toBe(second.value.tabId);
+  });
+
+  test("a new space in the home folder is labelled as the snapshot labels it", async () => {
+    const { adapter } = build();
+    const created = await adapter.createSpace({ cwd: "/home/dev" });
+    if (!created.ok) throw new Error(created.detail);
+    const after = await adapter.snapshot();
+    expect(after.spaces.find((space) => space.spaceId === created.value.spaceId)?.label).toBe(created.value.spaceLabel);
+    expect(created.value.spaceLabel).toBe("~");
+  });
+
+  test("a core error on a new space is a refusal", async () => {
+    const { fake, adapter } = build();
+    fake.runShell = () => Promise.reject(new HcError("not_found", "herdr-core terminal.run: not_found: no such folder"));
+    const gone = await adapter.createSpace({ cwd: "/nowhere" });
+    expect(gone.ok ? "ok" : gone.reason).toBe("gone");
+    fake.runShell = () => Promise.reject(new HcError("invalid_params", "herdr-core terminal.run: invalid_params: bad cwd"));
+    const refused = await adapter.createSpace({ cwd: "/nowhere" });
+    expect(refused.ok ? "ok" : refused.reason).toBe("refused");
   });
 
   test("the derived revision moves with one view's text and not across views", async () => {

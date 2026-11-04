@@ -41,7 +41,9 @@ The video and the screenshots use made-up agents.
 - **An agent's own questions become buttons**: permission prompts, AskUserQuestion, plan approval,
   menus.
 - **The keys a phone keyboard doesn't have**: Esc, Ctrl+C, Tab, arrows, and your own sequences.
-- **Start work from the phone**: a new agent, a command or a worktree, on any of your machines.
+- **Start work from the phone**: a new agent, a command or a worktree, on any of your machines;
+  your own launchers, the lead's and the ones you add from the phone, show on every machine of a
+  crew.
 - **Walky talky**: one agent session sends a short message to another, on any harness and across a
   crew, and you can message sessions from the phone; every message gets a receipt and a log entry,
   an address carries the pane's token so a message does not reach a new session in a reused pane id,
@@ -50,6 +52,9 @@ The video and the screenshots use made-up agents.
   and history ([experimental](./docs/durable-agents.md)).
 - **Read back what happened**: search the output, read the whole session as Chat, and browse the
   workspace's files and diffs, read-only.
+- **Voice input**: speak a reply instead of typing it. Whistle, Collie's own speech engine, turns
+  it into text on the phone or on your computer, so a phone whose browser cannot run it can still
+  use voice, and the audio stays on your own devices ([Voice input and Web Push](./docs/voice-and-push.md)).
 - **A push notification** when an agent stops and waits for you, once you turn Web Push on
   ([Voice input and Web Push](./docs/voice-and-push.md)).
 
@@ -265,7 +270,7 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | [**Deployment**](./docs/deployment.md) | Front doors other than the default: an identity-aware proxy, a reverse proxy with no Tailscale, an off-host ingress, several Collies on one host (one per user, or several instances for one user), and a crew's standby door |
 | [**Commands**](./docs/commands.md) | Every `collie` verb, the census verbs that show what a Collie knows (`status`, `mux list`, `sessions`, `crew status`), putting `collie` on your PATH, and the Herdr actions that mirror the verbs on a Herdr-managed install |
 | [**Crews**](./docs/crew.md) | Several machines' Collies behind one URL: invite, join, deputy, failover, and a machine that runs several Collies |
-| [**Voice input and Web Push**](./docs/voice-and-push.md) | The microphone in the composer, and notifications when an agent is waiting on you |
+| [**Voice input and Web Push**](./docs/voice-and-push.md) | The microphone in the composer, Whistle speech to text on your phone or your computer, and notifications when an agent is waiting on you |
 | [**Manage & update**](./docs/upgrading.md) | Update from the phone or the terminal, roll back, update a crew, cross a major, stop, uninstall, and upgrading a 0.x install to 1.0 |
 | [**Troubleshooting**](./docs/troubleshooting.md) | Symptoms in the words you would actually search for |
 | [**Terminology**](./docs/terminology.md) | Collie's words in plain words, beside the names other tools use: session, space, tab, pane, terminal, durable agent, harness, crew, lead, and more |
@@ -345,7 +350,7 @@ has the install, the update, and what is not tested. In short:
 - **Run by Task Scheduler.** `collie start`, `stop`, `restart`, `status` and `uninstall` work as they
   do elsewhere. The task is named `herdr.collie` and starts at your logon.
 - **Not covered.** tmux and zellij (neither has a Windows build), Windows 10, Windows on ARM,
-  a Windows machine joining a crew, and a managed front door: Collie does not run `tailscale serve`
+  a Windows machine in a crew without the [experimental](./docs/windows.md#crews) consent flag, and a managed front door: Collie does not run `tailscale serve`
   on Windows, so bring your own,
   [Variant C](./docs/deployment.md#variant-c--reverse-proxy-as-the-only-front-door-no-tailscale).
   Herdr's action buttons need `bash`, so the manifest lists only `linux` and `macos`.
