@@ -69,6 +69,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A lead launcher row reaches the member picked on the phone.** The browser route passes the lead's row carry through its resolver to the crew forward, so a command declared only on the lead can start on a member instead of being refused as absent from that member's launchers.
 - **The walky talky skill tells an agent to use `--wake` only when its operator asked.** A `resting` receipt is final: the agent does not send the message again. ([78daa2c](https://github.com/AltanS/collie/commit/78daa2c))
 - **`--wake` works in a crew that mixes versions.** A member below 1.26.1 never rests a pane, so the lead sends it a `--wake` message as a plain send, which types into all its panes. A lead below 1.26.1 cannot take `--wake`: the member's receipt reads "lead older than 1.26.1: send without --wake" instead of a signature failure. ([7f3ad90](https://github.com/AltanS/collie/commit/7f3ad90))
+- **The Zoom pill shows only in the Screen view.** In Chat it was a magnifier with a plus that pointed at nothing, because it zooms the terminal screen. Settings, under Appearance, has a new "Zoom pill" choice, "Screen view" (the default) or "Off", stored on the device. A theme file can set the surface word `zoom` to `screen` or `none`, and a choice made in Settings wins over the theme. ([9034c57](https://github.com/AltanS/collie/commit/9034c57))
 
 ## [2.11.2] - 2026-11-02
 
