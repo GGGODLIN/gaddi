@@ -2,7 +2,7 @@ import { isAbsolute, relative, sep } from "node:path";
 
 import { asJsonNumber, asJsonObject, asJsonString } from "../web/src/lib/json.ts";
 import type { JsonObject } from "../bridge/json.ts";
-import { contextPercent } from "../bridge/usage.ts";
+import { contextPercent, customClaudeConfigDir } from "../bridge/usage.ts";
 import type { CliContext } from "./context.ts";
 import { agentConfigRoot } from "./hold-entry.ts";
 import { mergeBeacon, readUsage, writeUsage, type BeaconChange, type UsageStoreDeps } from "./usage-store.ts";
@@ -170,10 +170,11 @@ export function takeContextReading(
     // window after the last answer: the context has grown by that much, so the old value is stale.
     // Remove it; the next answer measures it again.
     if (reading === null && !cut) return;
+    const configDir = customClaudeConfigDir(deps.ctx.env, deps.ctx.home);
     writeChange(deps, stateDirs(), input.session, input.harness, now, (window) => {
-      if (reading === null || reading.kind === "compacted") return { context: null };
+      if (reading === null || reading.kind === "compacted") return { context: null, configDir };
       // No window, no context.
-      return window === undefined ? null : { context: contextPercent(reading.tokens, window) };
+      return window === undefined ? null : { context: contextPercent(reading.tokens, window), configDir };
     });
   } catch {
     // Same: no reading.
@@ -200,14 +201,15 @@ export function takeSessionStart(
     const model = input.model !== undefined && input.model.length <= 256 ? input.model : undefined;
     const named = windowFromModel(model);
     const tokens = input.contextTokens !== undefined && Number.isFinite(input.contextTokens) && input.contextTokens >= 0 ? input.contextTokens : undefined;
+    const configDir = customClaudeConfigDir(deps.ctx.env, deps.ctx.home);
     writeChange(deps, stateDirs(), input.session, input.harness, now, (known) => {
       const window = named ?? known;
       // The context is unknown until the next assistant message measures it.
       const forgotten = source === "compact" || source === "clear";
       const resumed = (source === "resume" || source === "fork") && tokens !== undefined && window !== undefined;
       const context = forgotten ? null : resumed ? contextPercent(tokens, window) : undefined;
-      const change: BeaconChange = { context, window: named };
-      return named === undefined && context === undefined ? null : change;
+      const change: BeaconChange = { context, window: named, configDir };
+      return named === undefined && context === undefined && configDir === undefined ? null : change;
     });
   } catch {
     // No reading.

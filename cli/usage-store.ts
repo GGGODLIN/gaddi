@@ -49,6 +49,8 @@ export interface BeaconChange {
   readonly context?: number | null | undefined;
   /** The session's window in tokens. Absent keeps the one on file. */
   readonly window?: number | undefined;
+  /** The non-default `CLAUDE_CONFIG_DIR` this session runs under. Absent keeps the one on file. */
+  readonly configDir?: string | undefined;
 }
 
 /**
@@ -69,12 +71,15 @@ export function mergeBeacon(existing: UsageRecord | null, harness: string, now: 
   if (context !== undefined) record.context = context;
   const window = change.window ?? existing?.window;
   if (window !== undefined) record.window = window;
+  const configDir = change.configDir ?? existing?.configDir;
+  if (configDir !== undefined) record.configDir = configDir;
   if (limits.length > 0) record.limits = limits;
   // The cost is the wrapper's alone: the beacon keeps what is on file.
   if (existing?.cost !== undefined) record.cost = existing.cost;
   if (
     existing !== null &&
     existing.window === record.window &&
+    existing.configDir === record.configDir &&
     (existing.context === undefined ? record.context === undefined : record.context !== undefined && Math.round(existing.context) === Math.round(record.context)) &&
     (existing.limits?.length ?? 0) === limits.length
   ) {
@@ -94,6 +99,8 @@ export function mergeStatusLine(existing: UsageRecord | null, reading: UsageReco
   if (context !== undefined) record.context = context;
   const window = reading.window ?? existing?.window;
   if (window !== undefined) record.window = window;
+  const configDir = reading.configDir ?? existing?.configDir;
+  if (configDir !== undefined) record.configDir = configDir;
   const cost = reading.cost ?? existing?.cost;
   if (cost !== undefined) record.cost = cost;
   if (reading.limits !== undefined) {
