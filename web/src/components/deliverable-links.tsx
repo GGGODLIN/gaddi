@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { DeliverableContext } from "@/components/markdown-text";
-import { FileContent, type FileText } from "@/components/file-preview";
+import { FileContent, type FileImages, type FileText } from "@/components/file-preview";
 import { BottomSheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/hooks/use-locale";
@@ -253,6 +253,33 @@ export function DeliverableLinks({
   );
 }
 
+function matchesAscii(bytes: Uint8Array, offset: number, ascii: string): boolean {
+  if (bytes.length < offset + ascii.length) return false;
+  for (let i = 0; i < ascii.length; i++) {
+    if (bytes[offset + i] !== ascii.charCodeAt(i)) return false;
+  }
+  return true;
+}
+
+function sniffDeliverableImageType(bytes: Uint8Array): string | null {
+  if (bytes.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((b, i) => bytes[i] === b)) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (matchesAscii(bytes, 0, "GIF87a") || matchesAscii(bytes, 0, "GIF89a")) {
+    return "image/gif";
+  }
+  if (matchesAscii(bytes, 0, "RIFF") && matchesAscii(bytes, 8, "WEBP")) {
+    return "image/webp";
+  }
+  if (matchesAscii(bytes, 4, "ftypavif") || matchesAscii(bytes, 4, "ftypavis")) {
+    return "image/avif";
+  }
+  return null;
+}
+
 function DeliverableSheet({
   paneId,
   scope,
@@ -310,6 +337,27 @@ function DeliverableSheet({
     }
   };
   const ready = body.kind === "ready" ? body.preview : null;
+  const images = useMemo<FileImages>(
+    () => ({
+      bytes: async (_path, signal) => {
+        if (target === null || ready === null) return { outcome: "failed" };
+        if (!ready.downloadable) return { outcome: "too-large" };
+        try {
+          const rawBlob = await fetchDeliverableBytes(paneId, target.id, scope, signal);
+          const head = new Uint8Array(await rawBlob.slice(0, 32).arrayBuffer());
+          const type = sniffDeliverableImageType(head);
+          if (type === null) return { outcome: "not-image" };
+          return { outcome: "image", blob: new Blob([rawBlob], { type }) };
+        } catch (error) {
+          if (signal.aborted) throw error;
+          if (isApiErrorStatus(error, 413)) return { outcome: "too-large" };
+          return { outcome: "failed" };
+        }
+      },
+      text: async () => null,
+    }),
+    [paneId, ready, scope, target],
+  );
   const file: FileText | null =
     ready === null
       ? null
@@ -329,7 +377,7 @@ function DeliverableSheet({
       {body.kind === "error" && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("files.file.error")}</p>}
       {file !== null && ready !== null && (
         <>
-          <FileContent file={file} view="preview" />
+          <FileContent file={file} view="preview" images={images} />
           {!ready.downloadable && <p className="px-4 pt-3 text-xs text-muted-foreground">{t("deliverable.tooLarge")}</p>}
           {ready.downloadable && (
             <div className="px-4 py-3">

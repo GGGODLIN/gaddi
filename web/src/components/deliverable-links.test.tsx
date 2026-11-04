@@ -243,4 +243,31 @@ describe("a cached deliverable id", () => {
     expect(download?.authorization).toBe("Bearer tok-1");
     expect(download?.url.startsWith("file:")).toBe(false);
   });
+
+  it("renders a raster image preview inside the sheet while keeping the Download button", async () => {
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const shotHref = "file:///tmp/shot.png";
+    routes = (url) => {
+      if (isList(url)) return listBody("id-shot", shotHref, "shot.png");
+      if (url.includes("download=1")) return new Response(pngBytes, { status: 200 });
+      return respond(
+        JSON.stringify({
+          available: true,
+          name: "shot.png",
+          size: pngBytes.byteLength,
+          binary: true,
+          truncated: false,
+          text: "",
+          downloadable: true,
+        }),
+      );
+    };
+    renderNote("img", `see [shot](${shotHref})`);
+    await advance(200);
+    fireEvent.click(screen.getByRole("button", { name: "shot" }));
+    await advance(50);
+    expect(screen.getByRole("img", { name: "shot.png" })).toBeInTheDocument();
+    expect(document.querySelector("[data-slot='file-image']")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
+  });
 });

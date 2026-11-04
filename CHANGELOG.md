@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Changed
 
 - **A printed image path on a pane opens its picture in a sheet over the conversation.** Tapping a root-relative `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` or `.avif` path in Chat, a tool card or the terminal mirror now draws the picture in a bottom sheet on the pane screen (`GET /api/pane/<id>/files/image`) instead of leaving the conversation for the Files screen; middle-click and copy-link still carry the Files URL, and a path with a line number or any non-raster file still opens in Files.
+- **A picture link in an assistant reply draws in the deliverable sheet.** Opening a `file://`, `~/` or absolute path link to a `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` or `.avif` file from a reply (`ADR 9006`) now sniffs the downloaded bytes and renders the picture in `DeliverableSheet` above its Download button instead of showing only the binary size line.
 
 ### Fixed
 
