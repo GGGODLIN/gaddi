@@ -330,4 +330,23 @@ describe("chat prose with the existence check", () => {
     fireEvent.click(codeLink!);
     expect(currentLocation).toBe("/pane/w1%3Ap1/changes/files?path=src%2Fcart.ts");
   });
+
+  it("omits a zero-byte binary label when a sheet image preview is refused", async () => {
+    server.use(
+      http.get("/api/launchers", () => HttpResponse.json({ launchers: [], home: "/home/you" })),
+      http.post("/api/pane/:id/files/exist", () => HttpResponse.json({ exists: ["shots/huge.png"] })),
+      http.get("/api/pane/:id/files/image", () => new HttpResponse(null, { status: 413 })),
+    );
+    const { container } = render(
+      <MemoryRouter>
+        <PaneFileLinks>
+          <MarkdownText text="see `shots/huge.png`" />
+        </PaneFileLinks>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(container.querySelectorAll("a")).toHaveLength(1));
+    fireEvent.click(container.querySelector("a")!);
+    await waitFor(() => expect(screen.getByText(/too large to show/i)).toBeInTheDocument());
+    expect(screen.queryByText(/0 B/)).toBeNull();
+  });
 });

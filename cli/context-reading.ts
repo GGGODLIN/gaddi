@@ -169,12 +169,17 @@ export function takeContextReading(
     // (a resume's `context_tokens`). A CUT tail with none means one huge line, a tool result, filled the
     // window after the last answer: the context has grown by that much, so the old value is stale.
     // Remove it; the next answer measures it again.
-    if (reading === null && !cut) return;
     const configDir = customClaudeConfigDir(deps.ctx.env, deps.ctx.home);
+    if (reading === null && !cut && configDir === undefined) return;
     writeChange(deps, stateDirs(), input.session, input.harness, now, (window) => {
+      if (reading === null && !cut) return configDir === undefined ? null : { configDir };
       if (reading === null || reading.kind === "compacted") return { context: null, configDir };
-      // No window, no context.
-      return window === undefined ? null : { context: contextPercent(reading.tokens, window), configDir };
+      // No window, no context; a custom configDir is still recorded so the session is scoped at once.
+      return window === undefined
+        ? configDir === undefined
+          ? null
+          : { configDir }
+        : { context: contextPercent(reading.tokens, window), configDir };
     });
   } catch {
     // Same: no reading.

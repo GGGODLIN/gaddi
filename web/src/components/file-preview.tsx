@@ -440,8 +440,8 @@ const IMAGE_MISS_KEY = {
 function ImageMissed({ file, why }: { file: FileText; why: ImageMiss }) {
   return (
     <Quiet>
-      {t("files.binary", { size: formatBytes(file.size) })}
-      <span className="mt-1 block text-xs">{t(IMAGE_MISS_KEY[why])}</span>
+      {file.size > 0 && t("files.binary", { size: formatBytes(file.size) })}
+      <span className={file.size > 0 ? "mt-1 block text-xs" : "block text-xs"}>{t(IMAGE_MISS_KEY[why])}</span>
     </Quiet>
   );
 }

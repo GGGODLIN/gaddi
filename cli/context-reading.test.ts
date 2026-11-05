@@ -59,5 +59,22 @@ describe("context-reading configDir tracking", () => {
       context: 25,
       configDir: resolve(customRoot),
     });
+
+    // Even when no model window is known yet, a custom CLAUDE_CONFIG_DIR is recorded on the turn.
+    const noWindowFiles = fakeFiles({
+      [transcript]: `${JSON.stringify({ type: "user", message: { content: "hi" } })}\n`,
+    });
+    takeContextReading(
+      { files: noWindowFiles, uid: 1000, ctx: context({ CLAUDE_CONFIG_DIR: customRoot }) },
+      { session: SESSION, transcriptPath: transcript, harness: "claude" },
+      () => [STATE],
+      NOW,
+    );
+    expect(parseUsageRecord(noWindowFiles.read(USAGE) ?? "")).toEqual({
+      schemaVersion: 1,
+      harness: "claude",
+      at: NOW,
+      configDir: resolve(customRoot),
+    });
   });
 });

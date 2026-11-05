@@ -69,10 +69,11 @@ export function FileLinksProvider({ value, children }: { value: FileLinkOpener |
       imageSheetOpeners.delete(value);
     };
   }, [value]);
+  const activeTarget = value === null ? null : target;
   return (
     <FileLinkContext.Provider value={value}>
       {children}
-      {target !== null && <PaneImageSheet target={target} onClose={() => setTarget(null)} />}
+      {activeTarget !== null && <PaneImageSheet target={activeTarget} onClose={() => setTarget(null)} />}
     </FileLinkContext.Provider>
   );
 }
@@ -88,7 +89,7 @@ function PaneImageSheet({ target, onClose }: { target: PaneImageTarget; onClose:
       truncated: false,
       text: "",
     }),
-    [target.rel],
+    [target],
   );
   const images = useMemo<FileImages>(
     () => ({

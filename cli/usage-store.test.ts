@@ -74,6 +74,10 @@ describe("the beacon side of the merge", () => {
     expect(mergeBeacon(withDir, "claude", NOW, { context: 20 })?.configDir).toBe("/profiles/work");
     expect(mergeStatusLine(withDir, record({ at: NOW, context: 30 }), NOW).configDir).toBe("/profiles/work");
     expect(mergeStatusLine(existing, record({ at: NOW, context: 30, configDir: "/profiles/work" }), NOW).configDir).toBe("/profiles/work");
+    // Switching a session from one custom configDir to another drops the old account's running limits.
+    const withLimits = record({ context: 15, window: 200_000, configDir: "/profiles/a", limits: [FIVE_HOUR] });
+    expect(mergeBeacon(withLimits, "claude", NOW, { context: 20, configDir: "/profiles/b" })?.limits).toBeUndefined();
+    expect(mergeStatusLine(withLimits, record({ at: NOW, context: 20, configDir: "/profiles/b" }), NOW).limits).toBeUndefined();
   });
 });
 

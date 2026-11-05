@@ -61,7 +61,8 @@ export interface BeaconChange {
  * percent is not a change, so the hot path writes nothing.
  */
 export function mergeBeacon(existing: UsageRecord | null, harness: string, now: number, change: BeaconChange): UsageRecord | null {
-  const limits = liveLimits(existing, now);
+  const dirChanged = change.configDir !== undefined && existing?.configDir !== undefined && change.configDir !== existing.configDir;
+  const limits = dirChanged ? [] : liveLimits(existing, now);
   const record: UsageRecord = {
     schemaVersion: USAGE_SCHEMA_VERSION,
     harness: existing?.harness ?? harness,
@@ -106,7 +107,8 @@ export function mergeStatusLine(existing: UsageRecord | null, reading: UsageReco
   if (reading.limits !== undefined) {
     record.limits = reading.limits;
   } else {
-    const kept = liveLimits(existing, now);
+    const dirChanged = reading.configDir !== undefined && existing?.configDir !== undefined && reading.configDir !== existing.configDir;
+    const kept = dirChanged ? [] : liveLimits(existing, now);
     if (kept.length > 0 && existing !== null) {
       record.limits = kept;
       record.at = existing.at;

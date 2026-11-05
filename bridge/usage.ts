@@ -28,7 +28,9 @@
 //
 // ── WHAT THE BRIDGE TRUSTS ────────────────────────────────────────────────────────────────────────
 //
-// Numbers only. The record carries no text the phone draws: the window labels are the bridge's own
+// Numbers only, plus an optional absolute `configDir` that scopes which local Claude credential
+// directory `AccountWindows` polls for that session (`configDir` is never sent in `usageAt`). The
+// record carries no text the phone draws: the window labels are the bridge's own
 // (`5h`, `7d`), a percentage is clamped to 0 to 100, and anything else in the file is ignored. A file
 // that does not parse, is too large or is from a newer schema is ABSENT, and an absent reading draws
 // nothing. A window whose `resetsAt` has passed is dropped, as Claude Code drops it: the number
@@ -276,6 +278,8 @@ export const diskUsageFiles: UsageFiles = {
  */
 export interface AccountLimits {
   limits(harness: string, configDir?: string): UsageLimit[] | undefined;
+  /** Note which custom `configDir`s have live panes in `scope`, so closed profiles stop polling. */
+  observeConfigDirs?(harness: string, configDirs: ReadonlySet<string>, scope?: string): void;
 }
 
 /**
@@ -347,6 +351,12 @@ export class UsageTracker {
         this.held.set(session, { mtime, record: text === null ? null : parseUsageRecord(text) });
       }),
     );
+    const claudeDirs = new Set<string>();
+    for (const session of sessions) {
+      const record = this.held.get(session)?.record;
+      if (record?.harness === "claude" && record.configDir !== undefined) claudeDirs.add(record.configDir);
+    }
+    this.account?.observeConfigDirs?.("claude", claudeDirs, scope);
     await this.prune();
   }
 
