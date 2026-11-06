@@ -178,6 +178,8 @@ puts `collie` on your PATH if you want the short form.
 3. Run `bin/collie pair` and type its 8-character code in Gaddi under Settings → System → Paired
    devices.
 
+![Put Gaddi on the home screen: iPhone and Android steps.](docs/images/install/pwa-install.svg)
+
 Type the code inside the home-screen app rather than scanning the QR code: the QR code opens
 Safari, and a pairing made in Safari may not carry over to the home-screen app. On Android, use
 Chrome and the **Install** card in Gaddi's Settings. [`docs/install.md`](./docs/install.md#start-it) has the
