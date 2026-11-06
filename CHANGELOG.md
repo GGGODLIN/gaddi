@@ -5,7 +5,23 @@ This file tracks all notable changes to Collie, ordered newest version first. Th
 `### Added`, `### Changed`, `### Fixed`, `### Packaging` and `### Docs`, in that order and only
 where there is content, and every bullet opens with a short bold lead sentence, which is the line
 the GitHub Release page prints. Older versions carry a single flat list. Every entry links to its commit and credits the contributor where there is one. The
-`## [Unreleased]
+`## [Unreleased]` section contains merged work waiting for release. The release
+commit renames this heading to `## [x.y.z] - YYYY-MM-DD`, adds the commit hashes, and adds a new
+empty `## [Unreleased]` section above it. The newest numbered `## [x.y.z]` heading (excluding the
+Unreleased heading) **must** match the `version` field in `herdr-plugin.toml`, `package.json`,
+and `web/package.json`, which `scripts/check-version.sh` checks. See [`CLAUDE.md`](./CLAUDE.md) →
+*Versioning* for the bump policy.
+
+## Upgrading
+
+**Already on 1.x?** Run `collie update`, or run
+`herdr plugin action invoke update --plugin herdr.collie`. Check the result with
+`bin/collie version` (or `herdr plugin action invoke version --plugin herdr.collie`). It shows the
+newest tag. The phone PWA updates itself within about a minute; no reload needed.
+Running a crew? Update the lead first; members follow on their own. Details:
+`docs/crew.md` → *Updating from 1.7.0*.
+
+## [Unreleased]
 
 ### Added
 
@@ -63,7 +79,7 @@ the GitHub Release page prints. Older versions carry a single flat list. Every e
 - **The usage windows ask less and honour Retry-After.** Collie now asks a vendor's usage endpoint at most once in five minutes per agent, a turn end included, where it asked once a minute before. After an HTTP 429 it waits as long as the `Retry-After` header says, at least 15 minutes, and doubles the wait on each 429 in a row up to an hour, then says the real wait in the log. Thanks @s0up4200 (#672). ([caeedb6](https://github.com/AltanS/collie/commit/caeedb6))
 - **A numbered list that an indented bullet splits keeps counting from its own number.** The second part used to draw as "1." again, so every option in an agent's pick-one list read as option 1. Thanks @KyongSik-Yoon (#674). ([d507db5](https://github.com/AltanS/collie/commit/d507db5))
 - **A pi or Oh My Pi pane started with its resume command finds its session in a shared folder.** Collie reads the resume argument from the pane's own command line first, as it does for Muse, and refuses only when the command line names nothing. On the Herdr core, Collie reads the pane's command line from the core's foreground record. Thanks @minigold92 (#675). ([a19611e](https://github.com/AltanS/collie/commit/a19611e))
-- **A Claude Code pane with its own `CLAUDE_CONFIG_DIR` shows its own 5-hour and 7-day usage windows.** Before, the bridge read only one Claude login (from its own `CLAUDE_CONFIG_DIR` or `~/.claude`) and put those windows on every Claude pane, overwriting what a session in another config directory reported through its statusLine. The beacon hooks and the statusLine wrapper now record a session's non-default `CLAUDE_CONFIG_DIR`, `AccountWindows` reads each directory's `.credentials.json` (or its hashed macOS Keychain item) on its own schedule, and a session whose directory has no login keeps the windows its own statusLine reported.
+- **A Claude Code pane with its own `CLAUDE_CONFIG_DIR` shows its own 5-hour and 7-day usage windows.** Before, the bridge read only one Claude login (from its own `CLAUDE_CONFIG_DIR` or `~/.claude`) and put those windows on every Claude pane, overwriting what a session in another config directory reported through its statusLine. The beacon hooks and the statusLine wrapper now record a session's non-default `CLAUDE_CONFIG_DIR`, `AccountWindows` reads each directory's `.credentials.json` (or its hashed macOS Keychain item) on its own schedule, and a session whose directory has no login keeps the windows its own statusLine reported. A session under the default `~/.claude` reads that login even when the bridge itself has a `CLAUDE_CONFIG_DIR`, and a later hook or statusLine write without a custom directory clears the old value. Thanks @GGGODLIN (#693).
 - **A lead launcher row reaches the member picked on the phone.** The browser route passes the lead's row carry through its resolver to the crew forward, so a command declared only on the lead can start on a member instead of being refused as absent from that member's launchers.
 - **The walky talky skill tells an agent to use `--wake` only when its operator asked.** A `resting` receipt is final: the agent does not send the message again. ([78daa2c](https://github.com/AltanS/collie/commit/78daa2c))
 - **`--wake` works in a crew that mixes versions.** A member below 1.26.1 never rests a pane, so the lead sends it a `--wake` message as a plain send, which types into all its panes. A lead below 1.26.1 cannot take `--wake`: the member's receipt reads "lead older than 1.26.1: send without --wake" instead of a signature failure. ([7f3ad90](https://github.com/AltanS/collie/commit/7f3ad90))
