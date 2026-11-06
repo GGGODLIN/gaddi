@@ -1067,6 +1067,51 @@ export interface ReleaseLineReceipt {
   replay?: true;
 }
 
+/** Which switch decided the anonymous install count (`bridge/telemetry.ts`, a closed set). */
+export type TelemetryDecider =
+  | "do_not_track"
+  | "env"
+  | "config"
+  | "settings"
+  | "ci"
+  | "mirror"
+  | "dev_build"
+  | "url"
+  | "default";
+
+/** The phone's own switch: two words. */
+export type TelemetrySetting = "on" | "off";
+
+/** The exact message the next ping would send. A test on the bridge pins its key set. */
+export interface TelemetryPing {
+  v: number;
+  id: string;
+  day: string;
+  version: string;
+  os: string;
+  arch: string;
+  install: string;
+  line: string;
+}
+
+/** `GET /api/telemetry`: whether the count is on, which switch decided, and the next message. */
+export interface TelemetryView {
+  on: boolean;
+  decidedBy: TelemetryDecider;
+  /** The phone's switch as saved on the machine, or null when it never made one. */
+  setting: TelemetrySetting | null;
+  /** The exact JSON of the next ping; null when the count is off. */
+  next: TelemetryPing | null;
+}
+
+/** The answer of `POST /api/telemetry`: the same view, with the request id it answers. */
+export interface TelemetryReceipt extends TelemetryView {
+  ok: true;
+  requestId: string;
+  /** The same request id with the same setting was seen before; nothing changed this time. */
+  replay?: true;
+}
+
 /** The answer of `POST /api/update/back`: the same shape as a rollback's start. */
 export type GoBackStartResponse = RollbackStartResponse;
 
@@ -2562,6 +2607,9 @@ export interface NotifyPrefs {
   blocked: boolean;
   /** Push when an agent finishes its task. Default off. */
   done: boolean;
+  /** Send each alert as its own notification, one per agent, instead of one summary per machine.
+   *  Default off. */
+  individual: boolean;
   /** Push when a new Collie version is available (a restart or upgrade is waiting). Default on. */
   updates: boolean;
   /** Push before an agent pane's prompt cache expires. Default off, and it covers EVERY pane — the

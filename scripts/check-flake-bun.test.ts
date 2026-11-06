@@ -126,20 +126,18 @@ describe("the Windows check runs the flake's Bun", () => {
     expect(String(setup[0]?.with?.["bun-version"])).toBe(flakeBunVersion());
   });
 
-  test("windows-suites.ps1 gives each suite its own skip budget, 200 in all, each skip named", () => {
+  test("windows-suites.ps1 gives each suite its own skip budget, each skip named", () => {
     const script = readFileSync(join(ROOT, "scripts", "windows-suites.ps1"), "utf8");
     const budget = (suite: string): number => Number(new RegExp(`\\[int\\]\\$MaxSkips${suite} = (\\d+)`).exec(script)?.[1] ?? Number.NaN);
-    expect([budget("Bridge"), budget("Cli"), budget("Scripts")]).toEqual([106, 59, 35]);
-    // The scripts allowance is install.sh's 23 tests and the pre-push describe: its tests, and its
-    // beforeAll and afterAll, which bun counts as skips too. A pre-push test added without raising
-    // the budget turns Windows CI red on the release commit, where it was first seen (2026-10-15).
+    expect([budget("Bridge"), budget("Cli"), budget("Scripts")]).toEqual([106, 60, 35]);
+    // The scripts allowance includes the pre-push describe's tests and hooks; Bun counts both.
     const prePush = readFileSync(join(ROOT, "scripts", "pre-push.test.ts"), "utf8");
     const prePushTests = [...prePush.matchAll(/^\s*test\("/gm)].length;
     expect(prePush).toContain('describe.skipIf(process.platform === "win32")("pre-push collie.prepush=ci"');
     expect(budget("Scripts")).toBe(23 + 2 + prePushTests + 2);
     expect(script).toContain("scripts/pre-push.test.ts");
     // The bridge allowance is the local-cli tests that stay POSIX-only, the one real-engine Whistle
-    // case that needs the uncommitted model, the one scan of real links to /etc, the 5 hold socket tests, the 6
+    // case that needs the uncommitted model, the one scan of real links to /etc, the one telemetry file mode, the 5 hold socket tests, the 6
     // walky mode and socket tests, the 30 durable example tests, the 10 durable-harness adapter skips and the 36 durable socket tests; the comment
     // names them all.
     const localCli = readFileSync(join(ROOT, "bridge", "stt", "local-cli.test.ts"), "utf8");
@@ -159,6 +157,10 @@ describe("the Windows check runs the flake's Bun", () => {
     const etcLinks = [...readFileSync(join(ROOT, "bridge", "claude-commands.test.ts"), "utf8").matchAll(/test\.skipIf\([^)]*\)\("([^"]+)"/g)].map((m) => m[1]!);
     expect(etcLinks).toHaveLength(1);
     for (const name of etcLinks) expect(script).toContain(name);
+    // The telemetry file mode: a POSIX mode, its own skipped test beside the telemetry tests that run on Windows.
+    const telemetrySkips = [...readFileSync(join(ROOT, "bridge", "telemetry.test.ts"), "utf8").matchAll(/test\.skipIf\(process\.platform === "win32"\)\("([^"]+)"/g)].map((m) => m[1]!);
+    expect(telemetrySkips).toHaveLength(1);
+    for (const name of telemetrySkips) expect(script).toContain(name);
     // The pane's program reads (.adr/0124): two boundedRun tests start a POSIX sh, the live /proc probe is
     // Linux only, and the "two copies" describe's one test and its hook use POSIX sh fakes.
     const boundedRunSkips = [...readFileSync(join(ROOT, "bridge", "surface", "binary-version.test.ts"), "utf8").matchAll(/test\.skipIf\(process\.platform === "win32"\)\("([^"]+)"/g)].map((m) => m[1]!);
@@ -173,11 +175,11 @@ describe("the Windows check runs the flake's Bun", () => {
     const fakeGitSkips = [...readFileSync(join(ROOT, "bridge", "worktree-add.test.ts"), "utf8").matchAll(/test\.skipIf\(process\.platform === "win32"\)\("([^"]+)"/g)].map((m) => m[1]!);
     expect(fakeGitSkips).toHaveLength(6);
     for (const name of fakeGitSkips) expect(script).toContain(name);
-    // The Claude-only raw Enter test (PR 637) sits in a loop over claude, omp and pi, so it skips twice on every platform.
-    const rawEnterSkips = readFileSync(join(ROOT, "bridge", "surface", "protocol.unstyled.test.ts"), "utf8").includes('test.if(harness.id === "claude")(') ? 2 : 0;
-    expect(rawEnterSkips).toBe(2);
+    // The no-named-key one-line send test sits in a loop over claude, omp and pi and runs for claude and omp (pi's Alt+Enter stays a named key), so it skips once on every platform.
+    const rawEnterSkips = readFileSync(join(ROOT, "bridge", "surface", "protocol.unstyled.test.ts"), "utf8").includes('test.if(harness.id === "claude" || harness.id === "omp")(') ? 1 : 0;
+    expect(rawEnterSkips).toBe(1);
     expect(script).toContain("protocol.unstyled.test.ts");
-    expect(budget("Bridge")).toBe(posixOnly.length + 1 + etcLinks.length + holdSocket.length + walkySkips.length + 30 + 10 + 36 + boundedRunSkips.length + 1 + 2 + rawEnterSkips + fakeGitSkips.length);
+    expect(budget("Bridge")).toBe(posixOnly.length + 1 + etcLinks.length + holdSocket.length + walkySkips.length + telemetrySkips.length + 30 + 10 + 36 + boundedRunSkips.length + 1 + 2 + rawEnterSkips + fakeGitSkips.length);
     // The cli allowance adds the three real runs of the POSIX install leg a crew member runs, and the
     // 38 tests of cli/walky.test.ts that talk to a real walky socket (`socketTest`).
     const walkySocketTests = readFileSync(join(ROOT, "cli", "walky.test.ts"), "utf8").match(/^ {2}socketTest\(/gm) ?? [];
@@ -189,7 +191,11 @@ describe("the Windows check runs the flake's Bun", () => {
     const sysSkips = [...readFileSync(join(ROOT, "cli", "sys.test.ts"), "utf8").matchAll(/test\.skipIf\(process\.platform === "win32"\)\("([^"]+)"/g)].map((m) => m[1]!);
     expect(sysSkips).toHaveLength(2);
     for (const name of sysSkips) expect(script).toContain(name);
-    expect(budget("Cli")).toBe(sysSkips.length + 1 + 12 + 3 + walkySocketTests.length + 3);
+    // M84: the hc-only home probe in cli/remote.test.ts runs a POSIX `sh` against a stand-in `hc`.
+    const hcProbe = "the real probe on an hc-only home reports the core and Gaddi's own config dir";
+    expect(readFileSync(join(ROOT, "cli", "remote.test.ts"), "utf8")).toContain(hcProbe);
+    expect(script).toContain(hcProbe);
+    expect(budget("Cli")).toBe(sysSkips.length + 1 + 12 + 3 + walkySocketTests.length + 3 + 1);
     for (const name of posixOnly) expect(script).toContain(name);
     expect(script).toContain("a 13 s WAV becomes text through a real child of this Collie");
     expect(script).toContain("a child of this checkout's CLI turns 10.4 s of speech into text");

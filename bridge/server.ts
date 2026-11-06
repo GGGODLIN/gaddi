@@ -25,7 +25,7 @@ import {
   sessionBind,
 } from "./deliverables.ts";
 import { dialTcp, parseProbePort, probePort, tailnetIPv4 } from "./port-probe.ts";
-import { HOST } from "./host.ts";
+import { HOST, isInside } from "./host.ts";
 import {
   existingPaths,
   type FilesExistAnswer,
@@ -52,6 +52,7 @@ import { createSessionFolders, createSessionLabels, resolveSessionFolder, withSe
 import { computeEtag, gzipJsonResponse, notModified, wantsGzip } from "./http-cache.ts";
 import { pluginRoot } from "./root.ts";
 import { DEFAULT_NOTIFY_PREFS, type NotifyPrefs, type NotifyPrefsStore } from "./notify-prefs.ts";
+import { paneClears } from "./notifications.ts";
 import { browseFolders, type FolderBrowseContext } from "./folder-browse.ts";
 import { MAX_FAVOURITES, MAX_FOLDER_CHARS, type FolderSurface } from "./folders.ts";
 import { isValidWorktreeBranch } from "./worktree-branch.ts";
@@ -149,7 +150,7 @@ import {
 } from "./prompt-binding.ts";
 import { MAX_BIND_COLUMN, type ColumnRange } from "../web/src/lib/column-range.ts";
 import { MAX_TAIL_LINES } from "../web/src/lib/tail-lines.ts";
-import type { Push, PushSubscription } from "./push.ts";
+import type { Push, PushMessage, PushSubscription } from "./push.ts";
 import { RefreshCoalescer } from "./refresh.ts";
 import { herdTagFor, selectView, type SessionRegistry, type SessionRuntime, widenedPanes } from "./sessions.ts";
 import type { Snooze } from "./snooze.ts";
@@ -166,6 +167,7 @@ import {
   type PreflightReport,
 } from "./update-action.ts";
 import { type ReleaseLine, type UpdateLineRecord, withLine } from "./update-line.ts";
+import { parseTelemetryRequest, parseTroubleSignal, type Telemetry } from "./telemetry.ts";
 import { REPORT_SCREEN_ROWS, reportDoctorRows, reportScreen, type DoctorRowSource, type ReportContext, type ReportDoctorRow } from "./report.ts";
 import type { StateEngine } from "./state-engine.ts";
 import { adapterFor, buildJournalRegistry, journalAgentName } from "./journal/registry.ts";
@@ -208,7 +210,7 @@ import { redactAnsi } from "./redact.ts";
 import { TranscriptStore } from "./journal/store.ts";
 import type { AgentSessionRef, DiscoverHints, ForegroundProcess, JournalAdapter, PaneScreen } from "./journal/types.ts";
 import { isBlobHash, resolveBlobPath } from "./journal/pi.ts";
-import { containedRealpath, statFile } from "./journal/files.ts";
+import { containedRealpath, realpathOf, statFile } from "./journal/files.ts";
 import { isSessionId } from "./journal/claude.ts";
 import {
   bearerToken,
@@ -1166,6 +1168,13 @@ export interface UpdateLineDeps {
   now: () => number;
 }
 
+/**
+ * The anonymous install ping's state (M86 spec 01), read and changed by `GET`/`POST /api/telemetry`.
+ * A seam like {@link UpdateLineDeps}: the clock, the disk and the `fetch` are index.ts's. Undefined
+ * answers 503.
+ */
+export type TelemetryDeps = Pick<Telemetry, "view" | "choose" | "trouble">;
+
 export function startServer(opts: {
   cfg: Config;
   registry: SessionRegistry;
@@ -1186,6 +1195,8 @@ export function startServer(opts: {
   updateAction?: UpdateActionDeps;
   /** The release line record (M60 spec 01). See {@link UpdateLineDeps}. */
   updateLine?: UpdateLineDeps;
+  /** The anonymous install ping (M86 spec 01). See {@link TelemetryDeps}. */
+  telemetry?: TelemetryDeps;
   /** The doctor's send rows for Report a problem (M71 spec 05). See {@link ReportMachine.sendHealth}. */
   sendHealth?: () => readonly DoctorRowSource[];
   /**
@@ -1271,7 +1282,7 @@ export function startServer(opts: {
    * (CREW_PROTOCOL.md §5), and the lead being the only sender is what makes that fan complete.
    * Structurally typed, not the class: this file needs "fan a pref change, list the live slots".
    */
-  peerNotifier?: { applyPrefs(): void; tags(): string[] };
+  peerNotifier?: { applyPrefs(): void; tags(): string[]; paneClears(): PushMessage[] };
   /**
    * Device pairing (bridge/pairing.ts). Always supplied by index.ts — it is not an opt-in feature
    * flag: the store reads its own registry off disk, and pairing is always on (ADR 0086), so an empty
@@ -3399,6 +3410,14 @@ export function startServer(opts: {
           // raised those alerts and owns the subscription, so an unreachable peer is irrelevant here
           // — there is no policy to deliver and nothing to queue for reconnect (§5).
           for (const tag of peerNotifier?.tags() ?? []) void push.send({ type: "clear", tag });
+          // …and, with "one notification per agent" on, each pane's own notification, which no slot
+          // tag above names.
+          if (notifyPrefs.current().individual) {
+            const own = registry
+              .all()
+              .flatMap((rt) => paneClears(herdTagFor(rt.isPrimary, rt.name), rt.notifications.outstandingPaneIds()));
+            for (const msg of [...own, ...(peerNotifier?.paneClears() ?? [])]) void push.send(msg);
+          }
         }
         return json({ snoozedUntil: snooze.until() }, req.headers.get("accept-encoding"));
       }
@@ -3416,7 +3435,7 @@ export function startServer(opts: {
           let body: JsonValue;
           try {
             // SAFETY: `Request.json()` output IS a JsonValue by construction;
-            // `parseNotifyPrefsPatch` rejects anything that is not three optional booleans.
+            // `parseNotifyPrefsPatch` rejects anything that is not an optional boolean per pref.
             body = (await req.json()) as JsonValue;
           } catch {
             return text("bad request", 400);
@@ -3907,6 +3926,67 @@ export function startServer(opts: {
         };
         if (replay) receipt.replay = true;
         return json(receipt, req.headers.get("accept-encoding"));
+      }
+
+      if (pathname === "/api/telemetry" && (req.method === "GET" || req.method === "POST")) {
+        // ── THE ANONYMOUS INSTALL PING (M86 spec 01) ──────────────────────────
+        // The GET says whether the ping is on, which switch decided, the phone's own switch and the
+        // exact JSON the next ping would send (null when it is off). The POST is the phone's switch,
+        // a write with a request id, answered with the same body; the same id again answers it
+        // unchanged. Neither route sends a ping: the timer in index.ts is the only sender.
+        const ping = opts.telemetry;
+        if (!ping) return text("telemetry unavailable", 503);
+        if (req.method === "GET") {
+          const denied = guard(req, cfg, "read", pairingGate);
+          if (denied) return denied;
+          return json(ping.view(), req.headers.get("accept-encoding"));
+        }
+        const denied = browserGate("write");
+        if (denied) return denied;
+        let body: JsonValue;
+        try {
+          // SAFETY: `Request.json()` output IS a JsonValue by construction, and `parseTelemetryRequest`
+          // re-checks every field of it before any of it is believed.
+          body = (await req.json()) as JsonValue;
+        } catch {
+          return jsonError(apiError("telemetry.setting_invalid"), 400, req.headers.get("accept-encoding"));
+        }
+        const parsed = parseTelemetryRequest(body);
+        if (parsed === null || parsed.setting === null) {
+          return jsonError(apiError("telemetry.setting_invalid"), 400, req.headers.get("accept-encoding"));
+        }
+        if (parsed.requestId === null) {
+          return jsonError(apiError("telemetry.request_id_required"), 400, req.headers.get("accept-encoding"));
+        }
+        const result = ping.choose({ setting: parsed.setting, requestId: parsed.requestId });
+        if (!result.replay) {
+          audit.record({
+            action: "telemetry.setting",
+            device: whois(req).device,
+            detail: { setting: parsed.setting, requestId: parsed.requestId },
+          });
+        }
+        const receipt: JsonObject = { ok: true, ...result.view, requestId: parsed.requestId };
+        if (result.replay) receipt.replay = true;
+        return json(receipt, req.headers.get("accept-encoding"));
+      }
+
+      if (pathname === "/api/telemetry/trouble" && req.method === "POST") {
+        // ── THE TROUBLE TALLY (M86 spec 05) ───────────────────────────────────
+        // The phone showed one of its two trouble cards. A count, not a command: no request id, no
+        // audit line, and the phone never retries it. The bridge the phone talks to counts it under
+        // its own install, a crew member's pane included.
+        const denied = browserGate("write");
+        if (denied) return denied;
+        let body: JsonValue | undefined;
+        try {
+          // SAFETY: `Request.json()` output IS a JsonValue by construction, and `parseTroubleSignal`
+          // re-checks every field of it before any of it is believed.
+          body = (await req.json()) as JsonValue;
+        } catch {
+          body = undefined;
+        }
+        return telemetryTroubleRoute(opts.telemetry, body);
       }
 
       // ── Speech-to-text (bridge/stt/) ─────────────────────────────────────
@@ -4532,12 +4612,16 @@ export async function discoverProcesses(
 export async function discoveryHints(
   adapter: JournalAdapter,
   pane: AgentView,
-  mux: Pick<MuxAdapter, "readGrid" | "foregroundProcesses">,
+  mux: Pick<MuxAdapter, "readGrid" | "foregroundProcesses" | "paneLabels">,
   paneId: string,
 ): Promise<DiscoverHints | undefined> {
   // A reported session is never discovered, so the foreground argv would buy nothing.
   if (adapter.discover === undefined || pane.agentSession !== undefined) return undefined;
-  return { screen: paneScreen(mux, paneId), processes: await discoverProcesses(mux, paneId) };
+  const hints: DiscoverHints = { screen: paneScreen(mux, paneId), processes: await discoverProcesses(mux, paneId) };
+  // The labels come from the last snapshot and cost no call. Which key a journal reads is its own.
+  const labels = mux.paneLabels?.(paneId);
+  if (labels === undefined) return hints;
+  return { ...hints, labels };
 }
 
 /**
@@ -4545,10 +4629,15 @@ export async function discoveryHints(
  * its adapter answers to (`AGENT_ALIASES`): an `omp` pane and a `pi` pane write the same log format,
  * and one adapter's folder walk would find either's session.
  */
-function sharesFolder(adapter: JournalAdapter, pane: AgentView, panes: readonly AgentView[]): boolean {
-  return panes.some(
-    (other) => other.paneId !== pane.paneId && journalAgentName(other.agent) === adapter.agent && other.cwd === pane.cwd,
-  );
+async function sharesFolder(adapter: JournalAdapter, pane: AgentView, panes: readonly AgentView[]): Promise<boolean> {
+  for (const other of panes) {
+    if (other.paneId === pane.paneId || journalAgentName(other.agent) !== adapter.agent) continue;
+    if (other.cwd === pane.cwd) return true;
+    if (adapter.sharedFolderBlind !== true || !isAbsolute(pane.cwd) || !isAbsolute(other.cwd)) continue;
+    const [panePath, otherPath] = await Promise.all([realpathOf(pane.cwd).catch(() => null), realpathOf(other.cwd).catch(() => null)]);
+    if (panePath !== null && otherPath !== null && isInside(HOST, panePath, otherPath) && isInside(HOST, otherPath, panePath)) return true;
+  }
+  return false;
 }
 
 /**
@@ -4557,13 +4646,13 @@ function sharesFolder(adapter: JournalAdapter, pane: AgentView, panes: readonly 
  * (#508). Read only after {@link journalRefOf} answered null; a pane that reports a session never
  * reaches discovery, so it never earns this.
  */
-export function noSessionDetail(
+export async function noSessionDetail(
   adapter: JournalAdapter,
   pane: AgentView,
   panes: readonly AgentView[],
-): "shared-folder" | undefined {
+): Promise<"shared-folder" | undefined> {
   if (pane.agentSession !== undefined || adapter.sharedFolderBlind !== true) return undefined;
-  return sharesFolder(adapter, pane, panes) ? "shared-folder" : undefined;
+  return (await sharesFolder(adapter, pane, panes)) ? "shared-folder" : undefined;
 }
 
 /**
@@ -4681,7 +4770,7 @@ export async function journalRefOf(
   const reported = pane.agentSession;
   // Another pane running the same harness in the same folder: whatever a folder walk finds there
   // could be that pane's session.
-  const neighbour = sharesFolder(adapter, pane, panes);
+  const neighbour = await sharesFolder(adapter, pane, panes);
   if (reported === undefined) {
     // Discovery hears about the neighbour, so a folder-keyed adapter answers no session rather than
     // the neighbour's (#508). The flag rides only when true; otherwise the hints pass untouched.
@@ -4708,7 +4797,7 @@ export async function paneHistory(
   journals: Record<string, JournalAdapter> | null,
   transcripts: TranscriptStore | null,
   engine: StateEngine,
-  mux: Pick<MuxAdapter, "readGrid" | "foregroundProcesses">,
+  mux: Pick<MuxAdapter, "readGrid" | "foregroundProcesses" | "paneLabels">,
   paneId: string,
   url: URL,
   req: Request,
@@ -4859,7 +4948,7 @@ async function paneSubagent(
   cfg: Config,
   journals: Record<string, JournalAdapter> | null,
   engine: StateEngine,
-  mux: Pick<MuxAdapter, "readGrid" | "foregroundProcesses">,
+  mux: Pick<MuxAdapter, "readGrid" | "foregroundProcesses" | "paneLabels">,
   paneId: string,
   agentId: string,
   req: Request,
@@ -4926,7 +5015,7 @@ export async function paneChat(
   journals: Record<string, JournalAdapter> | null,
   live: LiveWindows | null,
   engine: StateEngine,
-  mux: Pick<MuxAdapter, "capabilities" | "readGrid" | "foregroundProcesses">,
+  mux: Pick<MuxAdapter, "capabilities" | "readGrid" | "foregroundProcesses" | "paneLabels">,
   paneId: string,
   url: URL,
   req: Request,
@@ -4954,7 +5043,7 @@ export async function paneChat(
   // runs per poll here, a bounded newest-first walk that costs milliseconds in the common case;
   // the resolved path below is what the live window holds.
   const ref = await journalRefOf(adapter, pane, panes, await discoveryHints(adapter, pane, mux, paneId));
-  if (ref === null) return unavailable("no-session", noSessionDetail(adapter, pane, panes));
+  if (ref === null) return unavailable("no-session", await noSessionDetail(adapter, pane, panes));
 
   const params = chatParams(url);
   try {
@@ -9010,6 +9099,20 @@ export async function reportContextRoute(
   const read = await rt.herdr.readGrid(pane, { scope: "recent", lines: REPORT_SCREEN_ROWS, styling: "preserve" });
   if (!read.ok) return text(`${rt.herdr.mux} read failed: ${read.detail}`, 502);
   return json({ ...context, screen: reportScreen(stripSgr(read.value.text)) } satisfies ReportContext, acceptEncoding);
+}
+
+/**
+ * `POST /api/telemetry/trouble` once the write gate passed (M86 spec 05): one trouble signal from the
+ * phone. A body that is not exactly `{ kind, harness, version, mux }` in their shapes is a 400, plain
+ * text, because the phone never shows it. A good body is a 204 whether or not it was counted: with the
+ * ping off for any reason, nothing is stored. Undefined telemetry answers 503, like the setting route.
+ */
+export function telemetryTroubleRoute(ping: Pick<Telemetry, "trouble"> | undefined, body: JsonValue | undefined): Response {
+  if (!ping) return text("telemetry unavailable", 503);
+  const signal = parseTroubleSignal(body);
+  if (signal === null) return text("telemetry.trouble_invalid", 400);
+  ping.trouble(signal);
+  return secure(new Response(null, { status: 204 }));
 }
 
 /**

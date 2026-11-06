@@ -32,7 +32,7 @@ import { repoFactsOf } from "./repo-facts.ts";
 import { withRepoFacts } from "./repo-facts-mux.ts";
 import { gitBinary } from "./changes.ts";
 import { withWorktreeCapability } from "./worktree-capability.ts";
-import { holdPrivateFile, loadConfig, loadConfigLayer, nonLoopbackBindRefusal, resolveConfigDir, type Config } from "./config.ts";
+import { holdPrivateFile, interfaceAddresses, listenFailureLine, loadConfig, loadConfigLayer, nonLoopbackBindRefusal, resolveConfigDir, type Config } from "./config.ts";
 import { applyConfigLayer } from "./config-source.ts";
 import {
   aclRepairAllowed,
@@ -243,6 +243,12 @@ import {
   withLine,
   writeUpdateLine,
 } from "./update-line.ts";
+import {
+  createTelemetry,
+  telemetryOrigin,
+  TELEMETRY_FIRST_DELAY_MS,
+  TELEMETRY_INTERVAL_MS,
+} from "./telemetry.ts";
 import {
   FreshPreflightGate,
   launchUpdateRunner,
@@ -1253,6 +1259,32 @@ updateFirstCheck.unref();
 const updateTimer = setInterval(updateTick, UPDATE_INTERVAL_MS);
 updateTimer.unref();
 
+// The anonymous install ping (M86 spec 01, bridge/telemetry.ts): one tiny POST a day at most, to
+// Collie's own endpoint, and nothing at all when any off switch says so. The state file is settled
+// here at boot (an off ping keeps no ID), the first check comes ten minutes in and then every hour,
+// and each tick only asks `shouldSend`. Both timers are unref()ed and cleared on shutdown.
+const telemetry = createTelemetry({
+  stateDir: cfg.stateDir,
+  env: process.env,
+  origin: telemetryOrigin(process.env, configLayer),
+  version: crewVersion,
+  installKind: installKind,
+  line: () => readUpdateLineSync(cfg.stateDir).line,
+  // Read at ping time. A peer (a member, or a deputy that is not the lead) is a member in the ping.
+  crewMode: () => crew.mode,
+  now: Date.now,
+  fetch: (url, init) => fetch(url, init),
+  os: HOST.platform,
+  arch: process.arch,
+  warn: (line) => console.warn(`[telemetry] ${line}`),
+  log: (line) => console.log(`[telemetry] ${line}`),
+});
+telemetry.observe();
+const telemetryFirstTick = setTimeout(() => void telemetry.tick(), TELEMETRY_FIRST_DELAY_MS);
+telemetryFirstTick.unref();
+const telemetryTimer = setInterval(() => void telemetry.tick(), TELEMETRY_INTERVAL_MS);
+telemetryTimer.unref();
+
 /**
  * What this collie publishes beside its snapshot body when its lead polls it (§19).
  *
@@ -1638,6 +1670,7 @@ const makeSession: SessionFactory = (name, endpoint, isPrimary) => {
     sink,
     cfg.notifyDelayMs,
     (status) => notifyPrefs.isNotifiable(status),
+    () => notifyPrefs.current().individual,
     // Opt-in (COLLIE_NOTIFY_DESCRIPTION): the description can quote the newest prompt, and a push body
     // lands on a lock screen. Off, the body stays the pane's place, as it always was.
     cfg.notifyDescription ? (agent) => paneDescription?.describe(agent)?.now : () => undefined,
@@ -2101,6 +2134,7 @@ const peerNotifier =
         mute: snooze,
         delayMs: cfg.notifyDelayMs,
         isNotifiable: (status) => notifyPrefs.isNotifiable(status),
+        individual: () => notifyPrefs.current().individual,
         asks: askPush,
       })
     : undefined;
@@ -3025,10 +3059,34 @@ const standbyDoor = standbyStore === null ? null : createStandbyDoor({
  * one question — *should anything route here?* — and a lead answers it `200` on both of its ports.
  */
 const standbyPort = standbyPortOf(process.env);
+/**
+ * Run a listen, or end the process (issue 699). Bun throws when a door cannot listen, and this
+ * module starts at top level, so the throw would fail the import while the hold socket, the walky
+ * socket, the poll loop and the timers kept a bridge with no listener alive. launchd, systemd and
+ * the Windows task restart only an exit, so the line below is printed and the process exits 1.
+ */
+function listenOrExit<T>(door: "front door" | "standby door", host: string, port: number, listen: () => T): T {
+  try {
+    return listen();
+  } catch (err) {
+    console.error(
+      listenFailureLine({
+        door,
+        host,
+        port,
+        code: err instanceof Error && "code" in err ? String(err.code) : undefined,
+        message: err instanceof Error ? err.message : String(err),
+        interfaces: interfaceAddresses(),
+      }),
+    );
+    process.exit(1);
+  }
+}
+
 const standbyServer =
   standbyPort === null || bootTrust === null
     ? null
-    : Bun.serve({
+    : listenOrExit("standby door", standbyHostOf(process.env), standbyPort, () => Bun.serve({
         hostname: standbyHostOf(process.env),
         port: standbyPort,
         fetch: async (req) => {
@@ -3051,7 +3109,7 @@ const standbyServer =
           // machine mid-update is most likely to meet (M15/05).
           return withStandbyVersion(answered ?? new Response("not found", { status: 404 }), crewVersion);
         },
-      });
+      }));
 
 if (standbyServer !== null && standbyDoor !== null) {
   console.log(
@@ -3066,7 +3124,7 @@ if (standbyServer !== null && standbyDoor !== null) {
   );
 }
 
-const server = startServer({
+const server = listenOrExit("front door", cfg.host, cfg.port, () => startServer({
   cfg,
   registry,
   push,
@@ -3082,6 +3140,8 @@ const server = startServer({
     write: (record) => writeUpdateLine(diskWriter, cfg.stateDir, record),
     now: Date.now,
   },
+  // The anonymous install ping's state and the phone's switch (M86 spec 01).
+  telemetry,
   // The bare `<semver>+<sha>` this process answers `/api/health` and `/crew/v1/hello` with — one
   // string, resolved once, so the detached updater's health gate and a peer can never be told two
   // different things about this machine (M15/04).
@@ -3234,7 +3294,7 @@ const server = startServer({
     }
     return null;
   },
-});
+}));
 
 const shutdown = async () => {
   console.log("\n[bridge] shutting down");
@@ -3264,6 +3324,8 @@ const shutdown = async () => {
   clearInterval(sweepTimer);
   clearTimeout(updateFirstCheck);
   clearInterval(updateTimer);
+  clearTimeout(telemetryFirstTick);
+  clearInterval(telemetryTimer);
   process.exit(0);
 };
 process.on("SIGINT", shutdown);
