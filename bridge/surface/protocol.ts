@@ -1958,8 +1958,25 @@ function aboveUnchanged(before: Snap, after: Snap, scroll = 0): boolean {
     if (tail.length === b.length && tail.every((row, i) => row === b[i])) return true;
     const lost = tail.length - b.length;
     if (bandMoved && lost > 0 && lost <= bandRows && b.some((row) => row.length > 0) && b.every((row, i) => row === tail[i])) return true;
+    if (shift > 0 && pinnedScroll(a, b, shift)) return true;
   }
   return false;
+}
+
+/**
+ * The scroll of {@link aboveUnchanged} under one pinned row: the screen's first row stays where it is,
+ * the same text, while the rows under it scroll up by `shift`. Every row under the pinned one must be
+ * the row `shift` lower down before, so no row is new; only rows that left at the top are gone. The
+ * running-turn compare holds the same rule ({@link aboveScrolled}). Claude Code 2.1.319 over Herdr
+ * (lab, 2026-11-07, 215 columns, a full screen): a slash command whose text wraps grows the box one row
+ * up, the transcript scrolls one row, and the screen's first row stays blank; read as a changed screen,
+ * every long `/subtask` was typed and never submitted.
+ */
+function pinnedScroll(before: readonly string[], after: readonly string[], shift: number): boolean {
+  if (before.length === 0 || after.length < 2 || before[0] !== after[0]) return false;
+  const rest = before.slice(1 + shift);
+  if (rest.length !== after.length - 1) return false;
+  return rest.some((row) => row.length > 0) && rest.every((row, i) => row === after[i + 1]);
 }
 
 /** The lines with the first one's lead character cut: a shell line's `!` turns into the box's prompt glyph. */
@@ -2846,8 +2863,8 @@ export class SendProtocol {
     if (match === null) return null;
     const entry = this.openSends.find((open) => open.id === match.id);
     if (entry === undefined) return null;
-    // The harness took the prompt: a queued send is not waiting any more.
-    this.queuedSends.drop(entry.id);
+    // The harness took the prompt: a queued send is not waiting any more. A submitted one stays: a Stop may give it back.
+    this.queuedSends.taken(entry.id);
     if (!entry.settled) {
       entry.effective = true;
       return entry.id;
@@ -3802,8 +3819,10 @@ export class SendProtocol {
     const receipt = this.receiptOf(state, outcome, outcome === "effective" ? undefined : end.reason, end.extra.cap, end.extra);
     this.deps.store.settle(state.record.id, receipt);
     // A send the harness holds for after the turn: a card until the journal or the box closes it (ADR 0122).
-    // A steer is kept too, with no card of its own: a Stop may give it back together with the queue.
-    if ((receipt.outcome === "sent" && receipt.queued === true) || receipt.outcome === "steered") {
+    // A steer is kept too, with no card of its own: a Stop may give it back together with the queue. So is a
+    // send that started a turn: a Stop early in it gives the prompt back to the box (queued.ts, SUBMITTED).
+    const submitted = (receipt.outcome === "sent" || receipt.outcome === "effective") && receipt.queued !== true;
+    if ((receipt.outcome === "sent" && receipt.queued === true) || receipt.outcome === "steered" || submitted) {
       this.queuedSends.add({
         id: state.record.id,
         session: state.target.session,
@@ -3813,6 +3832,7 @@ export class SendProtocol {
         collapse: state.match?.profile.collapse.pattern ?? null,
         at: this.now(),
         steer: receipt.outcome === "steered",
+        submitted,
       });
     }
     this.count(state, receipt, end.extra.surface);

@@ -23,6 +23,12 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A message that Stop puts back in the box gets a Send and Discard card.** When you tap Stop early in a turn, Claude Code takes your prompt out of the transcript and puts it back in its input box. The phone did not know that text was yours, so it showed no card, and every later send was refused because the box held a draft. Collie now keeps the text of a send that started a turn, and when Stop's read shows it back in the box, the "Back in the box" card offers Send and Discard. A turn that ends normally drops it after two idle reads, and nothing is pressed.
+- **A long slash command typed into Claude Code is submitted again.** On a full Herdr screen a command whose text wraps grows the box a row up, the transcript scrolls one row, and Claude Code keeps the screen's first row in place. Collie read that row as new text above the box and stopped before Enter, so a `/subtask` of a few hundred characters stayed in the box as "typed, not submitted". The check of the rows above a command now accepts one first row that stays put while the rows under it scroll; a row with new text still stops the send.
+- **The composer stays on screen when you come back to the app after a break.** An installed Android app restored from the background could keep a page height taller than the screen, which pushed the reply box past the bottom edge until a hard refresh. On each return Collie now compares the page height with the visible height and, when they differ, holds the page at the visible height until the next resize.
+
 ## [2.12.0] - 2026-11-08
 
 ### Changed
