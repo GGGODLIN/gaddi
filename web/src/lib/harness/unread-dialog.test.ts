@@ -298,8 +298,8 @@ const CARD_FIXTURES = {
   // question, which no recipe here ticks. Every other AGY dialog fixture is one its grammars read.
   // `agy--working.txt` keeps its composer live (`OWN_ESC_STATUS` in `agy/chrome.ts`), so no card shows
   // on a busy pane.
-  agy: { modals: ["agy--ask-multi.txt", "agy--resume-picker-nomatch.txt"], notModals: [] },
-  antigravity: { modals: ["agy--ask-multi.txt", "agy--resume-picker-nomatch.txt"], notModals: [] },
+  agy: { modals: ["agy--ask-multi.txt", "agy--resume-picker-nomatch.txt", "agy--v1412-subagent-band-permission.txt"], notModals: [] },
+  antigravity: { modals: ["agy--ask-multi.txt", "agy--resume-picker-nomatch.txt", "agy--v1412-subagent-band-permission.txt"], notModals: [] },
   // Every opencode picker: composerReady refuses it (the picker shape) and no grammar reads it, so
   // Escape, which closes a picker (probed on 1.18.32), is its way out. The permission steps and every
   // question dialog the grammars lift (single select, multi select, a many-question call, the Confirm
@@ -348,7 +348,8 @@ const CARD_FIXTURES = {
       // omp 18.12.2's goal menu, which a bare `/goal` opens in a goal turn (lab, 2026-10-22).
       "omp--v18-12-2-goal-bare-menu--w119.txt",
       "omp--v18-4-resume-nomatch.txt",
-      "omp--v18-4-switch-nerd.txt",
+      // omp 18.17.0's `/usage` dashboard, a full-screen modal nothing lifts (lab, 2026-11-06).
+      "omp--v18-17-0-usage-dashboard--w120.txt",
       "omp--v18-4-switch-nomatch.txt",
       "omp--v18-4-switch-quick-roles.txt",
       "omp--v18-4-switch-task.txt",

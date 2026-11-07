@@ -12,7 +12,7 @@ and the phone shows which one is waiting on you.
 You answer with a tap, not a terminal keyboard.
 
 It runs on your own machine and reaches your phone over your Tailscale network. Gaddi has no account
-of its own, no hosted backend and no telemetry; the connection is your Tailscale's. It isn't in an
+of its own and no hosted backend for your sessions; the connection is your Tailscale's. It isn't in an
 app store: you open a URL on the phone and add it to the home screen.
 
 > **Note.** Gaddi is [GGGODLIN's fork](https://github.com/GGGODLIN/gaddi) of
@@ -41,7 +41,9 @@ The video and the screenshots use made-up agents.
 - **An agent's own questions become buttons**: permission prompts, AskUserQuestion, plan approval,
   menus.
 - **The keys a phone keyboard doesn't have**: Esc, Ctrl+C, Tab, arrows, and your own sequences.
-- **Start work from the phone**: a new agent, a command or a worktree, on any of your machines.
+- **Start work from the phone**: a new agent, a command or a worktree, on any of your machines;
+  your own launchers, the lead's and the ones you add from the phone, show on every machine of a
+  crew.
 - **Walky talky**: one agent session sends a short message to another, on any harness and across a
   crew, and you can message sessions from the phone; every message gets a receipt and a log entry,
   an address carries the pane's token so a message does not reach a new session in a reused pane id,
@@ -50,8 +52,16 @@ The video and the screenshots use made-up agents.
   and history ([experimental](./docs/durable-agents.md)).
 - **Read back what happened**: search the output, read the whole session as Chat, and browse the
   workspace's files and diffs, read-only.
+- **Voice input**: speak a reply instead of typing it. Whistle, Collie's own speech engine, turns
+  it into text on the phone or on your computer, so a phone whose browser cannot run it can still
+  use voice, and the audio stays on your own devices. Off until you set it up
+  ([Voice input and Web Push](./docs/voice-and-push.md)).
 - **A push notification** when an agent stops and waits for you, once you turn Web Push on
   ([Voice input and Web Push](./docs/voice-and-push.md)).
+- **Telemetry**: upstream 1.27.0 adds a daily anonymous install and trouble count; in this fork it
+  is **off by default** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)),
+  and sends nothing unless opted in from Settings or with `COLLIE_TELEMETRY=1`
+  ([what leaves your machine](./docs/security.md#what-leaves-your-machine)).
 
 ### Your agents on the iPhone's Dynamic Island
 
@@ -169,6 +179,8 @@ puts `collie` on your PATH if you want the short form.
 3. Run `bin/collie pair` and type its 8-character code in Gaddi under Settings → System → Paired
    devices.
 
+![Put Gaddi on the home screen: iPhone and Android steps.](docs/images/install/pwa-install.svg)
+
 Type the code inside the home-screen app rather than scanning the QR code: the QR code opens
 Safari, and a pairing made in Safari may not carry over to the home-screen app. On Android, use
 Chrome and the **Install** card in Gaddi's Settings. [`docs/install.md`](./docs/install.md#start-it) has the
@@ -265,7 +277,7 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | [**Deployment**](./docs/deployment.md) | Front doors other than the default: an identity-aware proxy, a reverse proxy with no Tailscale, an off-host ingress, several Collies on one host (one per user, or several instances for one user), and a crew's standby door |
 | [**Commands**](./docs/commands.md) | Every `collie` verb, the census verbs that show what a Collie knows (`status`, `mux list`, `sessions`, `crew status`), putting `collie` on your PATH, and the Herdr actions that mirror the verbs on a Herdr-managed install |
 | [**Crews**](./docs/crew.md) | Several machines' Collies behind one URL: invite, join, deputy, failover, and a machine that runs several Collies |
-| [**Voice input and Web Push**](./docs/voice-and-push.md) | The microphone in the composer, and notifications when an agent is waiting on you |
+| [**Voice input and Web Push**](./docs/voice-and-push.md) | The microphone in the composer, Whistle speech to text on your phone or your computer, and notifications when an agent is waiting on you |
 | [**Manage & update**](./docs/upgrading.md) | Update from the phone or the terminal, roll back, update a crew, cross a major, stop, uninstall, and upgrading a 0.x install to 1.0 |
 | [**Troubleshooting**](./docs/troubleshooting.md) | Symptoms in the words you would actually search for |
 | [**Terminology**](./docs/terminology.md) | Collie's words in plain words, beside the names other tools use: session, space, tab, pane, terminal, durable agent, harness, crew, lead, and more |
@@ -345,7 +357,7 @@ has the install, the update, and what is not tested. In short:
 - **Run by Task Scheduler.** `collie start`, `stop`, `restart`, `status` and `uninstall` work as they
   do elsewhere. The task is named `herdr.collie` and starts at your logon.
 - **Not covered.** tmux and zellij (neither has a Windows build), Windows 10, Windows on ARM,
-  a Windows machine joining a crew, and a managed front door: Collie does not run `tailscale serve`
+  a Windows machine in a crew without the [experimental](./docs/windows.md#crews) consent flag, and a managed front door: Collie does not run `tailscale serve`
   on Windows, so bring your own,
   [Variant C](./docs/deployment.md#variant-c--reverse-proxy-as-the-only-front-door-no-tailscale).
   Herdr's action buttons need `bash`, so the manifest lists only `linux` and `macos`.
@@ -444,6 +456,14 @@ The tabs, in order: Dashboard, Pane, Crew, Settings, Boot & connection, Idle & r
 Notices, Motion. Notices covers everything that ANNOUNCES (the notice primitive, the strip band,
 the status toast); Motion covers everything that MOVES without announcing anything (collapse and
 swap primitives, loading bars, sheets, menus, pending and pulsing controls).
+
+A card shows its label and nothing else. Its `reach` and `note`, and a section's `intent`, appear
+only while the page's Notes switch is on (off by default, remembered in `localStorage`).
+`cd web && bun run playground:build` builds the page alone into `web/dist-playground/` (minified,
+one chunk per section, no service worker) for any static server; it never touches `dist/`.
+
+A design round that compares numbered options uses `Round` (`src/playground/round.tsx`): one Case
+switch drives every option, with Zoom, Replay and Flip.
 
 Within a tab, cards are grouped under a `Group` — a small heading over its own `.pg-grid` — ordered
 from the everyday state to the rare one, so a tab with a dozen cards can be skimmed by its group

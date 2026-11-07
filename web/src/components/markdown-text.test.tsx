@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { testFileOpener } from "@/test/file-links";
 
@@ -112,6 +112,21 @@ describe("MarkdownText fenced block wrap toggle", () => {
     render(<MarkdownText text={source} />);
     expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
     expect(screen.getByRole("button", { name: "Wrap long lines" }).className.split(" ")).toContain("right-0.5");
+  });
+});
+
+// A quoted PR body or plan used to fold into one run-on italic line. Its blocks now render inside
+// the quote, and only its prose is italic: code in it stays upright like code everywhere else.
+describe("MarkdownText blockquotes", () => {
+  it("draws a quote's paragraphs, list and code as blocks of their own", () => {
+    const src = "> Renames the settings page.\n>\n> **Changes**\n> - one\n> - two\n>\n> ```\n> bun run build\n> ```";
+    const { container } = render(<MarkdownText text={src} />);
+    const quote = container.querySelector("blockquote")!;
+    expect(within(quote).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["one", "two"]);
+    expect(within(quote).getByText("Renames the settings page.").tagName).toBe("P");
+    expect(quote.className).toContain("[&>:is(p,ul,ol)]:italic");
+    expect(quote.className).not.toMatch(/(^|\s)italic(\s|$)/);
+    expect(within(quote).getByText("bun run build").tagName).toBe("PRE");
   });
 });
 
@@ -352,5 +367,17 @@ describe("stretches", () => {
     for (const name of ["bold one", "list one", "cell one"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
+  });
+});
+
+describe("MarkdownText numbered lists", () => {
+  // An indented bullet splits a numbered list in two (blocks don't nest); the second list starts at
+  // its own number, so "2." does not draw as a second "1.".
+  it("a list split by a bullet keeps counting from its own first number", () => {
+    const { container } = render(<MarkdownText text={"1. push\n   - why\n2. fix first"} />);
+    const lists = container.querySelectorAll("ol");
+    expect(lists).toHaveLength(2);
+    expect(lists[0]!.start).toBe(1);
+    expect(lists[1]!.start).toBe(2);
   });
 });

@@ -605,6 +605,8 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   README → "The states playground") before changing a banner, the mark, the boot splash, the idle
   lock, or the crew page — it renders every state at once. Never import playground code from app
   code.
+  A card's label is a number and at most five words. Explanation goes in the report to Altan, not
+  on the page. `reach` and `note` are optional and hidden by default (the page's Notes switch).
 - Data flows through **React Router** (`createBrowserRouter`, data mode): route **loaders**
   (`web/src/lib/loaders.ts`) fetch the snapshot + pane; **polling is `useRevalidator()` on an
   adaptive interval** (`web/src/hooks/use-polling.ts`); mutations are direct `lib/api.ts` calls
@@ -689,6 +691,10 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   maps to ONE binary word in `bridge/harness-launch.ts` and reports per machine on `/api/launchers`;
   a launch with a `requestId` replays from `launch-receipts.json` instead of opening a second pane
   ([ADR 0091](./.adr/0091-launch-by-id-with-a-request-id.md)).
+  In a crew the lead's merged rows are the crew's: a launch of a lead row on a member carries the row
+  over the crew link, accepted only when `caller.via === "crew"`, never from a phone-direct body, and
+  a member's own row wins the same `command`; adds are answered on the lead and the deputy keeps a
+  read-only copy ([ADR 0127](./.adr/0127-the-leads-launcher-rows-are-the-crews-rows.md)).
   Rows a phone adds live in `<stateDir>/launchers-added.json` under the operator's `[phone]` switches,
   never in `launchers.toml`; they are merged into the allowlist at read time, the operator's row wins
   a duplicate line, a recipe row is rebuilt from `bridge/launcher-recipes.ts` and a free line is
@@ -711,7 +717,7 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   from `virtual:pwa-register` in `main.tsx` (bundled = CSP-safe). Install/SW need a **secure
   context** — over plain HTTP they no-op silently (Chrome insecure-origin flag, or HTTPS, to test).
 - **The app's UI typeface is a per-device SETTING, not the maker's choice** — System / Space Grotesk /
-  Aldrich (default), plus whatever the operator declared, applied pre-paint as a root class by
+  Aldrich / Atkinson Hyperlegible Next (default since 2026-11-06), plus whatever the operator declared, applied pre-paint as a root class by
   `web/public/theme-init.js` and stored in `collie:design:v1` (`web/src/lib/design.ts`). CSS owns
   every stack; JavaScript only swaps a class name. What survives the reversal is the other half of
   the rule: **the chosen face never dresses agent-authored text** — `font-mono` and `font-content`
@@ -870,11 +876,15 @@ exemption is granted by POSITION — the peer check sits after the federated dis
 its own `COLLIE_STANDBY_HOST` and neither gate reaches it; don't route it through the front door's
 `fetch` to share them.
 
-**The bridge makes two outbound calls of its own, and spawns no child for content unless
-`stt.json` names a speech provider.** The two calls are the update check and the Whistle
+**The bridge makes two outbound calls of its own by default, and spawns no child for content unless
+`stt.json` names a speech provider.** The two default calls are the update check and the Whistle
 model download: one file, fetched on a write device's tap or `collie stt whistle`, from a pinned
 address, and kept only when its sha256 matches a pin in this release
-([ADR 0096](./.adr/0096-speech-can-stay-on-the-phone.md)). A `durable` peer configured with `COLLIE_DURABLE_URL` makes a third, to the program's URL the
+([ADR 0096](./.adr/0096-speech-can-stay-on-the-phone.md)). Upstream's daily anonymous install and
+trouble-tally ping ([ADR 0129](./.adr/0129-an-anonymous-install-count-on-by-default.md)) is **off by
+default in this fork** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)) and
+runs only when opted in via Settings, `COLLIE_TELEMETRY=1`, or `telemetry = true` in `config.toml`.
+A `durable` peer configured with `COLLIE_DURABLE_URL` makes another, to the program's URL the
 operator set, with the bearer token from `COLLIE_DURABLE_TOKEN`, and it is declined by setting
 nothing ([ADR 0103](./.adr/0103-the-wire-has-two-transports-a-private-socket-or-tls-with-a-token.md)). Speech-to-text (`bridge/stt/`, CLI
 `cli/stt.ts`) is a registered provider seam, absent until `stt.json` names a provider. Then it may
@@ -1088,7 +1098,7 @@ change, so the review is part of the merge, not an extra:
    and kept the fork version, a lockfile, `CHANGELOG.md`, or dictionary additions with no changed
    existing key).
 3. After: check the Gaddi brand swap survived in strings and tests, the `CHANGELOG.md` entries and
-   the i18n keys in all six dictionaries; run both typechecks, lint, build and both suites; compare
+   the i18n keys in all twelve dictionaries; run both typechecks, lint, build and both suites; compare
    any failure with pure upstream by test name, not by count.
 
 ### Cutting a release

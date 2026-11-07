@@ -147,8 +147,9 @@ function activeLocale(): Locale {
 }
 
 
-// Fork-only (FORK.md, "Gaddi brand"): the dictionaries stay upstream's, word for word, so a sync
-// never conflicts on them; the product name is swapped on the way out instead. Every language
+// Fork-only (FORK.md, "Gaddi brand"): most upstream dictionary entries stay as written and the
+// product name is swapped on the way out, while fork-specific keys and overrides (such as ADR 9013's
+// default-off telemetry cause) live alongside them in all twelve locale files. Every language
 // writes the name in Latin letters, and it is swapped in the template before any `{slot}` is
 // filled, so a pane or file name that happens to say Collie is shown as it is.
 const BRAND = /\bCollie\b/g;

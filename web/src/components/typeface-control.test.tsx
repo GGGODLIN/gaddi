@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe("TypefaceControl", () => {
-  it("offers the shipped faces, with Space Grotesk selected and no class on the root", async () => {
+  it("offers the shipped faces, with Atkinson selected and no class on the root", async () => {
     config({});
     render(<TypefaceControl />);
 
@@ -89,8 +89,10 @@ describe("TypefaceControl", () => {
     const select = await screen.findByLabelText("Family");
     await user.selectOptions(select, "system");
     expect(document.documentElement).toHaveClass("font-system");
-    await user.selectOptions(select, "aldrich");
+    await user.selectOptions(select, "atkinson");
     expect(document.documentElement.className).toBe("");
+    await user.selectOptions(select, "aldrich");
+    expect(document.documentElement).toHaveClass("font-aldrich");
   });
 
   it("shows the operator's faces UNDER the shipped ones and mirrors the chosen row", async () => {
@@ -141,7 +143,7 @@ describe("TypefaceControl", () => {
     config({});
     render(<TypefaceControl />);
 
-    expect(await screen.findByLabelText("Family")).toHaveValue("aldrich");
+    expect(await screen.findByLabelText("Family")).toHaveValue("atkinson");
     expect(designPrefs().font).toBe("op:gone.woff2");
     expect(localStorage.getItem(STORAGE_KEY)).toContain("op:gone.woff2");
   });
