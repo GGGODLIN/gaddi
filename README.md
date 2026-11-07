@@ -58,9 +58,10 @@ The video and the screenshots use made-up agents.
   ([Voice input and Web Push](./docs/voice-and-push.md)).
 - **A push notification** when an agent stops and waits for you, once you turn Web Push on
   ([Voice input and Web Push](./docs/voice-and-push.md)).
-- **Telemetry**: the upstream 1.27.0 integration sends an anonymous install and trouble count daily,
-  on by default, to the upstream receiver. Turn it off per machine in Settings or with
-  `COLLIE_TELEMETRY=0` ([what leaves your machine](./docs/security.md#what-leaves-your-machine)).
+- **Telemetry**: upstream 1.27.0 adds a daily anonymous install and trouble count; in this fork it
+  is **off by default** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)),
+  and sends nothing unless opted in from Settings or with `COLLIE_TELEMETRY=1`
+  ([what leaves your machine](./docs/security.md#what-leaves-your-machine)).
 
 ### Your agents on the iPhone's Dynamic Island
 
