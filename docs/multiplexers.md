@@ -69,6 +69,7 @@ Herdr has no endpoint variable here: its socket is `HERDR_SOCKET_PATH`, not a
 That socket is the local one and no other. A machine saved in Herdr is not a crew member, and only
 a Collie crew brings another machine's panes to the phone. What each list is, and why one is not
 the other, is in [Herdr machines and the crew](crew.md#herdr-machines-and-the-crew).
+`collie crew add` offers the machines in Herdr's list, and in the core's list, as candidates.
 
 Then restart, install the beacon hooks, and start an agent where the phone can see it:
 
@@ -231,6 +232,10 @@ otherwise. A socket file left by a core that stopped is still picked on a machin
 and then reads as unreachable in the log and in `collie doctor`. `collie status` shows the
 multiplexer and, when nobody named it, why.
 
+The core's machine list (`hc machine ls`) is a source of candidates for `collie crew add`, and a
+crew member may run the core with no Herdr TUI. See
+[Herdr machines and the crew](crew.md#herdr-machines-and-the-crew).
+
 The core can run several named sessions. Collie drives one of them. It dials the socket that `hc`
 would: `HC_SOCKET`, else `$XDG_RUNTIME_DIR/herdr-core/<session>.sock`, else
 `/run/user/<uid>/herdr-core/<session>.sock` when that directory exists, else
@@ -258,6 +263,12 @@ What works:
 - History and Chat for a pi or Oh My Pi pane, with no hook. Collie finds the pane's session log from
   the pane's folder: pi keeps one log folder per working directory, and the newest log whose header
   names that folder is the pane's.
+- Two Oh My Pi panes in one folder, each with its own Chat. Without help, Collie cannot tell their
+  logs apart, so both show the empty card. The Oh My Pi extension labels its terminal with the path
+  of its session file (`omp.session_file`), and Collie opens that file for that pane. Copy the
+  extension into `~/.omp/agent/extensions/` (see `omp-extension/README.md`), and copy it again after
+  each Collie upgrade. Check the label with `hc get <terminal> --json`, field `labels`. A wrong label
+  can only point at one of your own sessions in that same folder.
 
 What looks different on the core:
 
@@ -268,8 +279,8 @@ What looks different on the core:
   Collie finds their log from the pane's folder. A fresh pi or Oh My Pi pane shows an empty Chat until
   the agent's first reply, because pi writes its log only then. An older log in the same folder is not
   shown for a pane whose program started after it, and `pi --resume` keeps its Chat.
-- **A send takes a few seconds longer.** The core holds a key for about three seconds after Collie
-  types text. Collie waits for it, and a send to an agent takes about six seconds.
+- **Text and submit stay separate.** Collie checks the input box before submitting. Multiline
+  insertion and Oh My Pi's follow-up key use direct input, without the core's named-key quiet wait.
 - **The last viewer sets the width.** The terminal has the width of the last window that looked at it.
   herdr-app on a phone makes Claude narrow, and the phone then shows it narrow too. When no window
   looks at the terminal, it goes back to 200 columns.

@@ -12,7 +12,7 @@ and the phone shows which one is waiting on you.
 You answer with a tap, not a terminal keyboard.
 
 It runs on your own machine and reaches your phone over your Tailscale network. Gaddi has no account
-of its own, no hosted backend and no telemetry; the connection is your Tailscale's. It isn't in an
+of its own and no hosted backend for your sessions; the connection is your Tailscale's. It isn't in an
 app store: you open a URL on the phone and add it to the home screen.
 
 > **Note.** Gaddi is [GGGODLIN's fork](https://github.com/GGGODLIN/gaddi) of
@@ -58,6 +58,9 @@ The video and the screenshots use made-up agents.
   ([Voice input and Web Push](./docs/voice-and-push.md)).
 - **A push notification** when an agent stops and waits for you, once you turn Web Push on
   ([Voice input and Web Push](./docs/voice-and-push.md)).
+- **Telemetry**: the upstream 1.27.0 integration sends an anonymous install and trouble count daily,
+  on by default, to the upstream receiver. Turn it off per machine in Settings or with
+  `COLLIE_TELEMETRY=0` ([what leaves your machine](./docs/security.md#what-leaves-your-machine)).
 
 ### Your agents on the iPhone's Dynamic Island
 
@@ -174,6 +177,8 @@ puts `collie` on your PATH if you want the short form.
 2. Tap **Share**, then **Add to Home Screen**, then open Gaddi from the new icon.
 3. Run `bin/collie pair` and type its 8-character code in Gaddi under Settings → System → Paired
    devices.
+
+![Put Gaddi on the home screen: iPhone and Android steps.](docs/images/install/pwa-install.svg)
 
 Type the code inside the home-screen app rather than scanning the QR code: the QR code opens
 Safari, and a pairing made in Safari may not carry over to the home-screen app. On Android, use
@@ -450,6 +455,14 @@ The tabs, in order: Dashboard, Pane, Crew, Settings, Boot & connection, Idle & r
 Notices, Motion. Notices covers everything that ANNOUNCES (the notice primitive, the strip band,
 the status toast); Motion covers everything that MOVES without announcing anything (collapse and
 swap primitives, loading bars, sheets, menus, pending and pulsing controls).
+
+A card shows its label and nothing else. Its `reach` and `note`, and a section's `intent`, appear
+only while the page's Notes switch is on (off by default, remembered in `localStorage`).
+`cd web && bun run playground:build` builds the page alone into `web/dist-playground/` (minified,
+one chunk per section, no service worker) for any static server; it never touches `dist/`.
+
+A design round that compares numbered options uses `Round` (`src/playground/round.tsx`): one Case
+switch drives every option, with Zoom, Replay and Flip.
 
 Within a tab, cards are grouped under a `Group` — a small heading over its own `.pg-grid` — ordered
 from the everyday state to the rare one, so a tab with a dozen cards can be skimmed by its group
