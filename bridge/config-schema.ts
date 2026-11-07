@@ -990,9 +990,9 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     env: "COLLIE_TELEMETRY",
     section: "bridge",
     kind: "bool",
-    default: true,
+    default: false,
     words: true,
-    doc: "Send one anonymous install ping a day. See docs/security.md.",
+    doc: "Send one anonymous install ping a day. Off by default in this fork; see docs/security.md.",
   },
   {
     key: "telemetry_url",

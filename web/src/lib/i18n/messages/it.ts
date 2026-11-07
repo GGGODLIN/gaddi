@@ -2762,7 +2762,7 @@ export const it: Dictionary = {
   "telemetry.card.readFailed": "Non è stato possibile leggere l'impostazione da questa macchina.",
   "telemetry.card.saving": "Salvataggio in corso…",
   "telemetry.card.failed": "L'impostazione non è stata modificata. {reason}",
-  "telemetry.card.cause.default": "Attivo, di default. Disattivalo con l'interruttore.",
+  "telemetry.card.cause.default": "Disattivato, di default. Attivalo con l'interruttore.",
   "telemetry.card.cause.settings.on": "Attivo. L'hai attivato qui.",
   "telemetry.card.cause.settings.off": "Disattivato. L'hai disattivato qui.",
   "telemetry.card.cause.env.on": "Attivo: COLLIE_TELEMETRY è attiva su questa macchina. L'interruttore qui può comunque disattivarlo.",

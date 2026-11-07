@@ -3884,7 +3884,7 @@ describe("the update write gate — POST api/update rides the pane path's own ga
 
   describe("telemetryTroubleRoute (M86 spec 05)", () => {
     const SIGNAL: TroubleSignal = { kind: "send", harness: "claude", version: "2.1.316", mux: "herdr" };
-    const telemetryIn = (stateDir: string, env: Record<string, string> = {}) =>
+    const telemetryIn = (stateDir: string, env: Record<string, string> = { COLLIE_TELEMETRY: "1" }) =>
       createTelemetry({
         stateDir,
         env,

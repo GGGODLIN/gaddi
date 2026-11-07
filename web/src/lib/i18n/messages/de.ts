@@ -2949,7 +2949,7 @@ export const de: Dictionary = {
   "telemetry.card.readFailed": "Die Einstellung konnte von diesem Rechner nicht gelesen werden.",
   "telemetry.card.saving": "Wird gespeichert…",
   "telemetry.card.failed": "Die Einstellung wurde nicht geändert. {reason}",
-  "telemetry.card.cause.default": "An, wie voreingestellt. Mit dem Schalter lässt es sich ausschalten.",
+  "telemetry.card.cause.default": "Aus, wie voreingestellt. Mit dem Schalter lässt es sich einschalten.",
   "telemetry.card.cause.settings.on": "An. Du hast es hier eingeschaltet.",
   "telemetry.card.cause.settings.off": "Aus. Du hast es hier ausgeschaltet.",
   "telemetry.card.cause.env.on": "An: COLLIE_TELEMETRY ist für diesen Rechner eingeschaltet. Der Schalter hier kann es trotzdem ausschalten.",

@@ -3420,9 +3420,10 @@ describe("the telemetry row (M86 spec 01)", () => {
 
   test("with no bridge answering it evaluates its own environment and says so", async () => {
     const own = async (env: Record<string, string>): Promise<string | undefined> => (await run(env, null)).found[0]?.detail;
-    expect(await own({})).toBe(`on, decided by default ${SHELL}`);
+    expect(await own({})).toBe(`off, decided by default ${SHELL}`);
     expect(await own({ DO_NOT_TRACK: "1" })).toBe(`off, decided by DO_NOT_TRACK ${SHELL}`);
     expect(await own({ COLLIE_TELEMETRY: "0" })).toBe(`off, decided by COLLIE_TELEMETRY ${SHELL}`);
+    expect(await own({ COLLIE_TELEMETRY: "1" })).toBe(`on, decided by COLLIE_TELEMETRY ${SHELL}`);
     expect(await own({ CI: "true" })).toBe(`off, decided by CI ${SHELL}`);
   });
 
@@ -3437,7 +3438,7 @@ describe("the telemetry row (M86 spec 01)", () => {
     ];
     for (const answer of answers) {
       const { found } = await run({}, answer);
-      expect(found[0]?.detail).toBe(`on, decided by default ${SHELL}`);
+      expect(found[0]?.detail).toBe(`off, decided by default ${SHELL}`);
     }
   });
 

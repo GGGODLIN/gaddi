@@ -536,7 +536,12 @@ The network paths you choose are separate from that: the phone reaches Collie th
 door (Tailscale by default), and Web Push, once you turn it on, goes through the phone's push
 service (Apple's on an iPhone).
 
-Turning it off is one switch: Settings, System, **Telemetry**. `COLLIE_TELEMETRY=0`,
+> **Note.** In this fork (`GGGODLIN/gaddi`), the daily anonymous ping is **off by default**
+> ([ADR 9013](../.adr/9013-the-anonymous-install-count-is-off-by-default.md)). Nothing is sent and no
+> install ID is created unless you opt in from **Settings** → **System** → **Telemetry**, set
+> `COLLIE_TELEMETRY=1`, or set `telemetry = true` in `config.toml`.
+
+Turning it on or off is one switch: Settings, System, **Telemetry**. `COLLIE_TELEMETRY=0`,
 `telemetry = false` in `config.toml` or `DO_NOT_TRACK=1` do the same, and so does blocking the one
 host it goes to, `ping.colliepwa.dev`, in your firewall. The first ping waits a day after the first
 start of a build that has it. The exact message is written down in the contract in the repository,

@@ -2889,7 +2889,7 @@ export const ru: Dictionary = {
   "telemetry.card.readFailed": "Не удалось прочитать настройку с этой машины.",
   "telemetry.card.saving": "Сохранение…",
   "telemetry.card.failed": "Настройка не изменена. {reason}",
-  "telemetry.card.cause.default": "Включено по умолчанию. Выключите переключателем.",
+  "telemetry.card.cause.default": "Выключено по умолчанию. Включите переключателем.",
   "telemetry.card.cause.settings.on": "Включено. Вы включили это здесь.",
   "telemetry.card.cause.settings.off": "Выключено. Вы выключили это здесь.",
   "telemetry.card.cause.env.on": "Включено: на этой машине включена COLLIE_TELEMETRY. Переключатель здесь всё равно может её выключить.",

@@ -2905,7 +2905,7 @@ export const zhTW: Dictionary = {
   "telemetry.card.readFailed": "無法從此機器讀取設定。",
   "telemetry.card.saving": "正在儲存…",
   "telemetry.card.failed": "設定未變更。{reason}",
-  "telemetry.card.cause.default": "預設為開啟。可用開關關閉。",
+  "telemetry.card.cause.default": "預設為關閉。可用開關開啟。",
   "telemetry.card.cause.settings.on": "已開啟。你在這裡開啟了它。",
   "telemetry.card.cause.settings.off": "已關閉。你在這裡關閉了它。",
   "telemetry.card.cause.env.on": "開啟：此機器上的 COLLIE_TELEMETRY 為開啟。這裡的開關仍可將它關閉。",

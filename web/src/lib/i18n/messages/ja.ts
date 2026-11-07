@@ -2930,7 +2930,7 @@ export const ja: Dictionary = {
   "telemetry.card.readFailed": "このマシンから設定を読み込めませんでした。",
   "telemetry.card.saving": "保存しています…",
   "telemetry.card.failed": "設定は変更されませんでした。{reason}",
-  "telemetry.card.cause.default": "オンです（初期設定）。スイッチでオフにできます。",
+  "telemetry.card.cause.default": "オフです（初期設定）。スイッチでオンにできます。",
   "telemetry.card.cause.settings.on": "オンです。ここでオンにしました。",
   "telemetry.card.cause.settings.off": "オフです。ここでオフにしました。",
   "telemetry.card.cause.env.on": "オン: このマシンでCOLLIE_TELEMETRYがオンです。ここのスイッチでオフにすることもできます。",

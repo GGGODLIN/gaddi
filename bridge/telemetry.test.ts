@@ -59,8 +59,8 @@ function state(a: {
 }
 
 describe("telemetryState: the decision order", () => {
-  test("default: a tagged release build with nothing set is on", () => {
-    expect(state({})).toEqual({ on: true, decidedBy: "default" });
+  test("default: a tagged release build with nothing set is off in this fork (ADR 9013)", () => {
+    expect(state({})).toEqual({ on: false, decidedBy: "default" });
   });
 
   test("DO_NOT_TRACK: any non-empty value but 0 is off, and it beats everything", () => {
@@ -71,9 +71,10 @@ describe("telemetryState: the decision order", () => {
   });
 
   test("DO_NOT_TRACK=0, empty or blank does not count", () => {
-    expect(state({ env: { DO_NOT_TRACK: "0" } })).toEqual({ on: true, decidedBy: "default" });
-    expect(state({ env: { DO_NOT_TRACK: "" } })).toEqual({ on: true, decidedBy: "default" });
-    expect(state({ env: { DO_NOT_TRACK: "  " } })).toEqual({ on: true, decidedBy: "default" });
+    expect(state({ env: { DO_NOT_TRACK: "0" } })).toEqual({ on: false, decidedBy: "default" });
+    expect(state({ env: { DO_NOT_TRACK: "" } })).toEqual({ on: false, decidedBy: "default" });
+    expect(state({ env: { DO_NOT_TRACK: "  " } })).toEqual({ on: false, decidedBy: "default" });
+    expect(state({ env: { DO_NOT_TRACK: "0", COLLIE_TELEMETRY: "1" } })).toEqual({ on: true, decidedBy: "env" });
   });
 
   test("COLLIE_TELEMETRY off words turn it off, decided by env", () => {
@@ -120,9 +121,10 @@ describe("telemetryState: the decision order", () => {
   });
 
   test("an empty or blank value is no vote: the phone and the default decide", () => {
-    expect(state({ env: { COLLIE_TELEMETRY: "" } })).toEqual({ on: true, decidedBy: "default" });
-    expect(state({ env: { COLLIE_TELEMETRY: "   " } })).toEqual({ on: true, decidedBy: "default" });
+    expect(state({ env: { COLLIE_TELEMETRY: "" } })).toEqual({ on: false, decidedBy: "default" });
+    expect(state({ env: { COLLIE_TELEMETRY: "   " } })).toEqual({ on: false, decidedBy: "default" });
     expect(state({ env: { COLLIE_TELEMETRY: "" }, setting: "off" })).toEqual({ on: false, decidedBy: "settings" });
+    expect(state({ env: { COLLIE_TELEMETRY: "" }, setting: "on" })).toEqual({ on: true, decidedBy: "settings" });
   });
 
   test("readTelemetrySwitch and telemetrySwitchWarning: only an unknown value warns, with the value as written", () => {
@@ -166,12 +168,13 @@ describe("telemetryState: the decision order", () => {
     expect(state({ env: { COLLIE_UPDATE_MIRROR: "http://127.0.0.1:1" }, version: DEV }).decidedBy).toBe("mirror");
   });
 
-  test("a -dev version is off with dev_build, and a +sha tag build is on", () => {
+  test("a -dev version is off with dev_build, and a +sha tag build is off by default until opted in", () => {
     expect(state({ version: DEV })).toEqual({ on: false, decidedBy: "dev_build" });
     expect(state({ version: "1.26.0-dev" })).toEqual({ on: false, decidedBy: "dev_build" });
-    expect(state({ version: "1.26.0+fd5a796587" })).toEqual({ on: true, decidedBy: "default" });
-    expect(state({ version: "1.26.0-edge.1+ab12cd3" })).toEqual({ on: true, decidedBy: "default" });
-    expect(state({ version: "1.26.0" })).toEqual({ on: true, decidedBy: "default" });
+    expect(state({ version: "1.26.0+fd5a796587" })).toEqual({ on: false, decidedBy: "default" });
+    expect(state({ version: "1.26.0-edge.1+ab12cd3" })).toEqual({ on: false, decidedBy: "default" });
+    expect(state({ version: "1.26.0" })).toEqual({ on: false, decidedBy: "default" });
+    expect(state({ version: "1.26.0+fd5a796587", env: { COLLIE_TELEMETRY: "1" } })).toEqual({ on: true, decidedBy: "env" });
   });
 
   test("a URL override that is not allowed turns it off, decided by url, below DO_NOT_TRACK only", () => {
@@ -340,7 +343,7 @@ function rig(over: { env?: Environment; origin?: TelemetryOrigin; version?: stri
   };
   const telemetry = createTelemetry({
     stateDir,
-    env: over.env ?? {},
+    env: over.env ?? { COLLIE_TELEMETRY: "1" },
     origin: over.origin ?? "env",
     version: over.version ?? RELEASE,
     installKind: "binary",
@@ -426,7 +429,7 @@ describe("createTelemetry", () => {
   });
 
   test("the URL override goes to the loopback test server", async () => {
-    const r = rig({ env: { COLLIE_TELEMETRY_URL: "http://127.0.0.1:9999/ping" } });
+    const r = rig({ env: { COLLIE_TELEMETRY: "1", COLLIE_TELEMETRY_URL: "http://127.0.0.1:9999/ping" } });
     r.telemetry.observe();
     r.clock.now += FIRST_PING_DELAY_MS;
     await r.telemetry.tick();
@@ -460,7 +463,7 @@ describe("createTelemetry", () => {
     const seen: Array<string | null> = [];
     const telemetry = createTelemetry({
       stateDir: r.stateDir,
-      env: {},
+      env: { COLLIE_TELEMETRY: "1" },
       origin: "env",
       version: RELEASE,
       installKind: "binary",
@@ -519,7 +522,12 @@ describe("createTelemetry", () => {
     });
   });
 
-  test("off by any switch keeps no ID: no ID in the file and next is null", () => {
+  test("off by default or by any switch keeps no ID: no ID in the file and next is null", () => {
+    const d = rig({ env: {} });
+    d.telemetry.observe();
+    expect(d.telemetry.view()).toEqual({ on: false, decidedBy: "default", setting: null, next: null });
+    expect(readTelemetryRecord(d.stateDir).id).toBeNull();
+
     const r = rig({ env: { DO_NOT_TRACK: "1" } });
     r.telemetry.observe();
     expect(r.telemetry.view()).toEqual({ on: false, decidedBy: "do_not_track", setting: null, next: null });
@@ -592,9 +600,9 @@ describe("createTelemetry", () => {
 });
 
 describe("the boot line (M86 spec 01)", () => {
-  const ON = "install count: on, decided by default; first ping after 2026-11-04 12:00 UTC; off with COLLIE_TELEMETRY=0 in the service .env, docs/security.md#what-leaves-your-machine";
+  const ON = "install count: on, decided by COLLIE_TELEMETRY; first ping after 2026-11-04 12:00 UTC; off with COLLIE_TELEMETRY=0 in the service .env, docs/security.md#what-leaves-your-machine";
 
-  test("a fresh install logs one line with the exact time of the first ping", () => {
+  test("a fresh opt-in install logs one line with the exact time of the first ping", () => {
     const r = rig();
     r.telemetry.observe();
     expect(r.logs).toEqual([ON]);
@@ -613,10 +621,10 @@ describe("the boot line (M86 spec 01)", () => {
     r.telemetry.observe();
     r.clock.now += FIRST_PING_DELAY_MS;
     r.telemetry.observe();
-    expect(r.logs[1]).toBe("install count: on, decided by default; first ping is due; off with COLLIE_TELEMETRY=0 in the service .env, docs/security.md#what-leaves-your-machine");
+    expect(r.logs[1]).toBe("install count: on, decided by COLLIE_TELEMETRY; first ping is due; off with COLLIE_TELEMETRY=0 in the service .env, docs/security.md#what-leaves-your-machine");
     await r.telemetry.tick();
     r.telemetry.observe();
-    expect(r.logs[2]).toBe("install count: on, decided by default; last send attempt 2026-11-04; off with COLLIE_TELEMETRY=0 in the service .env, docs/security.md#what-leaves-your-machine");
+    expect(r.logs[2]).toBe("install count: on, decided by COLLIE_TELEMETRY; last send attempt 2026-11-04; off with COLLIE_TELEMETRY=0 in the service .env, docs/security.md#what-leaves-your-machine");
   });
 
   test("off says which switch, in the doctor's words, and nothing more", () => {
@@ -625,6 +633,7 @@ describe("the boot line (M86 spec 01)", () => {
       r.telemetry.observe();
       return r.logs;
     };
+    expect(logs({ env: {} })).toEqual(["install count: off (default)"]);
     expect(logs({ env: { DO_NOT_TRACK: "1" } })).toEqual(["install count: off (DO_NOT_TRACK)"]);
     expect(logs({ env: { COLLIE_TELEMETRY: "0" } })).toEqual(["install count: off (COLLIE_TELEMETRY)"]);
     expect(logs({ env: { CI: "true" } })).toEqual(["install count: off (CI is set)"]);
@@ -649,10 +658,10 @@ describe("the boot line (M86 spec 01)", () => {
 
   test("telemetryBootLine is pure: the same input is the same line", () => {
     const input = {
-      state: { on: true, decidedBy: "default" },
+      state: { on: true, decidedBy: "env" },
       record: { firstSeenAt: Date.UTC(2026, 10, 3, 12, 0, 0), lastSentDay: null },
       now: Date.UTC(2026, 10, 3, 12, 0, 0),
-      env: {},
+      env: { COLLIE_TELEMETRY: "1" },
     } as const;
     expect(telemetryBootLine(input)).toBe(telemetryBootLine(input));
     expect(telemetryBootLine(input)).toBe(ON);
@@ -670,7 +679,7 @@ describe("the send is hardened (M86 spec 01)", () => {
       const now = Date.UTC(2026, 10, 3, 12, 0, 0);
       const t = createTelemetry({
         stateDir,
-        env: { COLLIE_TELEMETRY_URL: `http://127.0.0.1:${first.port}/v1/ping` },
+        env: { COLLIE_TELEMETRY: "1", COLLIE_TELEMETRY_URL: `http://127.0.0.1:${first.port}/v1/ping` },
         origin: "env",
         version: RELEASE,
         installKind: "binary",
@@ -685,7 +694,7 @@ describe("the send is hardened (M86 spec 01)", () => {
       await expect(t.tick()).resolves.toBeUndefined();
       const later = createTelemetry({
         stateDir,
-        env: { COLLIE_TELEMETRY_URL: `http://127.0.0.1:${first.port}/v1/ping` },
+        env: { COLLIE_TELEMETRY: "1", COLLIE_TELEMETRY_URL: `http://127.0.0.1:${first.port}/v1/ping` },
         origin: "env",
         version: RELEASE,
         installKind: "binary",
@@ -723,7 +732,7 @@ describe("the send is hardened (M86 spec 01)", () => {
     const hostile = new Response(body, { status: 200, headers: { "set-cookie": "a=b", location: "http://evil.example/" } });
     let now = Date.UTC(2026, 10, 3, 12, 0, 0);
     const t = createTelemetry({
-      stateDir, env: {}, origin: "env", version: RELEASE, installKind: "binary", line: () => "stable", crewMode: () => "solo",
+      stateDir, env: { COLLIE_TELEMETRY: "1" }, origin: "env", version: RELEASE, installKind: "binary", line: () => "stable", crewMode: () => "solo",
       now: () => now, fetch: async () => hostile, os: "linux", arch: "x64",
     });
     t.observe();

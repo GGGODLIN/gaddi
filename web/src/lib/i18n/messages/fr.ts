@@ -2761,7 +2761,7 @@ export const fr: Dictionary = {
   "telemetry.card.readFailed": "Le réglage de cette machine n'a pas pu être lu.",
   "telemetry.card.saving": "Enregistrement…",
   "telemetry.card.failed": "Le réglage n'a pas été modifié. {reason}",
-  "telemetry.card.cause.default": "Activé, par défaut. Désactivez-le avec l'interrupteur.",
+  "telemetry.card.cause.default": "Désactivé, par défaut. Activez-le avec l'interrupteur.",
   "telemetry.card.cause.settings.on": "Activé. Vous l'avez activé ici.",
   "telemetry.card.cause.settings.off": "Désactivé. Vous l'avez désactivé ici.",
   "telemetry.card.cause.env.on": "Activé : COLLIE_TELEMETRY est activé sur cette machine. L'interrupteur d'ici peut tout de même le désactiver.",

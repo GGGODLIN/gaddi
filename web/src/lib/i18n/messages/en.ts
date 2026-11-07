@@ -3140,7 +3140,7 @@ export const en = {
   "telemetry.card.readFailed": "The setting could not be read from this machine.",
   "telemetry.card.saving": "Saving…",
   "telemetry.card.failed": "The setting was not changed. {reason}",
-  "telemetry.card.cause.default": "On, the default. Turn it off with the switch.",
+  "telemetry.card.cause.default": "Off, the default. Turn it on with the switch.",
   "telemetry.card.cause.settings.on": "On. You turned it on here.",
   "telemetry.card.cause.settings.off": "Off. You turned it off here.",
   "telemetry.card.cause.env.on": "On: COLLIE_TELEMETRY is on for this machine. The switch here can still turn it off.",

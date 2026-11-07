@@ -41,7 +41,7 @@ import { isRequestId } from "./worktree-receipts.ts";
 //   7. the phone's switch "off"          off
 //   8. COLLIE_TELEMETRY / config on      on   (env or config)
 //   9. the phone's switch "on"           on
-//  10. default                           on
+//  10. default                           off  (this fork keeps telemetry off by default; ADR 9013)
 // Env or config off cannot be undone from the phone, and neither can CI, a mirror or a dev build.
 // An explicit COLLIE_TELEMETRY=1 does not beat DO_NOT_TRACK or the phone's "off".
 // THE SWITCH FAILS CLOSED. `0 false off no` are off, `1 true on yes` are on, an empty value is no vote,
@@ -177,7 +177,7 @@ export function telemetryState(input: TelemetryStateInput): TelemetryState {
   if (input.setting === "off") return { on: false, decidedBy: "settings" };
   if (vote === "on") return { on: true, decidedBy: input.origin };
   if (input.setting === "on") return { on: true, decidedBy: "settings" };
-  return { on: true, decidedBy: "default" };
+  return { on: false, decidedBy: "default" };
 }
 
 /** The one info line `collie doctor` prints for the ping. Never a warning: off is a choice. */

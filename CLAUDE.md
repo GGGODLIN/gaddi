@@ -876,11 +876,15 @@ exemption is granted by POSITION — the peer check sits after the federated dis
 its own `COLLIE_STANDBY_HOST` and neither gate reaches it; don't route it through the front door's
 `fetch` to share them.
 
-**The bridge makes two outbound calls of its own, and spawns no child for content unless
-`stt.json` names a speech provider.** The two calls are the update check and the Whistle
+**The bridge makes two outbound calls of its own by default, and spawns no child for content unless
+`stt.json` names a speech provider.** The two default calls are the update check and the Whistle
 model download: one file, fetched on a write device's tap or `collie stt whistle`, from a pinned
 address, and kept only when its sha256 matches a pin in this release
-([ADR 0096](./.adr/0096-speech-can-stay-on-the-phone.md)). A `durable` peer configured with `COLLIE_DURABLE_URL` makes a third, to the program's URL the
+([ADR 0096](./.adr/0096-speech-can-stay-on-the-phone.md)). Upstream's daily anonymous install and
+trouble-tally ping ([ADR 0129](./.adr/0129-an-anonymous-install-count-on-by-default.md)) is **off by
+default in this fork** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)) and
+runs only when opted in via Settings, `COLLIE_TELEMETRY=1`, or `telemetry = true` in `config.toml`.
+A `durable` peer configured with `COLLIE_DURABLE_URL` makes another, to the program's URL the
 operator set, with the bearer token from `COLLIE_DURABLE_TOKEN`, and it is declined by setting
 nothing ([ADR 0103](./.adr/0103-the-wire-has-two-transports-a-private-socket-or-tls-with-a-token.md)). Speech-to-text (`bridge/stt/`, CLI
 `cli/stt.ts`) is a registered provider seam, absent until `stt.json` names a provider. Then it may
@@ -1094,7 +1098,7 @@ change, so the review is part of the merge, not an extra:
    and kept the fork version, a lockfile, `CHANGELOG.md`, or dictionary additions with no changed
    existing key).
 3. After: check the Gaddi brand swap survived in strings and tests, the `CHANGELOG.md` entries and
-   the i18n keys in all six dictionaries; run both typechecks, lint, build and both suites; compare
+   the i18n keys in all twelve dictionaries; run both typechecks, lint, build and both suites; compare
    any failure with pure upstream by test name, not by count.
 
 ### Cutting a release

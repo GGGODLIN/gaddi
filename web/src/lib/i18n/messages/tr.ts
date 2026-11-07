@@ -2760,7 +2760,7 @@ export const tr: Dictionary = {
   "telemetry.card.readFailed": "Ayar bu makineden okunamadı.",
   "telemetry.card.saving": "Kaydediliyor…",
   "telemetry.card.failed": "Ayar değiştirilmedi. {reason}",
-  "telemetry.card.cause.default": "Varsayılan olarak açık. Anahtarla kapatın.",
+  "telemetry.card.cause.default": "Varsayılan olarak kapalı. Anahtarla açın.",
   "telemetry.card.cause.settings.on": "Açık. Bunu burada açtınız.",
   "telemetry.card.cause.settings.off": "Kapalı. Bunu burada kapattınız.",
   "telemetry.card.cause.env.on": "Açık: bu makinede COLLIE_TELEMETRY açık. Buradaki anahtar yine de kapatabilir.",

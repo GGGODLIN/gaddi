@@ -67,7 +67,7 @@ describe("Telemetry card (M86 spec 02)", () => {
       line: string;
       usable: boolean;
     }> = [
-      { decidedBy: "default", on: true, line: "On, the default. Turn it off with the switch.", usable: true },
+      { decidedBy: "default", on: false, line: "Off, the default. Turn it on with the switch.", usable: true },
       { decidedBy: "settings", on: true, line: "On. You turned it on here.", usable: true },
       { decidedBy: "settings", on: false, line: "Off. You turned it off here.", usable: true },
       { decidedBy: "env", on: true, line: "On: COLLIE_TELEMETRY is on for this machine. The switch here can still turn it off.", usable: true },

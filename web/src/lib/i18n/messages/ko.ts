@@ -2923,7 +2923,7 @@ export const ko: Dictionary = {
   "telemetry.card.readFailed": "이 머신에서 설정을 읽지 못했습니다.",
   "telemetry.card.saving": "저장하는 중…",
   "telemetry.card.failed": "설정이 변경되지 않았습니다. {reason}",
-  "telemetry.card.cause.default": "기본값으로 켜져 있습니다. 스위치로 끌 수 있습니다.",
+  "telemetry.card.cause.default": "기본값으로 꺼져 있습니다. 스위치로 켤 수 있습니다.",
   "telemetry.card.cause.settings.on": "켜져 있습니다. 여기에서 켰습니다.",
   "telemetry.card.cause.settings.off": "꺼져 있습니다. 여기에서 껐습니다.",
   "telemetry.card.cause.env.on": "켜짐: 이 머신에서 COLLIE_TELEMETRY가 켜져 있습니다. 여기의 스위치로 끌 수도 있습니다.",
