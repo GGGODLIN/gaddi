@@ -3,9 +3,10 @@ import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiTranscriptSource } from "../../journal/pi.ts";
+import type { DiscoverHints } from "../../journal/types.ts";
 import { HerdrCoreMux, RAW_KEY_GAP_MS } from "./adapter.ts";
 import { HcError, type RunShellRequest } from "./client.ts";
-import { FakeHcCore, ManualClock } from "./fake-core.ts";
+import { FakeHcCore, KEY_HOLD_MS, ManualClock } from "./fake-core.ts";
 import { IMPLICIT_SPACE_ID } from "./layout.ts";
 
 /** One fake core and the adapter over it. */
@@ -13,6 +14,9 @@ interface Built {
   readonly fake: FakeHcCore;
   readonly adapter: HerdrCoreMux;
 }
+
+/** The label a harness sets on its terminal to name its session file (#675). */
+const sessionFile = (harness: string) => `${harness}.session_file`;
 
 function build(): Built {
   const fake = new FakeHcCore();
@@ -109,6 +113,65 @@ describe("HerdrCoreMux over a fake core", () => {
     await rm(base, { recursive: true, force: true });
   });
 
+  test("paneLabels answers the labels of the last snapshot; an unlisted terminal has none (#675)", async () => {
+    const { fake, adapter } = build();
+    const labelled = fake.add({ status: null, labels: { [sessionFile("omp")]: "/x/y.jsonl" }, foreground: { name: "omp", cwd: "/home/dev" } });
+    expect(adapter.paneLabels(labelled)).toBeUndefined();
+    await adapter.snapshot();
+    expect(adapter.paneLabels(labelled)).toEqual({ [sessionFile("omp")]: "/x/y.jsonl" });
+    expect(adapter.paneLabels("t999")).toBeUndefined();
+  });
+
+  test("a label the program removes is gone from the next snapshot (#675)", async () => {
+    const { fake, adapter } = build();
+    const id = fake.add({ status: null, labels: { [sessionFile("omp")]: "/x/y.jsonl" }, foreground: { name: "omp", cwd: "/home/dev" } });
+    await adapter.snapshot();
+    expect(adapter.paneLabels(id)).toEqual({ [sessionFile("omp")]: "/x/y.jsonl" });
+    fake.removeLabel(id, sessionFile("omp"));
+    // Until the next snapshot the answer is the old one: labels are read from snapshots only.
+    expect(adapter.paneLabels(id)?.[sessionFile("omp")]).toBe("/x/y.jsonl");
+    await adapter.snapshot();
+    expect(adapter.paneLabels(id)?.[sessionFile("omp")]).toBeUndefined();
+    expect(adapter.paneLabels(id) ?? {}).toEqual({});
+  });
+
+  test("each pane's own session_file label names its session in a shared folder (end to end with the pi adapter)", async () => {
+    const base = await realpath(await mkdtemp(join(tmpdir(), "collie-hc-label-")));
+    const idOne = "019f4665-7df0-7540-a64f-7068335f2101";
+    const idTwo = "019f4665-7df0-7540-a64f-7068335f2102";
+    const ids = [idOne, idTwo];
+    const folder = join(base, "sessions", "--srv-proj--");
+    await mkdir(folder, { recursive: true });
+    const row = (sid: string) => `${JSON.stringify({ type: "session", version: 3, id: sid, timestamp: "2026-11-04T09:00:00.000Z", cwd: "/srv/proj" })}\n`;
+    const logs: string[] = await Promise.all(
+      ids.map(async (sid, i) => {
+        const path = join(folder, `2026-11-04T09-00-0${i}-000Z_${sid}.jsonl`);
+        await Bun.write(path, row(sid));
+        return path;
+      }),
+    );
+    const { fake, adapter } = build();
+    const omp = (labels: Record<string, string>) =>
+      fake.add({ status: null, cwd: "/srv/proj", labels, foreground: { name: "omp", pid: 4242, argv: ["omp"], cwd: "/srv/proj" } });
+    const first = omp({ [sessionFile("omp")]: logs[0]! });
+    const second = omp({ [sessionFile("omp")]: logs[1]! });
+    const bare = omp({});
+    await adapter.snapshot();
+    const src = new PiTranscriptSource(join(base, "sessions"), { home: join(base, "home"), tmp: join(base, "tmp") });
+    const discover = async (pane: string) => {
+      const processes = await adapter.foregroundProcesses(pane);
+      if (!processes.ok) throw new Error("no foreground");
+      const hints: DiscoverHints = { shared: true, processes: processes.value };
+      const labels = adapter.paneLabels(pane);
+      if (labels !== undefined) hints.labels = labels;
+      return src.discoverSession("/srv/proj", hints);
+    };
+    expect(await discover(first)).toEqual({ kind: "id", value: idOne });
+    expect(await discover(second)).toEqual({ kind: "id", value: idTwo });
+    expect(await discover(bare)).toBeNull();
+    await rm(base, { recursive: true, force: true });
+  });
+
   test("a core at another generation is unreachable, and the snapshot says what to update", async () => {
     const { fake, adapter } = build();
     fake.generation = 2;
@@ -147,7 +210,12 @@ describe("HerdrCoreMux over a fake core", () => {
     expect(sent.ok ? "ok" : sent.reason).toBe("refused");
     expect(fake.writes()).toHaveLength(0);
   });
-
+  test("an invalid chord rejects the whole batch before raw controls reach the core", async () => {
+    const { fake, adapter } = build();
+    const sent = await adapter.writeKeys("t2", ["ctrl+j", "ctrl+$"]);
+    expect(sent.ok ? "ok" : sent.reason).toBe("refused");
+    expect(fake.writes()).toHaveLength(0);
+  });
   test("closing a pane that already ended answers gone", async () => {
     const { adapter } = build();
     expect((await adapter.closePane("t2")).ok).toBe(true);
@@ -339,10 +407,9 @@ describe("the raw key gap (RAW_KEY_GAP_MS)", () => {
     const fake = new FakeHcCore();
     const clock = new ManualClock();
     const waits: number[] = [];
-    const adapter = new HerdrCoreMux(fake, "/home/dev", {
-      clock: { now: () => clock.now(), wait: (ms) => (waits.push(ms), clock.wait(ms)) },
-    });
-    return { fake, adapter, clock, waits };
+    const adapterClock = { now: () => clock.now(), wait: (ms: number) => (waits.push(ms), clock.wait(ms)) };
+    const adapter = new HerdrCoreMux(fake, "/home/dev", { clock: adapterClock });
+    return { fake, adapter, clock, waits, adapterClock };
   }
 
   test("a raw Enter right after a text write waits until the floor has passed", async () => {
@@ -423,5 +490,34 @@ describe("the raw key gap (RAW_KEY_GAP_MS)", () => {
       ["text", ["hello"]],
       ["keys", ["ctrl+c", "shift+tab"]],
     ]);
+  });
+  test("Ctrl+J and Ctrl+Q use the raw path with one 150 ms gap apiece", async () => {
+    const { fake, adapter, clock, waits, adapterClock } = paced();
+    fake.holdKeysAfterRawWrite(adapterClock);
+    await adapter.typeText("t2", "first");
+    expect((await adapter.writeKeys("t2", ["ctrl+J"])).ok).toBe(true);
+    await adapter.typeText("t2", "second");
+    expect((await adapter.writeKeys("t2", ["Ctrl+Q"])).ok).toBe(true);
+    expect(fake.writes().map((write) => [write.kind, write.payload])).toEqual([
+      ["text", ["first"]],
+      ["text", ["\n"]],
+      ["text", ["second"]],
+      ["text", ["\x11"]],
+    ]);
+    expect(waits).toEqual([RAW_KEY_GAP_MS, RAW_KEY_GAP_MS]);
+    expect(clock.now()).toBe(2 * RAW_KEY_GAP_MS);
+  });
+
+  test("a modified Ctrl+J stays named and still encounters the quiet hold", async () => {
+    const { fake, adapter, clock, waits, adapterClock } = paced();
+    fake.holdKeysAfterRawWrite(adapterClock);
+    await adapter.typeText("t2", "first");
+    expect((await adapter.writeKeys("t2", ["ctrl+shift+j"])).ok).toBe(true);
+    expect(fake.writes().map((write) => [write.kind, write.payload])).toEqual([
+      ["text", ["first"]],
+      ["keys", ["ctrl+shift+j"]],
+    ]);
+    expect(waits).toEqual([KEY_HOLD_MS]);
+    expect(clock.now()).toBe(KEY_HOLD_MS);
   });
 });

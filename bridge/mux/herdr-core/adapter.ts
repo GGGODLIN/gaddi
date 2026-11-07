@@ -61,6 +61,7 @@ import {
 } from "../types.ts";
 import { DEFAULT_HC_TIMEOUT_MS, defaultHcSocket, HC_GENERATION, HcClient, HcError, HcTimeout, type HcRpc, type WireForeground, type WireLayout, type WireRead, type WireTerminal } from "./client.ts";
 import { routeEvent } from "./events.ts";
+import { herdrCoreMachineCandidates } from "./machine-list.ts";
 import { herdrCoreBeaconMatcher } from "./markers.ts";
 import { HERDR_CORE_LOGO_SVG } from "./logo.ts";
 import { HC_UNSENDABLE_KEYS, isRawKeyText, toHcKey, type HcKey } from "./keys.ts";
@@ -92,7 +93,8 @@ const HERDR_CORE_CAPABILITIES = declareCapabilities({
     paneGrid: "herdr-core hands out the screen as plain text, so the mirror shows no colour.",
     agentDetection:
       "herdr-core names the agent in a terminal from the agent's own status report. A program that sends no report is named from the process in the foreground, through the same table (omp sends none), and then has no status. A shell, or a process Collie has no harness for, reads as a shell.",
-    agentSessionRef: "herdr-core keeps an agent's status but not its conversation id. The agent's own hook supplies it: install the hooks with `collie hooks install claude`.",
+    agentSessionRef:
+      "herdr-core keeps an agent's status but not its conversation id. The agent's own hook supplies it: install the hooks with `collie hooks install claude`. A `<harness>.session_file` terminal label is read as a discovery hint (ADR 0024), not reported as a ref.",
     sendKeys:
       "herdr-core presses keys by name. A Super or Command chord, Ctrl+Enter, and a modified key it has no name for (such as Ctrl+$) are refused.",
     renamePane: "herdr-core has no command that renames a terminal.",
@@ -158,7 +160,7 @@ export const OLDER_NOTE_BLOCKED = "On the Herdr core, Load older waits until the
 export const OLDER_NOTE_READING = "The Herdr core is still reading the older rows of this pane. Try Load older again in a moment.";
 
 /**
- * The least time between a text write to a pane and a raw Enter, Backspace or Tab right after it.
+ * The least time between a text write to a pane and a raw control key (Enter, Backspace, Tab, Ctrl+J or Ctrl+Q) right after it.
  *
  * Since PR 637 these three keys go to the core as raw bytes (`\r`, `\x7f`, `\t`), so the core's key
  * hold no longer spaces them. Codex reads text and `\r` that arrive together as a paste and inserts a
@@ -166,7 +168,8 @@ export const OLDER_NOTE_READING = "The Herdr core is still reading the older row
  * 2026-11-01). Collie's Send Protocol reads the screen between its writes, but a read can pass at once
  * when the app has not drained its input, and a stalled receiver drains the pty in one chunk. This
  * floor keeps the gap in the adapter, whatever the caller does. It applies to every raw key on the
- * core, for every harness, and to no other adapter.
+ * core, for every harness, and to no other adapter. The gap now also applies to the raw LF (Ctrl+J) and
+ * DC1 (Ctrl+Q) bytes that carry a newline and Oh My Pi's submit.
  *
  * Only a key whose pane's last write was TEXT waits: the paste-burst is text and a key in one chunk
  * (text and `\r`, a probe character and `\x7f`). Two raw keys in a row need no gap. A clear of a
@@ -207,6 +210,12 @@ export class HerdrCoreMux implements MuxAdapter {
    * the snapshot is as fresh as the last poll.
    */
   private foregrounds = new Map<string, WireForeground | null>();
+
+  /**
+   * Per terminal, the labels of the last snapshot, replaced whole on each one. `paneLabels` answers
+   * from it, so a label a program sets with `hc label` costs no call of its own.
+   */
+  private labels = new Map<string, Record<string, string>>();
 
   /** Whether the core on the socket was last seen speaking our generation. `null`: not asked yet. */
   private compatible: boolean | null = null;
@@ -259,6 +268,7 @@ export class HerdrCoreMux implements MuxAdapter {
     }
     const snapshot = toSnapshot(read[0], read[1], this.home);
     this.foregrounds = new Map(read[0].map((terminal) => [terminal.address, terminal.foreground]));
+    this.labels = new Map(read[0].map((terminal) => [terminal.address, terminal.labels]));
     this.forgetGonePanes(snapshot);
     this.noteHistoryState(snapshot);
     return snapshot;
@@ -285,6 +295,14 @@ export class HerdrCoreMux implements MuxAdapter {
     } catch (err) {
       return refusalFor(err);
     }
+  }
+
+  /**
+   * The terminal's labels as of the last snapshot, for a journal that reads a hint there (#675,
+   * `DiscoverHints.labels`). A terminal the snapshot did not list has none to give.
+   */
+  paneLabels(paneId: string): Record<string, string> | undefined {
+    return this.labels.get(paneId);
   }
 
   /** A no-op that resolves, as Herdr's is: every snapshot is a fresh read, and the watch pushes. */
@@ -400,10 +418,10 @@ export class HerdrCoreMux implements MuxAdapter {
   }
 
   /**
-   * One raw write to a pane. A raw Enter, Backspace or Tab right after a text write to the same pane
-   * first waits until {@link RAW_KEY_GAP_MS} have passed since that write; a key after another key goes
-   * at once. Text is never paced and never shares a write with a key (every call here carries either
-   * the text or the one key).
+   * A raw Enter, Backspace, Tab, Ctrl+J or Ctrl+Q right after a text write to the same pane first waits
+   * until {@link RAW_KEY_GAP_MS} has passed since that write. A raw key after another key goes at once.
+   * Text is never paced and never shares a write with a key (every call here carries either the text
+   * or the one key).
    */
   private async writeRaw(paneId: string, text: string): Promise<void> {
     const key = isRawKeyText(text);
@@ -679,6 +697,7 @@ export const herdrCoreMuxFactory: MuxAdapterFactory = {
   describeTarget(endpoint: string) {
     return `socket ${herdrCoreSocketFor(endpoint)}`;
   },
+  hostCandidates: herdrCoreMachineCandidates,
 };
 
 /** The socket an endpoint names: itself, or the core's own default when it is blank. */

@@ -1,8 +1,8 @@
 // Original literals shared with the browser sweep. The unit tests keep the expects.
 
 /** typeface-control.test.tsx L42–46 labels, L47 value, L58–61 stored choice. */
-export const shippedTypefaceOptionLabels = ["System default", "Space Grotesk", "Aldrich"] as const;
-export const typefaceDefaultValue = "aldrich";
+export const shippedTypefaceOptionLabels = ["System default", "Space Grotesk", "Aldrich", "IBM Plex Sans", "Geist", "Atkinson Hyperlegible Next"] as const;
+export const typefaceDefaultValue = "atkinson";
 export const typefaceGroteskValue = "grotesk";
 export const typefaceGroteskStore = { font: "grotesk" } as const;
 

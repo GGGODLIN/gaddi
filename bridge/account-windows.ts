@@ -87,14 +87,14 @@ export const MAX_CUSTOM_CONFIG_DIRS = 16;
 
 /**
  * The macOS Keychain service name Claude Code uses for `configDir`: `"Claude Code-credentials"` for the
- * default `~/.claude`, or suffixed with the first 8 hex chars of `sha256(posix.join(configDir.trim(), "."))`
+ * default `~/.claude`, or suffixed with the first 8 hex chars of `sha256(posix.join(configDir.trim(), ".").normalize("NFC"))`
  * when `CLAUDE_CONFIG_DIR` is set (2.1.318, read in its bundle; `security dump-keychain` shows
  * `"svce"<blob>="Claude Code-credentials-<8 hex chars>"`).
  */
 export function claudeKeychainService(configDir?: string): string {
   const trimmed = configDir?.trim() ?? "";
   if (trimmed === "") return CLAUDE_KEYCHAIN_SERVICE;
-  const suffix = createHash("sha256").update(posix.join(trimmed, ".")).digest("hex").slice(0, 8);
+  const suffix = createHash("sha256").update(posix.join(trimmed, ".").normalize("NFC")).digest("hex").slice(0, 8);
   return `${CLAUDE_KEYCHAIN_SERVICE}-${suffix}`;
 }
 
@@ -392,12 +392,6 @@ export interface CredentialSeams {
   /** The last `maxBytes` of a plain file, or null. */
   tail(path: string, maxBytes: number): Promise<string | null>;
   now(): number;
-}
-
-/** `$CLAUDE_CONFIG_DIR/.credentials.json`, else `~/.claude/.credentials.json`. */
-export function claudeCredentialsPath(env: Readonly<Record<string, string | undefined>>, home: string): string {
-  const dir = (env.CLAUDE_CONFIG_DIR ?? "").trim();
-  return join(dir === "" ? join(home, ".claude") : dir, ".credentials.json");
 }
 
 /**
@@ -1111,7 +1105,7 @@ export function accountWindowsDoctorLine(
   const named = (name: string, tilde: string, path: string): string => ((env[name] ?? "").trim() === "" ? tilde : path);
   const keychain = platform === "darwin" ? " or the Keychain" : "";
   const where = {
-    claude: `reads ${named("CLAUDE_CONFIG_DIR", "~/.claude/.credentials.json", claudeCredentialsPath(env, home))}${keychain}, asks ${CLAUDE_USAGE_HOST}`,
+    claude: `reads ~/.claude/.credentials.json${keychain}${(env.CLAUDE_CONFIG_DIR ?? "").trim() === "" ? "" : ", plus the login under CLAUDE_CONFIG_DIR for each session that sets it"}, asks ${CLAUDE_USAGE_HOST}`,
     codex: `reads ${named("CODEX_HOME", "~/.codex/sessions", codexSessionsDir(env, home))}`,
     opencode: facts.opencodeGoKey
       ? `reads ${named("XDG_DATA_HOME", "~/.local/share/opencode/auth.json", opencodeAuthPath(env, home))}, asks ${OPENCODE_USAGE_HOST}`

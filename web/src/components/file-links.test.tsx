@@ -11,7 +11,15 @@ import { parseJsonObject } from "@/lib/json";
 import { paneLinkHandlers, PaneFileLinks } from "@/test/file-links";
 import { server } from "@/test/setup";
 
-import { FILE_EXIST_ABSENT_TTL_MS, FILE_EXIST_DEBOUNCE_MS, FileLinksProvider, useFileLinks, usePaneFileLinks, type FileLinkOpener, type FileLinkTarget } from "./file-links";
+import {
+  FILE_EXIST_ABSENT_TTL_MS,
+  FILE_EXIST_DEBOUNCE_MS,
+  FileLinksProvider,
+  useFileLinks,
+  usePaneFileLinks,
+  type FileLinkOpener,
+  type FileLinkTarget,
+} from "./file-links";
 import { MarkdownText } from "./markdown-text";
 
 // The pane screen's opener (ADR 0088): the root from the snapshot, home from the launchers answer,
@@ -349,99 +357,165 @@ describe("chat prose with the existence check", () => {
     await waitFor(() => expect(screen.getByText(/too large to show/i)).toBeInTheDocument());
     expect(screen.queryByText(/0 B/)).toBeNull();
   });
+});
 
-  it("opens the sheet from a target built by an earlier opener, and clears the open sheet when the opener goes null", async () => {
-    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+// The sheet of a printed picture belongs to the provider: the opener it hands down reaches the sheet's
+// state through the context, and the sheet closes for good.
+describe("the image sheet of a file links provider", () => {
+  const imageOpener: FileLinkOpener = ({ path }) => ({
+    href: `/files?path=${path}`,
+    onOpen: () => {},
+    image: { paneId: "w1:p1", scope: {}, root: "/home/you/webapp", rel: path },
+  });
+  const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const servePng = () =>
+    server.use(
+      http.get(/\/api\/pane\/[^/]+\/files\/image$/, () => new HttpResponse(pngBytes, { status: 200, headers: { "content-type": "image/png" } })),
+    );
+
+  /** Hands the opener the context gave this render to the test, so a later render can use it late. */
+  interface Grabbed {
+    current: FileLinkOpener | null;
+  }
+  function Grab({ into }: { into: Grabbed }) {
+    into.current = useFileLinks();
+    return null;
+  }
+
+  it("opens the sheet from a target taken in an earlier render, after the opener was replaced", async () => {
+    servePng();
+    const grabbed: Grabbed = { current: null };
+    const ui = (value: FileLinkOpener | null) => (
+      <FileLinksProvider value={value}>
+        <Grab into={grabbed} />
+      </FileLinksProvider>
+    );
+    const { rerender } = render(ui(imageOpener));
+    const stale: FileLinkTarget = grabbed.current!({ path: "shots/home.png" })!;
+    rerender(ui(({ path }) => imageOpener({ path })));
+    act(() => stale.onOpen());
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("img", { name: "home.png" })).toBeInTheDocument());
+  });
+
+  it("stays closed after a close, a re-render, and the opener going away and coming back", async () => {
+    servePng();
+    const grabbed: Grabbed = { current: null };
+    const ui = (value: FileLinkOpener | null) => (
+      <FileLinksProvider value={value}>
+        <Grab into={grabbed} />
+      </FileLinksProvider>
+    );
+    const { rerender } = render(ui(imageOpener));
+    act(() => grabbed.current!({ path: "shots/home.png" })!.onOpen());
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender(ui(imageOpener));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // Open again, lose the opener while the sheet is up, and bring it back: the sheet does not return.
+    act(() => grabbed.current!({ path: "shots/home.png" })!.onOpen());
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    rerender(ui(null));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender(ui(imageOpener));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes the open sheet when the same provider switches to another pane, and opens it again on the first", async () => {
+    servePng();
+    const grabbed: Grabbed = { current: null };
+    const paneOpener = (paneId: string): FileLinkOpener => {
+      const opener: FileLinkOpener = ({ path }) => ({
+        href: `/files?path=${path}`,
+        onOpen: () => {},
+        image: { paneId, scope: {}, root: "/home/you/webapp", rel: path },
+      });
+      opener.paneKey = `\0\0${paneId}\0/home/you/webapp`;
+      return opener;
+    };
+    const ui = (value: FileLinkOpener | null) => (
+      <FileLinksProvider value={value}>
+        <Grab into={grabbed} />
+      </FileLinksProvider>
+    );
+    const { rerender } = render(ui(paneOpener("w1:p1")));
+    const stale = grabbed.current!({ path: "shots/home.png" })!;
+    act(() => stale.onOpen());
+    await waitFor(() => expect(screen.getByRole("img", { name: "home.png" })).toBeInTheDocument());
+
+    // A fresh opener of the same pane keeps the sheet.
+    rerender(ui(paneOpener("w1:p1")));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // Another pane, without going through null, closes it, and it does not return with the first pane.
+    rerender(ui(paneOpener("w1:p2")));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender(ui(paneOpener("w1:p1")));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // A target taken from an earlier opener still opens the sheet on the pane it belongs to.
+    act(() => stale.onOpen());
+    await waitFor(() => expect(screen.getByRole("img", { name: "home.png" })).toBeInTheDocument());
+  });
+
+  it("works end to end with usePaneFileLinks: stale target, pane switch, and null opener", async () => {
+    servePng();
     server.use(
       http.get("/api/launchers", () => HttpResponse.json({ launchers: [], home: "/home/you" })),
       http.post("/api/pane/:id/files/exist", async ({ request }) => {
         const body = parseJsonObject(await request.text());
-        const paths = Array.isArray(body?.paths) ? body.paths : [];
-        return HttpResponse.json({ exists: paths });
+        return HttpResponse.json({ exists: Array.isArray(body?.paths) ? body.paths : [] });
       }),
-      http.get("/api/pane/:id/files/image", () => new HttpResponse(pngBytes, { status: 200, headers: { "content-type": "image/png" } })),
     );
+    const grabbed: Grabbed = { current: null };
     let currentLocation = "";
     function LocationProbe() {
       const loc = useLocation();
       currentLocation = `${loc.pathname}${loc.search}`;
       return null;
     }
-    let staleTarget: FileLinkTarget | null = null;
-    function StaleTargetProbe() {
-      const open = useFileLinks();
-      const target = open?.({ path: "shots/first.png" }) ?? null;
-      if (target !== null && staleTarget === null) staleTarget = target;
-      return null;
-    }
-    function Harness({ activePane, secondPath }: { activePane: typeof pane | undefined; secondPath: boolean }) {
-      const opener: FileLinkOpener | null = usePaneFileLinks({
-        paneId: activePane?.paneId ?? "w1:p1",
-        pane: activePane,
-        panes: activePane ? [activePane] : [],
+    function Harness({ active, second }: { active: typeof pane | undefined; second: boolean }) {
+      const opener = usePaneFileLinks({
+        paneId: active?.paneId ?? "w1:p1",
+        pane: active,
+        panes: active ? [active] : [],
         workspaces,
       });
       return (
         <FileLinksProvider value={opener}>
-          <StaleTargetProbe />
-          <MarkdownText text={secondPath ? "see `shots/first.png` and `shots/second.png`" : "see `shots/first.png`"} />
+          <Grab into={grabbed} />
+          <MarkdownText text={second ? "see `shots/first.png` and `shots/second.png`" : "see `shots/first.png`"} />
         </FileLinksProvider>
       );
     }
-    const { rerender } = render(
+    const ui = (active: typeof pane | undefined, second: boolean) => (
       <MemoryRouter>
         <LocationProbe />
-        <Harness activePane={pane} secondPath={false} />
-      </MemoryRouter>,
+        <Harness active={active} second={second} />
+      </MemoryRouter>
     );
-    await waitFor(() => expect(staleTarget).not.toBeNull());
-    // Force a second existence batch so usePaneFileLinks produces a new opener instance.
-    rerender(
-      <MemoryRouter>
-        <LocationProbe />
-        <Harness activePane={pane} secondPath={true} />
-      </MemoryRouter>,
-    );
+    const { rerender } = render(ui(pane, false));
+    await waitFor(() => expect(grabbed.current?.({ path: "shots/first.png" }) ?? null).not.toBeNull());
+    const stale = grabbed.current!({ path: "shots/first.png" })!;
+    // A second existence batch yields a new opener instance; the earlier target still works.
+    rerender(ui(pane, true));
     await waitFor(() => expect(screen.getByText("shots/second.png").closest("a")).not.toBeNull());
-
-    // Calling onOpen on the target captured from the earlier opener still opens the sheet instead of navigating.
-    act(() => staleTarget!.onOpen());
+    act(() => stale.onOpen());
     await waitFor(() => expect(screen.getByRole("img", { name: "first.png" })).toBeInTheDocument());
     expect(currentLocation).toBe("/");
 
-    // Switching directly to another valid pane (without going through null) also clears the open sheet.
-    rerender(
-      <MemoryRouter>
-        <LocationProbe />
-        <Harness activePane={other} secondPath={true} />
-      </MemoryRouter>,
-    );
+    rerender(ui(other, true));
     expect(screen.queryByRole("img", { name: "first.png" })).toBeNull();
 
-    // Re-open on the first pane, then verify that a null opener transition also clears the stored target.
-    rerender(
-      <MemoryRouter>
-        <LocationProbe />
-        <Harness activePane={pane} secondPath={true} />
-      </MemoryRouter>,
-    );
-    act(() => staleTarget!.onOpen());
+    rerender(ui(pane, true));
+    act(() => stale.onOpen());
     await waitFor(() => expect(screen.getByRole("img", { name: "first.png" })).toBeInTheDocument());
-
-    // When the opener goes null, the stored target is cleared and does not reappear when the pane comes back.
-    rerender(
-      <MemoryRouter>
-        <LocationProbe />
-        <Harness activePane={undefined} secondPath={true} />
-      </MemoryRouter>,
-    );
+    rerender(ui(undefined, true));
     expect(screen.queryByRole("img", { name: "first.png" })).toBeNull();
-    rerender(
-      <MemoryRouter>
-        <LocationProbe />
-        <Harness activePane={pane} secondPath={true} />
-      </MemoryRouter>,
-    );
+    rerender(ui(pane, true));
     await settle();
     expect(screen.queryByRole("img", { name: "first.png" })).toBeNull();
   });

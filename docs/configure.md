@@ -92,7 +92,7 @@ The config file groups every setting under a `[section]`. The environment name o
 
 | section | what it holds |
 | --- | --- |
-| `bridge` | poll cadence, how many lines are read, where state lives |
+| `bridge` | poll cadence, how many lines are read, where state lives, telemetry |
 | `network` | the port, the bind address, allowed hosts and origins |
 | `mux` | which multiplexer this collie mirrors, and where it lives |
 | `access` | the Tailscale identity gate, the device header, the audit trail, the secret mask |
@@ -108,6 +108,16 @@ The durable agents one Collie runs beside its multiplexer are not in `config.tom
 `sources.json`, in the same folder as `.env` ([Durable agents](durable-agents.md#attach-a-durable-agent)).
 | `stt` | speech-to-text, absent until `collie stt setup` runs |
 
+### Telemetry
+
+Two keys in `[bridge]` set the daily install ping that
+[What leaves your machine](security.md#what-leaves-your-machine) describes.
+
+| key | environment | default | what it does |
+| --- | --- | --- | --- |
+| `telemetry` | `COLLIE_TELEMETRY` | on | `false` or `0` turns the ping off and deletes the install ID. The file also takes the words `off`, `no`, `on` and `yes` as strings, and a word Collie does not know reads as off. `DO_NOT_TRACK=1` and the switch in Settings turn it off too, and any off setting wins over an on setting. Each switch changes one machine. For a service, set `COLLIE_TELEMETRY=0` in that instance's `.env`, not in your shell profile. |
+| `telemetry_url` | `COLLIE_TELEMETRY_URL` | Collie's own address | Where the ping goes, for a test server. An address that is not `https` (or `http` on `127.0.0.1` or `localhost`) turns the ping off. |
+
 To read history from multiple agent home directories, provide a comma-separated list in
 `COLLIE_TRANSCRIPT_ROOT`.
 
@@ -116,6 +126,13 @@ Pi-format journals default to `~/.omp/agent/sessions`, `~/.pi/agent/sessions` an
 homes; `COLLIE_PI_ROOT` can name a comma-separated list of session directories.
 Gentle Shell keeps the sessions of the pi it bundles in the last of these, so they open in
 Chat with no setting.
+
+For an Oh My Pi profile that stores sessions inside a project, add that profile's `sessions`
+directory to `COLLIE_PI_ROOT` in the bridge's `.env`, then restart that Collie instance. The bridge
+does not inherit a terminal's project-local profile configuration. This setting replaces the
+default list, so include the default session directories as well if other panes use them.
+Discovery recognises symlink spellings of the same home or working directory, but still refuses
+to guess between two unnamed pi or Oh My Pi sessions in the same folder.
 
 [`docs/deployment.md`](deployment.md) covers custom domains and reverse proxies. Collie enforces a
 same-origin policy, so any custom hostname or external TLS terminator must be explicitly
@@ -764,7 +781,7 @@ clipboard, an image or a file raises no strip; the clipboard button still opens 
 ## Your own typefaces
 
 The interface font is a per-device setting. Under **Settings → Appearance → Typeface**, you can choose between
-System, Space Grotesk, Aldrich (the default), IBM Plex Sans, Geist and Atkinson Hyperlegible Next. A
+System, Space Grotesk, Aldrich, IBM Plex Sans, Geist and Atkinson Hyperlegible Next (the default). A
 [theme](themes.md) that names a face writes it here once, when you pick the theme. You can add custom fonts in
 `theme.toml`, the fourth configuration file:
 

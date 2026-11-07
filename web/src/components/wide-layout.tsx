@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRevalidator } from "react-router";
-import { ChevronDown, ChevronUp, Columns2, PanelLeftClose, PanelLeftOpen, Plus, Replace, TerminalSquare } from "lucide-react";
+import { ChevronDown, ChevronUp, Columns2, PanelLeftClose, PanelLeftOpen, Plus, Replace } from "lucide-react";
 
 import { ActionRow } from "@/components/action-sheet-rows";
-import { AgentIcon } from "@/components/agent-icon";
 import { ThreadSidebar } from "@/components/agent-sidebar";
 import { SettingsGear, useHeaderDock } from "@/components/app-header";
 import { useHostHealth } from "@/components/crew-provider";
@@ -12,6 +11,7 @@ import { StatusDot } from "@/components/status-badge";
 import { TabStrip } from "@/components/tab-strip";
 import { ColumnControls, ColumnHeader, PaneColumnBody, columnFrame } from "@/components/strip-column";
 import { Button } from "@/components/ui/button";
+import { PaneGlyph } from "@/components/ui/pane-glyph";
 import { BottomSheet } from "@/components/ui/sheet";
 import { Wordmark } from "@/components/wordmark";
 import { openForCount, useDashPrefs } from "@/hooks/use-dash-prefs";
@@ -31,6 +31,7 @@ import { hostKey, hostName, isMultiHost, paneRowKey } from "@/lib/hosts";
 import { t } from "@/lib/i18n";
 import { useLaunchers } from "@/lib/launchers";
 import { homePath, newPath, panePath } from "@/lib/nav";
+import { useTabLook } from "@/lib/tab-look";
 import type { WorkspaceGroup } from "@/lib/pane-groups";
 import { paneName } from "@/lib/pane-name";
 import { isOpenBeside, queueOpenBeside, takeOpenBeside } from "@/lib/open-beside";
@@ -126,6 +127,7 @@ function isTypingInLayout(strip: HTMLElement): boolean {
 
 export function WideLayout({ widthClass, paneId, scope, agent, focused, fold = "flat" }: WideLayoutProps) {
   useLocale();
+  const tabLook = useTabLook();
   const root = useRootData();
   const nav = useNav();
   const open = useSidebarOpen();
@@ -431,11 +433,19 @@ export function WideLayout({ widthClass, paneId, scope, agent, focused, fold = "
         data-segment={book ? "left" : undefined}
         aria-label={t("wide.sidebar.label")}
         // Folded with one column, the sidebar fills the left segment; with two, it is the rail.
-        className={cn("flex shrink-0 flex-col border-r border-rule bg-card", book && sidebarShown && "fold-left-full")}
+        // `pt-[env(safe-area-inset-top)]`: the sidebar and the tab row beside it are the layout's top
+        // edge, so the two of them clear the status bar; the header docked lower down does not
+        // (app-header.tsx). The card paints under the bar, so the strip it reserves is the panel's own.
+        className={cn("flex shrink-0 flex-col border-r border-rule bg-card pt-[env(safe-area-inset-top)]", book && sidebarShown && "fold-left-full")}
         style={book && sidebarShown ? undefined : { width: sidebarShown ? SIDEBAR_WIDTH[widthClass] : RAIL_WIDTH }}
       >
         <SidebarTop open={sidebarShown} setMark={setMark} toggle={!book} />
-        <div {...hostProps} className="min-h-0 flex-1 overflow-y-auto [-webkit-touch-callout:none]">
+        {/* `relative`: the list's scroller is the containing block of everything absolute in it. A
+            row's `sr-only` word is `position: absolute`, and with no positioned box above it its
+            containing block was the page: a word far down a long list escaped this scroller and the
+            app's root and made the document taller than the screen, so a drag on the header scrolled
+            the whole app up under the status bar (1.27.1). */}
+        <div {...hostProps} className="relative min-h-0 flex-1 overflow-y-auto [-webkit-touch-callout:none]">
           {sidebarShown ? (
             <SidebarList agent={agent} paneId={paneId} scope={scope} onSelect={goTo} />
           ) : (
@@ -444,9 +454,15 @@ export function WideLayout({ widthClass, paneId, scope, agent, focused, fold = "
         </div>
         {/* NEW SPACE and SETTINGS, pinned under the list so both are one tap away, however long the
             list. The pane header has no gear; this is the large screen's way to Settings. */}
+        {/* The foot clears the gesture bar the way the composer beside it does (composer.tsx's
+            bottom pad), so the two columns end on one line and NEW SPACE never sits under the bar.
+            With no bottom inset it is the 4px it always was. */}
         <div
           data-slot="sidebar-foot"
-          className={cn("flex shrink-0 items-center border-t border-rule", sidebarShown ? "gap-1 px-2 py-1" : "flex-col py-1")}
+          className={cn(
+            "flex shrink-0 items-center border-t border-rule pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]",
+            sidebarShown ? "gap-1 px-2" : "flex-col",
+          )}
         >
           {sidebarShown ? (
             <Button variant="ghost" data-slot="new-space" className="h-11 min-w-0 flex-1 justify-start gap-2.5 px-2 text-sm font-medium" onClick={toNew}>
@@ -469,7 +485,12 @@ export function WideLayout({ widthClass, paneId, scope, agent, focused, fold = "
         <div
           data-slot="space-header"
           {...swipe}
-          className={cn("flex h-12 shrink-0 touch-none items-center gap-1 border-b border-rule bg-band-ground", bookPair ? "pr-1" : "pl-4 pr-1")}
+          // The row keeps its 48px and the status bar's inset goes on top of it, in the row's own
+          // ground, beside the sidebar's (the aside above says why). With no inset it is 48px as before.
+          className={cn(
+            "flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 touch-none items-center gap-1 border-b border-rule bg-band-ground pt-[env(safe-area-inset-top)]",
+            bookPair ? "pr-1" : "pl-4 pr-1",
+          )}
         >
           {/* Folded with two columns, the header is cut at the fold like the strip under it: the name
               over the left column, the buttons over the right one, nothing on the hinge. */}
@@ -498,7 +519,10 @@ export function WideLayout({ widthClass, paneId, scope, agent, focused, fold = "
                 savedCopy={root.error}
                 onRenamed={revalidate}
                 onClosed={closedTab}
-                className="min-w-0 flex-1 bg-transparent"
+                // Under the folder look the row sits on the bar's bottom edge, one pixel over the
+                // bar's own rule, so the open tab covers that rule and joins the page below the bar
+                // (tab-strip.tsx). Plain: centred in the bar, as it always was.
+                className={cn("min-w-0 flex-1 bg-transparent", tabLook === "folder" && "self-end -mb-px")}
               />
             ) : (
               <span className="flex-1" />
@@ -558,7 +582,11 @@ export function WideLayout({ widthClass, paneId, scope, agent, focused, fold = "
                   aria-label={pane ? paneName(pane) : undefined}
                   aria-current={isFocus && framed ? "true" : undefined}
                   className={cn(
-                    "flex h-full shrink-0 border-r border-rule",
+                    // `min-w-0`: a flex item's automatic minimum is its content's width, so a column
+                    // whose pane holds a wide line (a mirror row, a table, a status footer) grew past
+                    // its 100% basis and the strip scrolled sideways inside the content. Out of wide
+                    // mode the inline `minWidth` below is not set, so this is the column's floor.
+                    "flex h-full min-w-0 shrink-0 border-r border-rule",
                     COLUMN_SNAP_CLASSES,
                     // A sideways wheel over a column must reach the strip. The transcript list is
                     // `overscroll-contain` on both axes for the phone, which stopped the chain inside
@@ -829,10 +857,6 @@ function SidebarList({ agent, paneId, scope, onSelect }: { agent: AgentView | un
   );
 }
 
-function PaneGlyph({ pane, className = "size-7" }: { pane: AgentView; className?: string }) {
-  return pane.kind === "shell" ? <TerminalSquare className={cn(className, "text-muted-foreground")} aria-hidden /> : <AgentIcon agent={pane.agent} className={className} />;
-}
-
 /** The closed sidebar: each space's panes as icons with their status marks, in the sidebar's order. */
 function Rail({ spaces, hereKey, onSelect }: { spaces: readonly WorkspaceGroup[]; hereKey: string | null; onSelect: (pane: AgentView) => void }) {
   return (
@@ -858,10 +882,7 @@ function Rail({ spaces, hereKey, onSelect }: { spaces: readonly WorkspaceGroup[]
                   here ? "border-ring bg-accent" : "border-transparent",
                 )}
               >
-                <span className="relative inline-flex">
-                  <PaneGlyph pane={p} />
-                  <StatusDot status={shownStatus(p)} backed surface="bg-card" className="absolute -bottom-1 -right-1" />
-                </span>
+                <PaneGlyph pane={p} markOn="bg-card" />
               </button>
             );
           })}
