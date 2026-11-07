@@ -232,10 +232,14 @@ describe("the Claude login", () => {
     const expectedHash = "2ea9e238";
     expect(claudeKeychainService()).toBe(CLAUDE_KEYCHAIN_SERVICE);
     expect(claudeKeychainService("   ")).toBe(CLAUDE_KEYCHAIN_SERVICE);
-    expect(claudeKeychainService(` ${customDir} `)).toBe(`${CLAUDE_KEYCHAIN_SERVICE}-${expectedHash}`);
-    expect(claudeKeychainService(`${customDir}/`)).toBe(`${CLAUDE_KEYCHAIN_SERVICE}-${expectedHash}`);
     expect(claudeKeychainService(customDir)).toBe(`${CLAUDE_KEYCHAIN_SERVICE}-${expectedHash}`);
-    // NFC spellings share a Keychain name independently of the pending raw-path decision.
+    // Claude Code hashes the string as set, with no trim and no path clean-up: a trailing slash is another item
+    // (sha256("/profiles/work/").slice(0, 8) === "75564947", sha256("/profiles/café" as NFC UTF-8) === "4bee4e79").
+    const slashed = claudeKeychainService(`${customDir}/`);
+    expect(slashed).toBe(`${CLAUDE_KEYCHAIN_SERVICE}-75564947`);
+    expect(slashed).not.toBe(claudeKeychainService(customDir));
+    expect(claudeKeychainService(` ${customDir} `)).not.toBe(claudeKeychainService(customDir));
+    // NFC first: an NFD "é" (e + U+0301) names the same item as its NFC form.
     const nfc = "/profiles/café";
     const nfd = "/profiles/café";
     expect(nfd).not.toBe(nfc);
@@ -251,7 +255,7 @@ describe("the Claude login", () => {
       ok: true,
       token: "sk-ant-oat01-custom",
     });
-    expect(await readClaudeLogin(seams({ platform: "darwin", env: { CLAUDE_CONFIG_DIR: `${customDir}/` }, keychain }))).toEqual({
+    expect(await readClaudeLogin(seams({ platform: "darwin", env: { CLAUDE_CONFIG_DIR: customDir }, keychain }))).toEqual({
       ok: true,
       token: "sk-ant-oat01-custom",
     });
@@ -266,7 +270,7 @@ describe("the Claude login", () => {
     ]);
   });
 
-  it("hands a session's config dir to the Keychain name through the fork's path normalization", async () => {
+  it("hands a session's raw config dir to the Keychain name, whatever its spelling", async () => {
     const services: Array<string | undefined> = [];
     const keychain = async (svc?: string): Promise<string | null> => {
       services.push(svc);
@@ -275,7 +279,7 @@ describe("the Claude login", () => {
     const source = claudeAccountSource(seams({ platform: "darwin", keychain }), "/profiles/work/");
     if (source.kind !== "http") throw new Error("claude is an http source");
     await source.login();
-    expect(services).toEqual([claudeKeychainService(join("/profiles/work", "."))]);
+    expect(services).toEqual([`${CLAUDE_KEYCHAIN_SERVICE}-75564947`]);
   });
 
   it("builds the one ask with the bearer header and the beta header", () => {
