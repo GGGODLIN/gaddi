@@ -2906,6 +2906,8 @@ export const ru: Dictionary = {
   "telemetry.card.next.aria": "Следующее сообщение в формате JSON",
   "telemetry.card.more": "Что отправляется",
   "telemetry.notice.body": "Gaddi отправляет анонимную телеметрию раз в день. Отключите ее в Настройках.",
+  "telemetry.notice.updateBody": "Ежедневный подсчет Collie теперь также указывает диалог, который не удалось прочитать, по короткому коду из подсказок клавиш этого диалога, но никогда не из вашего текста.",
+  "telemetry.notice.docs": "Что отправляется",
   "telemetry.notice.open": "Открыть настройки",
   "telemetry.notice.dismiss": "Закрыть уведомление",
   "apiError.telemetry.setting_invalid": "Параметр телеметрии должен быть «Вкл» или «Выкл». Ничего не изменено.",
