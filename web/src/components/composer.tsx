@@ -3215,15 +3215,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             field upward to its cap, which is where a thumb already is. `p-1` is 4px, exactly the
             reach of `TOOLBAR_TAP_TARGET`, so an empty box is 36 + 8 = 44px inside its border.
 
-            A TALL DRAFT STACKS THE TWO BUTTONS (ADR 0057, amended 2026-10-19). Dictated text runs
-            to many lines and attach then stands over empty room, so at 3+ lines (or 5+ when the
-            draft mic is also shown) the buttons become a column, attach over the primary action,
-            and the field takes the width back. The empty box and one or two lines are exactly the
-            row above (stacking by default would make an empty box 76px, DESIGN.md §2). It is a
-            class change on ONE always-rendered group, so nothing remounts and the caret stays;
-            `useStackedActions` holds the hysteresis that keeps the freed width from rewrapping the
-            text back into the row.
-
             THE FRAME IS HERE AND NOWHERE ELSE, AND THERE IS ONE. The border is unconditional and
             only its colour moves on focus, so the box never resizes under the caret (DESIGN.md §2),
             and `focus-within:ring-1` doubles it to a 2px line as a box-shadow, which costs no

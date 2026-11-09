@@ -8,6 +8,7 @@ import { cropRawColumns, type ColumnRange } from "../column-range";
 import { MAX_AUTOCOMPLETE_LINES } from "../harness/claude/autocomplete";
 import { displayWidth } from "../text-width";
 import { findInputFrame, frameAt, plainRows, type Frame, type FrameRow, type FrameRun } from "./frame";
+import { surfaceOfScreen } from "./fold";
 import { readAboveNotice } from "./notice";
 import { requireProfile } from "./profile";
 
@@ -1089,7 +1090,7 @@ describe("the draft of a soft-wrapped box joins the rows the way they were broke
     expect(draftOf([cjk.slice(0, 18), cjk.slice(18, 36), cjk.slice(36)], 40)).toBe(cjk);
   });
 
-  it("Claude background agents panel (#740): wrapped agent rows and a 9-row full panel stay named footer rows, never a checkbox modal cue", () => {
+  it("Claude background agents panel (#740): wrapped agent rows and a full panel with wrapped rows stay named footer rows, never a checkbox modal cue", () => {
     const claude = requireProfile("claude").idle;
     const wrappedRows = plainRows([
       "● Done.",
@@ -1110,8 +1111,14 @@ describe("the draft of a soft-wrapped box joins the rows the way they were broke
     const wrappedFrame = findInputFrame(wrappedRows, claude);
     expect(wrappedFrame?.volatile.footer).not.toBeNull();
     expect(wrappedFrame?.volatile.named.length).toBeGreaterThanOrEqual(4);
+    expect(surfaceOfScreen({ seq: 1, source: "screen", at: 1000, revision: 1, rows: wrappedRows, ask: null }, claude).surface).toEqual({
+      revision: 1,
+      turn: "idle",
+      modal: "none",
+      composer: "empty",
+    });
 
-    const nineRows = plainRows([
+    const fullWrappedRows = plainRows([
       "● Done.",
       "",
       "✻ Waiting for 7 background agents to finish",
@@ -1121,7 +1128,8 @@ describe("the draft of a soft-wrapped box joins the rows the way they were broke
       "  ⏵⏵ bypass permissions on (shift+tab to cycle) · 2 background tasks · ↓ to view",
       "",
       "  ● main",
-      "  ◯ general-purpose · worker 1",
+      "  ◯ general-purpose · worker 1 with a very long description that wraps",
+      "    onto a continuation line (12m 34s)",
       "  ◯ general-purpose · worker 2",
       "  ◯ general-purpose · worker 3",
       "  ◯ general-purpose · worker 4",
@@ -1130,12 +1138,18 @@ describe("the draft of a soft-wrapped box joins the rows the way they were broke
       "",
       "  ↓ to manage",
     ]);
-    const nineFrame = findInputFrame(nineRows, claude);
-    expect(nineFrame?.volatile.footer).not.toBeNull();
-    expect(nineFrame?.volatile.named.length).toBeGreaterThanOrEqual(8);
+    const fullFrame = findInputFrame(fullWrappedRows, claude);
+    expect(fullFrame?.volatile.footer).not.toBeNull();
+    expect(fullFrame?.volatile.named.length).toBeGreaterThanOrEqual(9);
+    expect(surfaceOfScreen({ seq: 1, source: "screen", at: 1000, revision: 1, rows: fullWrappedRows, ask: null }, claude).surface).toEqual({
+      revision: 1,
+      turn: "idle",
+      modal: "none",
+      composer: "empty",
+    });
   });
 
-  it("opencode 2.2.6 (#749): a boxed slash-command row above the top edge does not swallow the frame", () => {
+  it("opencode 2.2.6 (#749): a boxed slash-command row above the top edge does not swallow the frame and marks the modal unreadable", () => {
     const opencode = requireProfile("opencode").idle;
     const rows = plainRows([
       "                      ┃ /review       review changes [commit|branch|pr], defaults to uncommitte ┃",
@@ -1150,5 +1164,6 @@ describe("the draft of a soft-wrapped box joins the rows the way they were broke
     expect(frame).not.toBeNull();
     expect(frame?.top).toBe(1);
     expect(frame?.interior.text).toBe("/compact");
+    expect(surfaceOfScreen({ seq: 1, source: "screen", at: 1000, revision: 1, rows, ask: null }, opencode).surface.modal).toBe("unreadable");
   });
 });
