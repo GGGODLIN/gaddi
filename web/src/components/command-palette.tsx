@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Pencil } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { SearchField } from "@/components/ui/search-field";
@@ -12,6 +11,7 @@ import type { Scope } from "@/lib/scope";
 import type { OperatorCommand } from "@/lib/types";
 import { t } from "@/lib/i18n";
 import { useLocale } from "@/hooks/use-locale";
+import { Icon } from "@/components/icons/icon";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -162,7 +162,7 @@ export function CommandPalette({
                 </div>
                 <p className="truncate text-xs text-muted-foreground">{c.description}</p>
               </div>
-              <Pencil className="size-4 shrink-0 text-muted-foreground" />
+              <Icon name="command-takes-arg" className="size-4 shrink-0 text-muted-foreground" />
             </button>
           );
         })}

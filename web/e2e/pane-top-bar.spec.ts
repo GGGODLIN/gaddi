@@ -177,8 +177,9 @@ test("opening a tab moves no neighbour", async ({ page }) => {
 // THE "+" SITS LEVEL IN ITS ROW, AS A BARE GLYPH (2026-11-06). The 28px ring kept 1px of air above and below in the
 // 30px row and read as sitting on the folder row's bottom rule; then a 24px ring read as a placeholder. It is the bare
 // glyph in a 24px box now, no border, keeping 3px each way: level with the labels, and with the open tab's card under
-// the folder look. Its hit stays the row's 30px and 44px across, and a text tab keeps at least 40px of its own under
-// the plain look, where the reach takes the last pixels of its padding. The plain look is collie's own colours in an imported theme that names no `tabs` word.
+// the folder look. Its hit stays the row's 30px and 44px across, and a text
+// tab keeps at least 40px of its own under the plain look, where the reach takes the last pixels of its padding. The
+// plain look is collie's own colours in an imported theme that names no `tabs` word.
 for (const look of ["folder", "plain"] as const) {
   for (const pane of ["w2:p1", "w2:p2"]) {
     test(`the tab row's "+" is a bare 24px box level with the tabs, ${look} look, ${pane} open`, async ({ page }) => {

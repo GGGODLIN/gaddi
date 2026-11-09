@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Layers } from "lucide-react";
+import { Icon } from "@/components/icons/icon";
 
 import { cn } from "@/lib/utils";
 import { useNav } from "@/hooks/use-nav";
@@ -168,7 +168,7 @@ export function SessionSwitcher({ sessions, scope, viewAll }: SessionSwitcherPro
                     : "hover:bg-accent active:bg-accent",
                 )}
               >
-                <Layers className="size-4 shrink-0 text-muted-foreground" />
+                <Icon name="session" className="size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">
                     {t("connection.session.all")}
@@ -177,7 +177,7 @@ export function SessionSwitcher({ sessions, scope, viewAll }: SessionSwitcherPro
                     {t("connection.session.allDescription")}
                   </span>
                 </div>
-                {viewAll && <Check className="size-4 shrink-0 text-primary" />}
+                {viewAll && <Icon name="selected" className="size-4 shrink-0 text-primary" />}
               </button>
             </li>
             {listedSessions.map((s) => {
@@ -235,7 +235,7 @@ export function SessionSwitcher({ sessions, scope, viewAll }: SessionSwitcherPro
                         </span>
                       )}
                     </div>
-                    {active && <Check className="size-4 shrink-0 text-primary" />}
+                    {active && <Icon name="selected" className="size-4 shrink-0 text-primary" />}
                   </button>
                 </li>
               );

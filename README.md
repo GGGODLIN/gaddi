@@ -44,14 +44,15 @@ The video and the screenshots use made-up agents.
 - **Start work from the phone**: a new agent, a command or a worktree, on any of your machines;
   your own launchers, the lead's and the ones you add from the phone, show on every machine of a
   crew.
-- **Walky talky**: one agent session sends a short message to another, on any harness and across a
+- **WalkyTalky**: one agent session sends a short message to another, on any harness and across a
   crew, and you can message sessions from the phone; every message gets a receipt and a log entry,
   an address carries the pane's token so a message does not reach a new session in a reused pane id,
-  and a crew machine signs it ([Walky talky](./docs/walky-talky.md)).
+  and a crew machine signs it ([WalkyTalky](./docs/walky-talky.md)).
 - **Durable agents** run beside the terminal multiplexer, with their own conversations, approvals
   and history ([experimental](./docs/durable-agents.md)).
-- **Read back what happened**: search the output, read the whole session as Chat, and browse the
-  workspace's files and diffs, read-only.
+- **Read back what happened**: search the output, read the whole session as Chat (with optional math
+  typesetting, [syntax](./docs/changes.md#equations)), and browse the workspace's files and diffs,
+  read-only.
 - **Voice input**: speak a reply instead of typing it. Whistle, Collie's own speech engine, turns
   it into text on the phone or on your computer, so a phone whose browser cannot run it can still
   use voice, and the audio stays on your own devices. Off until you set it up
@@ -244,7 +245,7 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | --- | --- |
 | [**Install in five minutes**](./docs/five-minute-install.md) | The recommended setup, step by step: Tailscale, Herdr and Collie on your computer, then a paired phone with Collie on its home screen |
 | [**Claude Code in tmux or Herdr, on your phone**](./docs/claude-code-on-your-phone.md) | Keep Claude Code running in tmux or Herdr when SSH drops. Manage sessions, start new agents and worktrees, approve prompts, and send Esc or Ctrl from your phone with push alerts. |
-| [**Walky talky**](./docs/walky-talky.md) | Messages between agent sessions: `collie walky who`, `send`, `reply`, `inbox` and `status`, pane tokens, receipts, how a message crosses a crew and how its outcome comes back, the phone's cards and composer, installing the skill into your agents, and the limits |
+| [**WalkyTalky**](./docs/walky-talky.md) | Messages between agent sessions: `collie walky who`, `send`, `reply`, `inbox` and `status`, pane tokens, receipts, how a message crosses a crew and how its outcome comes back, the phone's cards and composer, installing the skill into your agents, and the limits |
 
 ### Sessions
 
@@ -269,7 +270,7 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | | |
 | --- | --- |
 | [**Install**](./docs/install.md) | The front door you need, then the install for your system: Linux, Arch and Omarchy, Nix, macOS, Windows, or as a Herdr plugin. Covers first run, setup on an iPhone or Android phone, updates, and uninstallation |
-| [**Windows**](./docs/windows.md) | Windows 11 with Herdr: what is supported, installing with `install.ps1`, the unsigned binary, updating, long paths, and what is not tested |
+| [**Windows**](./docs/windows.md) | Windows 11 with Herdr: what is supported and what is still experimental, installing with `install.ps1`, the unsigned binary, updating, long paths, and what is not tested |
 | [**Security**](./docs/security.md) | What a Collie exposes, the defenses, and pairing a device, the credential for every request |
 | [**Configure**](./docs/configure.md) | The `.env`, your own slash commands, keys, quick replies, launchers and typefaces; appearance, Zen mode, language |
 | [**Themes**](./docs/themes.md) | The four looks Collie ships, picking one in Settings, importing a theme file after a preview, exporting one to edit, and writing your own: the 43 colour tokens, the shape and look words, the terminal palette, and what a theme cannot change |
@@ -283,42 +284,35 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | [**Terminology**](./docs/terminology.md) | Collie's words in plain words, beside the names other tools use: session, space, tab, pane, terminal, durable agent, harness, crew, lead, and more |
 | **For an AI coding agent in your terminal** | `collie skill` prints a brief on how Collie works, and `collie docs` prints the pages above, both out of the binary and with no network |
 
-Repository-level specifications live at the root: [`ARCHITECTURE.md`](./ARCHITECTURE.md) ·
-[`docs/deployment.md`](./docs/deployment.md) · [`MUX_CONTRACT.md`](./MUX_CONTRACT.md) ·
-[`CREW_PROTOCOL.md`](./CREW_PROTOCOL.md) · [`HERDR_API.md`](./HERDR_API.md) ·
-[`DESIGN.md`](./DESIGN.md) · [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+Root specifications: [`ARCHITECTURE.md`](./ARCHITECTURE.md),
+[`MUX_CONTRACT.md`](./MUX_CONTRACT.md), [`CREW_PROTOCOL.md`](./CREW_PROTOCOL.md),
+[`HERDR_API.md`](./HERDR_API.md), [`HC_API.md`](./HC_API.md), [`DESIGN.md`](./DESIGN.md),
+[`HARNESS_CONTRIBUTING.md`](./HARNESS_CONTRIBUTING.md), and [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## Deployment variants
 
-Collie always binds **loopback only**; what changes between deployments is *what sits in front
-of it* and *how a request proves who it is*. Variant A is the default and sits below; the other four
-are in [`docs/deployment.md`](./docs/deployment.md). Pick one.
+Collie always binds to **loopback only**. Deployment types differ by ingress configuration and
+authentication mechanism. Variant A is default. See [`docs/deployment.md`](./docs/deployment.md)
+for variants B through E.
 
 ### Variant A — `tailscale serve` + person identity (default)
 
-The happy path from [Install](./docs/install.md#install). `tailscale serve` terminates TLS on your MagicDNS name and
-injects `Tailscale-User-Login`; set `COLLIE_TRUSTED_USER` to your tailnet login and Collie
-rejects anyone else.
+Standard path from [Install](./docs/install.md#install). `tailscale serve` terminates TLS on your
+MagicDNS domain and injects `Tailscale-User-Login`, a header a client cannot forge through the proxy. Define
+`COLLIE_TRUSTED_USER` in `.env` to restrict access:
 
 ```bash
-# in your .env
 COLLIE_TRUSTED_USER=you@example.com
 ```
 
-- **Granularity:** the tailnet *person*, not the device.
-- **Why it's safe on bare `tailscale serve`:** serve is the *trusted injector* of
-  `Tailscale-User-Login` — it sets that header itself and a client can't forge it through the proxy.
-- Nothing else to configure; origins match automatically on the MagicDNS name.
-- Per-device control comes from [pairing](./docs/security.md#pair-a-device--the-write-credential),
-  which is always on and applies on top of this variant.
+This trusts the tailnet user, not the device. For device-level security,
+[pair the device](./docs/security.md#pair-a-device--the-write-credential). Use alternative variants
+only for proxy setups or environments without Tailscale:
 
-This is the right choice unless you specifically need a proxy in the path. If you do, or if Tailscale
-isn't in the path at all, [`docs/deployment.md`](./docs/deployment.md) has the rest:
-
-- **[B — identity-aware proxy, authorised by device](./docs/deployment.md#variant-b--identity-aware-proxy--per-device-authorisation)** — a proxy on this host; some devices drive, others watch.
-- **[C — reverse proxy as the only front door](./docs/deployment.md#variant-c--reverse-proxy-as-the-only-front-door-no-tailscale)** — no Tailscale anywhere in the path.
-- **[D — off-host identity proxy over the tailnet](./docs/deployment.md#variant-d--off-host-identity-proxy-over-the-tailnet)** — one central ingress node fronting Collie among your other services.
-- **[E — any other mesh or tunnel](./docs/deployment.md#variant-e--any-other-mesh-or-tunnel-netbird-zerotier-cloudflare-tunnel)** — NetBird, ZeroTier, Cloudflare Tunnel: you own the ingress, Collie publishes nothing.
+- **[B, identity-aware proxy, authorised by device](./docs/deployment.md#variant-b--identity-aware-proxy--per-device-authorisation):** Host-level proxy with role-based access.
+- **[C, reverse proxy as the only front door](./docs/deployment.md#variant-c--reverse-proxy-as-the-only-front-door-no-tailscale):** Direct reverse proxy without Tailscale.
+- **[D, off-host identity proxy over the tailnet](./docs/deployment.md#variant-d--off-host-identity-proxy-over-the-tailnet):** Shared ingress node routing traffic to Collie and other systems.
+- **[E, any other mesh or tunnel](./docs/deployment.md#variant-e--any-other-mesh-or-tunnel-netbird-zerotier-cloudflare-tunnel):** Custom network tunnels (NetBird, ZeroTier, Cloudflare Tunnel).
 
 ## Windows
 
@@ -337,44 +331,32 @@ Upstream's installer:
 irm https://colliepwa.dev/install.ps1 | iex
 ```
 
-Upstream v1.16.0 is its first release with a Windows zip. Its installer was run against that release on
-a Windows 11 VM, and `collie start`, `status`, `doctor` and `stop` worked. Phone access over HTTP
-through Tailscale Serve was run too. Not tested yet are an update between two real releases on
-Windows and the HTTPS form of Tailscale Serve on Windows, which is why it stays experimental.
-
-The release check requires the Windows zip from now on. Only the maintainer can override that, for a
-Linux hotfix.
-
-Windows 11 on x64 with Herdr is a supported host: the maintainer owns the code and tests it.
-The conditions for dropping the word are on the Windows page. [**docs/windows.md**](./docs/windows.md)
-has the install, the update, and what is not tested. In short:
+Windows 11 x64 running Herdr is maintained and tested directly upstream. The platform stays labelled
+experimental until an update between two real releases is proven on it. Linux and macOS are unaffected. See
+[**docs/windows.md**](./docs/windows.md) for installation, updates, and limitations. Summary:
 
 - **Checks.** The `windows.yml` workflow runs the bridge, cli and scripts tests on pull requests
   and pushes to `main`. This fork permanently waives only the Windows 11 VM rehearsal; install,
   update and rollback remain unverified. ([ADR 0075](./.adr/0075-windows-is-a-supported-host.md))
-- **Installed without a toolchain.** Each release builds `collie-<version>-windows-x64.zip`, and
-  `scripts/install.ps1` installs it. The binary is unsigned, and Smart App Control can block it.
-- **Run by Task Scheduler.** `collie start`, `stop`, `restart`, `status` and `uninstall` work as they
-  do elsewhere. The task is named `herdr.collie` and starts at your logon.
-- **Not covered.** tmux and zellij (neither has a Windows build), Windows 10, Windows on ARM,
+- **Installed without a toolchain.** Releases provide `collie-<version>-windows-x64.zip`,
+  installed via `scripts/install.ps1`. The binary is unsigned and may trigger Smart App Control.
+- **Run by Task Scheduler.** Commands `collie start`, `stop`, `restart`, `status`, and `uninstall`
+  work normally. The service runs as task `herdr.collie` at user login.
+- **Not covered.** tmux and zellij (no Windows binaries), Windows 10, Windows on ARM,
   a Windows machine in a crew without the [experimental](./docs/windows.md#crews) consent flag, and a managed front door: Collie does not run `tailscale serve`
   on Windows, so bring your own,
   [Variant C](./docs/deployment.md#variant-c--reverse-proxy-as-the-only-front-door-no-tailscale).
-  Herdr's action buttons need `bash`, so the manifest lists only `linux` and `macos`.
+  Herdr action buttons require `bash`, limiting manifest support to `linux` and `macos`.
 
-Herdr on Windows exposes its control socket as a named pipe derived from the full socket path instead
-of an AF_UNIX socket. Collie connects through `node:net` rather than `Bun.connect`, with a single shim,
-[`bridge/dial.ts`](./bridge/dial.ts), which documents the path mapping. The socket path defaults to
-`%APPDATA%\herdr\herdr.sock`; override it with `HERDR_SOCKET_PATH`. Explicit `\\.\pipe\...` values pass
-through directly. The bridge logs `[events] stream up` on startup when event streaming runs over the pipe.
-
-`COLLIE_HERDR_DIAL=net` forces the `node:net` dialer on Linux and macOS. This allows testing the
-Windows connection path without a Windows environment; `bridge/dial.test.ts` relies on it.
+Herdr on Windows uses a named pipe for its control socket. Collie connects through `node:net`
+via [`bridge/dial.ts`](./bridge/dial.ts), which details the path mapping. The socket defaults to
+`%APPDATA%\herdr\herdr.sock`; override it with `HERDR_SOCKET_PATH`. Setting
+`COLLIE_HERDR_DIAL=net` enables this dialer on Linux and macOS for testing without Windows.
 
 ## Architecture
 
-A small Bun process sits between your phone and your multiplexer — the browser never touches the
-multiplexer.
+A Bun process bridges your phone and your terminal multiplexer. The browser never connects to the
+multiplexer directly.
 
 ```
   phone (PWA)
@@ -387,93 +369,62 @@ multiplexer.
      │  one mux adapter, chosen per install
      ▼
   the multiplexer        owns the panes, agents and terminal state
-  Herdr · tmux · zellij
+  Herdr · Herdr core · tmux · zellij
 ```
 
-Under [Variant C](./docs/deployment.md#variant-c--reverse-proxy-as-the-only-front-door-no-tailscale) a
-reverse proxy replaces the `tailscale serve` box; everything below the front door is identical.
+Under [Variant C](./docs/deployment.md#variant-c--reverse-proxy-as-the-only-front-door-no-tailscale),
+a standard reverse proxy replaces `tailscale serve`. The downstream components are unchanged.
 
-- **Only the adapter touches the multiplexer** (`bridge/mux/<name>/` — Herdr dials a Unix socket, tmux and zellij shell out to their CLIs); everything else speaks the bridge's HTTP API. What every adapter must answer is [`MUX_CONTRACT.md`](./MUX_CONTRACT.md).
-- **Polling is still the model** — the bridge takes one snapshot per tick from the adapter and the browser polls `/api/snapshot`; where the multiplexer offers an event stream (Herdr does) it only pokes the bridge's poll to go faster, it never replaces it. No resync logic.
-- **Actions are plain HTTP** — a reply or key `POST`s to `/api/pane/:id/{reply,keys}`, and the adapter types it into a real terminal (hence the security posture).
-- **The UI is a static PWA** — Vite builds `web/dist`, served from disk, so a rebuild is live with no restart.
-- **A second Collie is a peer, not a second bridge** — one machine's bridge mirrors one multiplexer, and a lead reads its peers over the crew link ([`CREW_PROTOCOL.md`](./CREW_PROTOCOL.md)).
+- **Only the adapter touches the multiplexer** (`bridge/mux/<name>/`: Herdr dials a Unix socket, tmux and zellij shell out to their CLIs); everything else speaks the bridge's HTTP API. What every adapter must answer is [`MUX_CONTRACT.md`](./MUX_CONTRACT.md).
+- **Polling is still the model.** The bridge takes one snapshot per tick from the adapter and the browser polls `/api/snapshot`; where the multiplexer offers an event stream (Herdr does) it only pokes the bridge's poll to go faster, it never replaces it. No resync logic.
+- **Actions are plain HTTP.** A reply or key `POST`s to `/api/pane/:id/{reply,keys}`, and the adapter types it into a real terminal (hence the security posture).
+- **The UI is a static PWA.** Vite builds `web/dist`, served from disk, so a rebuild is live with no restart.
+- **A second Collie is a peer, not a second bridge.** One machine's bridge mirrors one multiplexer, and a lead reads its peers over the crew link ([`CREW_PROTOCOL.md`](./CREW_PROTOCOL.md)).
 
-Full design rationale in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+Read [`ARCHITECTURE.md`](./ARCHITECTURE.md) for full design rationale.
 
 ## Developing
 
 Clone and build the repository
-([Install → the same result, from source](./docs/install.md#the-same-result-from-source)), then edit
-in place.
+([Install, the same result from source](./docs/install.md#the-same-result-from-source)), then edit
+the code.
 
 - **Every verb is implemented once, in `cli/`,** and runs as `bin/collie <verb>`
-  ([Commands](./docs/commands.md)). No other layer implements verbs. `scripts/collie-ctl.sh` is a
-  bootstrap shim that compiles the binary and passes your argv. The Herdr adapter's
-  `herdr-plugin.toml` is a thin registration file whose `[[actions]]` call that shim
-  ([Herdr actions](./docs/commands.md#herdr-actions)). Both files contain explanatory comments.
-- **Development loop asymmetry:** `web/` rebuilds appear immediately without a restart because the
-  bridge serves `web/dist` directly from disk. Changes to `bridge/` require
-  `systemctl --user restart collie`. Build, test, and versioning rules live in
-  [`CLAUDE.md`](./CLAUDE.md). Versioning is enforced by git hooks, so check the document before
-  committing.
+  ([Commands](./docs/commands.md)). `scripts/collie-ctl.sh` is a bootstrap shim that compiles the
+  binary and passes your argv. The Herdr adapter's `herdr-plugin.toml` is a thin registration file
+  whose `[[actions]]` call that shim ([Herdr actions](./docs/commands.md#herdr-actions)).
+- **Development loop:** `web/` rebuilds appear at once, because the bridge serves `web/dist` from
+  disk. Changes to `bridge/` need a restart (`systemctl --user restart collie`). Build, test and
+  versioning rules live in [`CLAUDE.md`](./CLAUDE.md), and git hooks enforce versioning, so read it
+  before you commit.
+- **Checks:** `bun run typecheck`, `bun run lint`, `bun test ./bridge ./cli ./scripts`, and in
+  `web/` `bun run typecheck` and `bun run test`. [`CONTRIBUTING.md`](./CONTRIBUTING.md) has the
+  full list.
 - **Multiplexer adapters:** [`MUX_CONTRACT.md`](./MUX_CONTRACT.md) defines the interface an adapter
   must implement, and [`MUX_CONTRIBUTING.md`](./MUX_CONTRIBUTING.md) covers the integration
   boundaries. [`ARCHITECTURE.md`](./ARCHITECTURE.md) §3 explains why Collie runs as a supervised
   service instead of an embedded pane, which keeps the Herdr manifest limited to `[[actions]]` and
-  `[[build]]`.
+  `[[build]]`. An agent program that Collie should read needs a harness profile:
+  [`HARNESS_CONTRIBUTING.md`](./HARNESS_CONTRIBUTING.md).
 - **Pull requests:** send them to this fork's `dev` branch; `main` takes only releases and docs.
   [`CONTRIBUTING.md`](./CONTRIBUTING.md) covers CI checks and version bump requirements.
 
 ### The states playground
 
-A development page that renders the web components across mock states (boot, idle, dashboard, crew,
-settings) without a running agent. This lets you inspect visual elements like banners, marks, boot
-screens, and lock states without manually reproducing each condition. Its browser tab wears a red
-icon, so it is never mistaken for a real Collie build.
+A local test page renders UI components across mock states (boot, idle, dashboard, crew,
+settings) without active agents. The tab shows a red icon to identify it as test-only.
 
 ```
 cd web && COLLIE_DEV_HOSTS=bluefin,localhost bun run playground
 ```
 
-Open `http://<host>:5199/playground.html`. Port 5199 redirects root requests to the playground and
-disables `/api`, preventing requests to a live Collie instance. Vite targets only `index.html`
-during production builds, keeping `playground.html` and `src/playground/` out of `dist` and the PWA
-precache. This exclusion is tested in `src/playground/playground-entry.test.ts`.
-
-The page is split into pages: one section is shown at a time, picked from a sidebar on wide screens
-and a top bar on narrow ones. Each section's code loads only when you open it, and only its
-components are mounted. The section lives in the URL hash, and a click pushes it, so Back returns to
-the page before. `#pane` opens the Pane section, and `#pane/<card-handle>` also scrolls that card
-into view once it mounts (the handle is the card's `data-state`, e.g. `pane-mid-tool-run`). A
-section's groups are sub-pages: the bar under its title opens one, `#changes:one-file`, and mounts
-only that group's cards. With no hash, the last section you were on is remembered (`localStorage`);
-with neither, the page opens on the first. `src/playground/layout.tsx` holds the page's layout and
-routes; `src/playground/harness.tsx` holds the routers that mount real app routes, so a section that
-needs no router never loads them.
-
-The tabs, in order: Dashboard, Pane, Crew, Settings, Boot & connection, Idle & resume, Brand,
-Notices, Motion. Notices covers everything that ANNOUNCES (the notice primitive, the strip band,
-the status toast); Motion covers everything that MOVES without announcing anything (collapse and
-swap primitives, loading bars, sheets, menus, pending and pulsing controls).
-
-A card shows its label and nothing else. Its `reach` and `note`, and a section's `intent`, appear
-only while the page's Notes switch is on (off by default, remembered in `localStorage`).
-`cd web && bun run playground:build` builds the page alone into `web/dist-playground/` (minified,
-one chunk per section, no service worker) for any static server; it never touches `dist/`.
-
-A design round that compares numbered options uses `Round` (`src/playground/round.tsx`): one Case
-switch drives every option, with Zoom, Replay and Flip.
-
-Within a tab, cards are grouped under a `Group` — a small heading over its own `.pg-grid` — ordered
-from the everyday state to the rare one, so a tab with a dozen cards can be skimmed by its group
-titles instead of scrolled blind.
-
-To add a state, add a `<Card>` to the relevant `Group` in the relevant file under
-`src/playground/sections/` and the corresponding mock data in `src/playground/fixtures.ts`. To add
-a whole new section, add a file there exporting `DEF` (a `SectionDef`) and a `<Something>Section`
-component wrapping its cards in one or more `Group`s, then add one line to the `SECTIONS` registry
-in `src/playground/app.tsx`.
+Open `http://<host>:5199/playground.html`. Port 5199 disables `/api` calls to ensure it never hits
+a live instance. `bun run playground:build` outputs the test assets to `web/dist-playground/`
+without touching `dist/`. The view shows one section at a time, tracked via the URL hash (`#pane`,
+`#pane/<card-handle>`, `#changes:one-file`). Add states by adding a `<Card>` to a `Group` in
+`web/src/playground/sections/` and mock entries to `web/src/playground/fixtures.ts`. Add sections
+by exporting `DEF` and a component from a new file, then register it in `SECTIONS` inside
+`web/src/playground/app.tsx`. Use `Round` (`web/src/playground/round.tsx`) to evaluate layout variants.
 
 For Herdr adapter development, refer to upstream documentation for the plugin system:
 [authoring](https://herdr.dev/docs/plugins/) ·
@@ -481,17 +432,27 @@ For Herdr adapter development, refer to upstream documentation for the plugin sy
 [example plugins](https://github.com/ogulcancelik/herdr-plugin-examples). Collie's socket
 integration is documented in [`HERDR_API.md`](./HERDR_API.md).
 
+## Telemetry
+
+Upstream 1.27.0 adds an anonymous daily ping ([ADR 0129](./.adr/0129-an-anonymous-install-count-on-by-default.md)); in this fork (`GGGODLIN/gaddi`) it is **off by default** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)). Nothing is sent and no install ID is created unless you opt in on a machine in Settings, System, **Telemetry**, with `COLLIE_TELEMETRY=1`, or with `telemetry = true` in `config.toml`. When enabled, once a day each bridge (one instance with its own state folder) sends one small ping to `ping.colliepwa.dev`: a random ID made on your machine, the day, the version, the OS, the CPU, the install kind, the release line (Stable or Edge) and whether the bridge runs alone, leads a crew or is a member. When a trouble card showed ("Cannot read a dialog" or "Send not landing"), it also carries a count: which card, the agent program's name and version, the multiplexer and, from 1.27.4, for a dialog a short hash of its key-hint row. No IP address is stored. No usage, no content, nothing you type or read.
+
+Turn it on or off on each machine in Settings, System, **Telemetry**, with `COLLIE_TELEMETRY=0` (in the
+instance's `.env` for a service), `telemetry = false` in `config.toml` or `DO_NOT_TRACK=1`. Blocking
+the host in your firewall works too. The update check is a separate anonymous request to GitHub's
+public tags API. [Details](./docs/security.md#what-leaves-your-machine) ·
+[exact message](./telemetry/README.md)
+
 ## See also
 
 - All how-to pages: [`docs/`](./docs/)
-- Deployment variants B through E: [`docs/deployment.md`](./docs/deployment.md)
 - Architecture and design rationale: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 - Multiplexer query interface and capabilities: [`MUX_CONTRACT.md`](./MUX_CONTRACT.md)
 - Lead-to-peer crew protocol: [`CREW_PROTOCOL.md`](./CREW_PROTOCOL.md) (topology diagram in
   [§2](./CREW_PROTOCOL.md#2-shape-of-the-thing))
 - Crew recovery from a phone after lead failure:
-  [`docs/deployment.md` → the standby door](./docs/deployment.md#the-standby-door--a-crews-failover-path)
-- Verified Herdr socket API: [`HERDR_API.md`](./HERDR_API.md)
+  [`docs/deployment.md`, the standby door](./docs/deployment.md#the-standby-door--a-crews-failover-path)
+- Verified Herdr socket API: [`HERDR_API.md`](./HERDR_API.md), and for the Herdr core
+  [`HC_API.md`](./HC_API.md)
 - Operations, versioning, and project conventions: [`CLAUDE.md`](./CLAUDE.md)
 - Contribution guidelines: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - Names, logo and forks: [`TRADEMARKS.md`](./TRADEMARKS.md)

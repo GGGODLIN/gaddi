@@ -33,6 +33,6 @@
   // `bun run typecheck` rather than a browser run five minutes later.
   // `e2e/tester-army` stays out of this project: its SDK is optional, and an ordinary install never
   // downloads it. CI typechecks that directory with its own frozen install, instead of skipping it.
-  "include": ["src", "vite.config.ts", "vite.playground.config.ts", "playwright.config.ts", "e2e", "playground-fixtures"],
+  "include": ["src", "vite.config.ts", "vite.playground.config.ts", "vite.math.ts", "playwright.config.ts", "e2e", "playground-fixtures"],
   "exclude": ["src/sw.ts", "src/stt/worker.ts", "e2e/tester-army"]
 }
