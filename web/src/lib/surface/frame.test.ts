@@ -1085,4 +1085,67 @@ describe("the draft of a soft-wrapped box joins the rows the way they were broke
     // 18 double-width characters fill 36 of the 37 cells: omp cuts the run one cell short.
     expect(draftOf([cjk.slice(0, 18), cjk.slice(18, 36), cjk.slice(36)], 40)).toBe(cjk);
   });
+
+  it("Claude background agents panel (#740): wrapped agent rows and a 9-row full panel stay named footer rows, never a checkbox modal cue", () => {
+    const claude = requireProfile("claude").idle;
+    const wrappedRows = plainRows([
+      "● Done.",
+      "",
+      "✻ Waiting for 2 background agents to finish",
+      "────────────────────────────────────────────────────────────────────────────────",
+      "❯ ",
+      "────────────────────────────────────────────────────────────────────────────────",
+      "  ⏵⏵ bypass permissions on (shift+tab to cycle) · 2 background tasks · ↓ to view",
+      "",
+      "  ● main",
+      "  ◯ general-purpose · running a very long background task that wraps",
+      "    onto the next line (12m 34s)",
+      "  ◯ general-purpose · second background worker (8m 10s)",
+      "",
+      "  ↓ to manage",
+    ]);
+    const wrappedFrame = findInputFrame(wrappedRows, claude);
+    expect(wrappedFrame?.volatile.footer).not.toBeNull();
+    expect(wrappedFrame?.volatile.named.length).toBeGreaterThanOrEqual(4);
+
+    const nineRows = plainRows([
+      "● Done.",
+      "",
+      "✻ Waiting for 7 background agents to finish",
+      "────────────────────────────────────────────────────────────────────────────────",
+      "❯ ",
+      "────────────────────────────────────────────────────────────────────────────────",
+      "  ⏵⏵ bypass permissions on (shift+tab to cycle) · 2 background tasks · ↓ to view",
+      "",
+      "  ● main",
+      "  ◯ general-purpose · worker 1",
+      "  ◯ general-purpose · worker 2",
+      "  ◯ general-purpose · worker 3",
+      "  ◯ general-purpose · worker 4",
+      "  ◯ general-purpose · worker 5",
+      "  ↓ 2 more",
+      "",
+      "  ↓ to manage",
+    ]);
+    const nineFrame = findInputFrame(nineRows, claude);
+    expect(nineFrame?.volatile.footer).not.toBeNull();
+    expect(nineFrame?.volatile.named.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("opencode 2.2.6 (#749): a boxed slash-command row above the top edge does not swallow the frame", () => {
+    const opencode = requireProfile("opencode").idle;
+    const rows = plainRows([
+      "                      ┃ /review       review changes [commit|branch|pr], defaults to uncommitte ┃",
+      "                      ┃",
+      "                      ┃  /compact",
+      "                      ┃",
+      "                      ┃  Build auto · DeepSeek V4.1 Flash OpenCode Go · high",
+      "                      ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+      "                      /tmp/opencode                             shift+tab agents  ctrl+p commands",
+    ]);
+    const frame = findInputFrame(rows, opencode);
+    expect(frame).not.toBeNull();
+    expect(frame?.top).toBe(1);
+    expect(frame?.interior.text).toBe("/compact");
+  });
 });

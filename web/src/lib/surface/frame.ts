@@ -622,9 +622,9 @@ function walkBelowNamed(texts: readonly string[], bottom: number, end: number, i
   let first = end - 1;
   while (first > bottom && (isBlank(texts[first]!) || footerRowIndex(texts[first]!, rows, 1) >= 0)) first--;
   if (first <= bottom + 1 || footerRowIndex(texts[first]!, rows, 0) !== 0 || !isBlank(texts[first - 1]!)) return plain();
-  if (end - first > below.footerMaxRows) return plain();
 
   // Down the run: each row matches an entry at or after the last one, never the first entry again.
+  // Blank separator rows inside the run do not count against `footerMaxRows` (#740).
   const named: NamedRow[] = [{ row: first, name: rows[0]!.name }];
   let at = 1;
   for (let j = first + 1; j < end; j++) {
@@ -634,6 +634,7 @@ function walkBelowNamed(texts: readonly string[], bottom: number, end: number, i
     named.push({ row: j, name: rows[k]!.name });
     at = k;
   }
+  if (named.length > below.footerMaxRows) return plain();
 
   let rest = first;
   while (rest > bottom + 1 && isBlank(texts[rest - 1]!)) rest--;

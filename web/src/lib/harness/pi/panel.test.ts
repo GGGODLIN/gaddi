@@ -151,6 +151,31 @@ describe("a cropped screen", () => {
     const [block] = piAdapter.buildBlocks(lines);
     expect(block?.kind === "raw" ? block.lines : []).toEqual(trimTrailingBlank(lines.slice(0, 13)));
   });
+
+  it("crops a Gentle Shell side rail separated by spaces from the dialog's top rule (#710)", () => {
+    const base = load("pi--v130-gentle-choice.txt").map((line) => cropLine(line, 136));
+    const rail = [
+      "  │ ⊘ task one                  │",
+      "  │   task two                  │",
+      "  │ ◔ task three                │",
+      "  │                             │",
+      "  └─────────────────────────────┘",
+    ];
+    const withRail = base.map((line, idx): StyledLine => {
+      const addon = rail[idx];
+      if (addon === undefined) return line;
+      const pad = Math.max(0, 136 - text(line).length);
+      return { segments: [...line.segments, ...parseAnsi(" ".repeat(pad) + addon)] };
+    });
+    expect(panelColumn(withRail)).toBe(136);
+    const blocks = piAdapter.buildBlocks(withRail);
+    const card = blocks.find((b) => b.kind === "prompt-select");
+    expect(card?.kind).toBe("prompt-select");
+    if (card?.kind === "prompt-select") {
+      expect(card.prompt.bindColumns).toEqual({ start: 0, end: 136 });
+      expect(card.prompt.question).toBe("Pick a color for the Collie probe");
+    }
+  });
 });
 
 describe("cropLine", () => {
