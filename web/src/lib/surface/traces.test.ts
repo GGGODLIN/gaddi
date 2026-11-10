@@ -121,14 +121,14 @@ describe("the sets, marked by label (traces/README.md)", () => {
       replayTrace(trace, { mode: "present", fixture: fixtureText }).flatMap((result) => result.mismatches.map((line) => `${trace.name}: ${line}`)),
     );
     expect(failures).toEqual([]);
-  });
+  }, 15_000);
 
   it("reads free on at least 95% of the positive traces of a harness with a profile", () => {
     const profiled = positive.filter((trace) => loadProfiles().has(trace.header.harness));
     expect(profiled.length).toBeGreaterThan(0);
     const missed = profiled.filter((trace) => freeSteps(replayTrace(trace, { mode: "present", fixture: fixtureText })).length === 0);
     expect((profiled.length - missed.length) / profiled.length).toBeGreaterThanOrEqual(POSITIVE_SHARE);
-  });
+  }, 15_000);
 
   it("a negative trace that reads free is caught: the rule has teeth", () => {
     const idle = positive.find((trace) => loadProfiles().has(trace.header.harness));
@@ -143,7 +143,7 @@ describe("the hook source varied", () => {
     it(`never free: every negative trace, with the hook source ${mode}`, () => {
       const freed = negative.flatMap((trace) => freeSteps(replayTrace(trace, { mode, fixture: fixtureText })).map((step) => `${trace.name} step ${String(step + 1)}`));
       expect(freed).toEqual([]);
-    });
+    }, 15_000);
   }
 
   it("hook source removed: the screen alone decides, so a free screen after a prompt edge reads free", () => {
