@@ -158,7 +158,8 @@ const BRAND = /\bCollie\b/g;
 // bridge sends, say): upstream's `t()` returns undefined there and the cell renders empty, and a
 // throw here would take the whole route down instead.
 function message(key: MessageKey): string {
-  return activeDictionary()[key]?.replace(BRAND, "Gaddi");
+  // A key on the pending-translation list may be missing from a bundle; it reads English alone.
+  return (activeDictionary()[key] ?? en[key])?.replace(BRAND, "Gaddi");
 }
 
 /** Translate one key into the active language, filling any `{slot}`s. */

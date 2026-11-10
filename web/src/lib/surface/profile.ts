@@ -161,6 +161,12 @@ export interface FooterRow {
   readonly name: string;
   /** A regular expression source, matched on the row with its trailing space cut. */
   readonly pattern: string;
+  /**
+   * A regular expression source for a wrapped continuation row directly under this entry (no blank row
+   * between). A continuation row joins `Frame.volatile.named` under the same `name` without counting
+   * as a separate logical entry against `footerMaxRows`. Optional.
+   */
+  readonly wrapped?: string;
 }
 
 /**
@@ -363,9 +369,26 @@ export interface FrameLayout {
    * typed with newlines then reads as the box's own lines, not as a pointed list between two rules, when
    * no row of it is an option row or a key hint and no named command list stands in
    * the box (cues.ts `draftWrap`). Muse points with `›` and `⟩` in its dialogs and keeps `❯` for its
-   * prompt (#552). pi draws its menus with the same `❯` as its prompt, so it must not name this. Optional.
+   * prompt (#552). pi draws its menus with the same `❯` as its prompt, so it must not name this; it names
+   * `draftCaret`. Optional.
    */
   readonly draftLines?: boolean;
+  /**
+   * The narrower form of `draftLines`, for a profile whose dialogs may point with the prompt glyph: true
+   * when the box's editor draws its own cursor as one reverse-video cell in the draft. A draft typed with
+   * newlines then reads as the box's own lines only while its rows hold exactly one such cell, one cell
+   * wide, and no option row, key hint or named command list (cues.ts `draftWrap`). A list a dialog draws
+   * holds no text cursor among its rows, and a highlighted row is wider than one cell. A read with no
+   * styling has no cell, so it stays a list: the safe side. pi's editor draws the cell (pi-tui
+   * `renderFakeCursor`) and an extension may put `❯` in front of it (#722). Optional.
+   */
+  readonly draftCaret?: boolean;
+  /**
+   * More placeholder shapes (`idle.placeholders.patterns`, the same plain-read-only fallback) that hold
+   * for THIS layout alone. A profile with several layouts (`idle.frameAlternates`) whose hints differ
+   * names them here, so a hint of one box never reads a draft typed in another as empty. Optional.
+   */
+  readonly placeholderPatterns?: readonly string[];
   readonly maxDraftRows: number;
   /** How many rows above the last non-blank row the bottom edge may sit (the frame module's
    *  search bound, M56 spec 03): the tallest thing the harness draws under a live box. */
@@ -799,6 +822,12 @@ export interface Profile {
      * the token as plain text. Collie's own pastes never carry the token in their text, so they pass.
      */
     readonly refuseLiteral?: boolean;
+    /**
+     * True when the `lines` group of `pattern` counts total lines rather than line breaks (opencode's
+     * `[Pasted ~N lines]` prints 1 for a single long line and 30 for 30 lines, whereas Claude Code's
+     * `+M lines` counts `\n`s). Optional: absent counts line breaks (`lines.length - 1`).
+     */
+    readonly countsLines?: boolean;
   };
   /**
    * The leads the harness reads as something other than text: a command (`/`), a shell line (`!`), or
@@ -1148,7 +1177,10 @@ function footerRows(value: JsonValue | undefined): FooterRow[] {
     names.add(name);
     const compiled = pattern(field(node, "pattern", at), `${at}.pattern`);
     if (compiled.test("")) fail(`${at}.pattern`, "must not match a blank row");
-    return { name, pattern: compiled.source };
+    if (node.wrapped === undefined) return { name, pattern: compiled.source };
+    const wrapped = pattern(node.wrapped, `${at}.wrapped`);
+    if (wrapped.test("")) fail(`${at}.wrapped`, "must not match a blank row");
+    return { name, pattern: compiled.source, wrapped: wrapped.source };
   });
 }
 
@@ -1409,7 +1441,13 @@ function parseFrame(frameNode: JsonObject): FrameLayout {
   const withIndent = frameNode.draftIndent === undefined ? withWidgets : { ...withWidgets, draftIndent: whole(frameNode.draftIndent, "idle.frame.draftIndent", 1) };
   if (frameNode.draftLines !== undefined && frameNode.draftLines !== true && frameNode.draftLines !== false) fail("idle.frame.draftLines", "must be true or false");
   const withLines = frameNode.draftLines === true ? { ...withIndent, draftLines: true } : withIndent;
-  const scrolled = frameNode.scroll === undefined ? withLines : { ...withLines, scroll: parseScroll(frameNode.scroll, maxDraftRows) };
+  if (frameNode.draftCaret !== undefined && frameNode.draftCaret !== true && frameNode.draftCaret !== false) fail("idle.frame.draftCaret", "must be true or false");
+  const withCaretCell = frameNode.draftCaret === true ? { ...withLines, draftCaret: true } : withLines;
+  const withHints =
+    frameNode.placeholderPatterns === undefined
+      ? withCaretCell
+      : { ...withCaretCell, placeholderPatterns: textList(frameNode.placeholderPatterns, "idle.frame.placeholderPatterns", 1).map((item, i) => pattern(item, `idle.frame.placeholderPatterns[${String(i)}]`).source) };
+  const scrolled = frameNode.scroll === undefined ? withHints : { ...withHints, scroll: parseScroll(frameNode.scroll, maxDraftRows) };
   const base = { ...scrolled, ...parseAnswerBox(frameNode) };
   if (walk === "edges") {
     for (const key of ["rows", "trailer", "continuation", "ownPrompt", "maxWidgetRows"] as const) {
@@ -1618,7 +1656,9 @@ export function parseProfile(raw: JsonValue): Profile {
   const collapseNode = object(field(root, "collapse", ""), "collapse");
   const collapseBase = { pattern: pattern(field(collapseNode, "pattern", "collapse"), "collapse.pattern").source };
   if (collapseNode.refuseLiteral !== undefined && collapseNode.refuseLiteral !== true && collapseNode.refuseLiteral !== false) fail("collapse.refuseLiteral", "must be true or false");
-  const collapse = collapseNode.refuseLiteral === true ? { ...collapseBase, refuseLiteral: true } : collapseBase;
+  if (collapseNode.countsLines !== undefined && collapseNode.countsLines !== true && collapseNode.countsLines !== false) fail("collapse.countsLines", "must be true or false");
+  const collapseWithRefuse = collapseNode.refuseLiteral === true ? { ...collapseBase, refuseLiteral: true } : collapseBase;
+  const collapse = collapseNode.countsLines === true ? { ...collapseWithRefuse, countsLines: true } : collapseWithRefuse;
 
   const reservedLeads = textList(field(root, "reservedLeads", ""), "reservedLeads", 1);
   let reservedLeadNotes: Readonly<Record<string, string>> | undefined;

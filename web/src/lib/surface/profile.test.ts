@@ -477,6 +477,8 @@ interface Spec14Case {
   readonly queueKey?: string;
   /** The pause after the text write the profile names (`paste.settleMs`, #507), where it names one. */
   readonly pasteSettleMs?: number;
+  /** Whether the profile sends a multi-line or long text as one whole paste (`paste.block`). */
+  readonly pasteBlock?: boolean;
 }
 
 const SPEC14_CASES: readonly Spec14Case[] = [
@@ -501,6 +503,7 @@ const SPEC14_CASES: readonly Spec14Case[] = [
     submit: ["Enter"],
     probeStatus: "provisional",
     enterWhileRunning: "queues",
+    pasteBlock: true,
   },
   {
     id: "grok",
@@ -743,7 +746,8 @@ describe.each(SPEC14_CASES)("the $id profile (M56 spec 14)", (c) => {
     expect(p.keys.queueKey).toBe(c.queueKey);
     expect(p.reservedLeads).toEqual(c.reservedLeads ?? ["/", "!", "@"]);
     expect(p.probe.char.length).toBeGreaterThan(0);
-    expect(p.paste).toEqual(c.pasteSettleMs === undefined ? { bracketed: true } : { bracketed: true, settleMs: c.pasteSettleMs });
+    const basePaste: Profile["paste"] = c.pasteSettleMs === undefined ? { bracketed: true } : { bracketed: true, settleMs: c.pasteSettleMs };
+    expect(p.paste).toEqual(c.pasteBlock === true ? { ...basePaste, block: true } : basePaste);
     expect(p.hooks).toBeDefined();
   });
 
@@ -803,6 +807,10 @@ describe("the frame schema of the interior walk (M56 spec 14)", () => {
     ["an underPainted flag with no under pattern", ["idle", "frame", "underPainted"], true, "idle.frame.underPainted"],
     ["an ownPrompt flag that is no boolean", ["idle", "frame", "ownPrompt"], "yes", "idle.frame.ownPrompt"],
     ["a draftLines flag that is no boolean", ["idle", "frame", "draftLines"], "yes", "idle.frame.draftLines"],
+    ["a draftCaret flag that is no boolean", ["idle", "frame", "draftCaret"], "yes", "idle.frame.draftCaret"],
+    ["a layout placeholder pattern list that is no list", ["idle", "frame", "placeholderPatterns"], "^Try", "idle.frame.placeholderPatterns"],
+    ["an empty layout placeholder pattern list", ["idle", "frame", "placeholderPatterns"], [], "idle.frame.placeholderPatterns"],
+    ["a layout placeholder pattern that is no expression", ["idle", "frame", "placeholderPatterns"], ["[unclosed"], "idle.frame.placeholderPatterns[0]"],
     ["a dialogsInBox flag that is no boolean", ["idle", "dialogsInBox"], "yes", "idle.dialogsInBox"],
     ["a promptEchoes flag that is no boolean", ["idle", "promptEchoes"], "yes", "idle.promptEchoes"],
     ["a placeholder prefix list that is no list", ["idle", "placeholders", "prefixes"], "Ask", "idle.placeholders.prefixes"],
@@ -877,6 +885,17 @@ describe("the frame schema of the interior walk (M56 spec 14)", () => {
       expect(read(id).frameAlternates?.every((frame) => frame.draftLines === undefined) ?? true, id).toBe(true);
     }
     expect(parseProfile(change(rawClaude(), ["idle", "frame", "draftLines"], false)).idle.frame.draftLines).toBeUndefined();
+  });
+
+  it("names the caret-proven newline draft (`draftCaret`) on pi's main frame alone (#722)", () => {
+    const read = (id: string) => parseProfile(parseJsonObject(readFileSync(join(PROFILES_DIR, `${id}.json`), "utf8"))!).idle;
+    const named = readdirSync(PROFILES_DIR)
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => file.slice(0, -".json".length))
+      .filter((id) => read(id).frame.draftCaret === true || (read(id).frameAlternates?.some((frame) => frame.draftCaret === true) ?? false));
+    expect(named).toEqual(["pi"]);
+    expect(read("pi").frameAlternates?.every((frame) => frame.draftCaret === undefined)).toBe(true);
+    expect(parseProfile(change(rawClaude(), ["idle", "frame", "draftCaret"], false)).idle.frame.draftCaret).toBeUndefined();
   });
 
   it("takes keys.interruptClearsDraft as a boolean and nothing else (M68 spec 01)", () => {

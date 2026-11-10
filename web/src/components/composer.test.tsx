@@ -17,7 +17,9 @@ import { CrewProvider } from "./crew-provider";
 import { Composer, type ComposerHandle } from "./composer";
 import { addRow, chordKey, DEFAULT_BOARD, setCell } from "@/lib/key-board";
 import { resetKeyBoard, setKeyBoard } from "@/lib/key-board-store";
-import { type PaneJob, type PaneSubagent, type ServerSummary, type TranscriptEntry } from "@/lib/types";
+import { type PaneJob, type PaneSubagent, type PinRow, type ServerSummary, type TranscriptEntry } from "@/lib/types";
+import { __resetBeltIntents, queueBeltIntent, takeBeltIntent } from "@/lib/belt-intent";
+import { paneScopeKey } from "@/lib/scope";
 import { SubagentSheetCtx, type SubagentSheetHandle, type SubagentTarget } from "./chat-cards";
 import type { Surface } from "@/lib/surface/surface";
 import { asJsonObject } from "@/lib/json";
@@ -26,7 +28,6 @@ import { beginCatchUp, endCatchUp, setLocked } from "@/lib/idle";
 import { offersFor, SEND_REASONS, type SendReason } from "@/lib/surface/send";
 import { WAY_OUT_STATES, type WayOutState } from "@/lib/way-out";
 import { wayOutCase } from "@/test/way-out-states";
-import { installFakeMediaRecorder, uninstallFakeMediaRecorder } from "@/test/media-recorder";
 import { COLLAPSE_MS } from "./ui/collapse";
 
 // M46 spec 11 turns every send off for a pane the bridge has not answered lately (lib/liveness.ts).
@@ -3377,13 +3378,10 @@ describe("Composer — the composer is one box", () => {
     // One row, no toolbar row under the field: the three are direct children of the box, in
     // reading order field, attach, action — attach next to the primary action, as it stood
     // before the one-box change.
-    // The two buttons share one always-rendered group (so stacking them is a class change, never a
-    // remount), and the group is the box's second child after the field.
-    const group = attach().parentElement!;
-    expect(group.parentElement).toBe(box);
-    expect(send.parentElement).toBe(group);
-    expect([...box.children].filter((el) => el === field() || el === group)).toEqual([field(), group]);
-    expect([...group.children].filter((el) => el === attach() || el === send)).toEqual([attach(), send]);
+    expect(attach().parentElement).toBe(box);
+    expect(send.parentElement).toBe(box);
+    const order = [...box.children].filter((el) => el === attach() || el === field() || el === send);
+    expect(order).toEqual([field(), attach(), send]);
     // The box IS the flex row, and `items-end` pins both buttons to the bottom edge while a long
     // draft grows the field upward.
     expect(box.className).toMatch(/(?:^|\s)flex(?=\s|$)/);
@@ -3453,7 +3451,7 @@ describe("Composer — the composer is one box", () => {
     expect(field().className).toMatch(/(?:^|\s)min-w-0(?=\s|$)/);
     const send = screen.getByRole("button", { name: "Send" });
     // Still in the box's one row, beside the field, after the field.
-    expect(send.parentElement!.parentElement).toBe(field().parentElement);
+    expect(send.parentElement).toBe(field().parentElement);
     expect(field().compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Nothing in the field reserves a horizontal strip for a control, so the path has the field's
     // whole width to wrap into.
@@ -4241,7 +4239,7 @@ describe("Composer — hand", () => {
   it("left: mirrors the box so Send, Attach, then the field read left to right, in the same DOM order", () => {
     renderComposer();
     const order = (el: HTMLElement) =>
-      [...el.querySelectorAll(":scope > textarea, :scope > [data-slot=composer-buttons] > button")]
+      [...el.children]
         .map((c) => c.getAttribute("aria-label") ?? c.tagName)
         .filter((n) => ["TEXTAREA", "Attach file", "Send"].includes(n));
     const right = order(box());
@@ -5696,6 +5694,113 @@ describe("Composer jobs mark and sheet (issue 670)", () => {
   });
 });
 
+describe("Composer pins mark and sheet (M90 spec 03)", () => {
+  afterEach(() => __resetBeltIntents());
+  const NOW = Date.now();
+  const ROWS: PinRow[] = [
+    { id: "p1", itemId: "t1:0", kind: "user", excerpt: "what changed today?", textLength: 19, anchor: "what changed today?", pinnedAt: NOW - 120_000 },
+    { id: "p2", itemId: "t2:1", kind: "reply", excerpt: "One commit: abc1234.", textLength: 20, anchor: "One commit", pinnedAt: NOW - 60_000 },
+  ];
+
+  /** A composer whose pins list the test can empty, the way the pane view's hook does after an Unpin. */
+  function Pinned({ onShow, onOpened }: { onShow?: (pin: PinRow) => boolean; onOpened?: () => void }) {
+    const [rows, setRows] = useState<readonly PinRow[]>(ROWS);
+    return (
+      <Composer
+        paneId="w1:p1"
+        agent="claude"
+        isShell={false}
+        gone={false}
+        readOnly={false}
+        surface={FREE}
+        text="pane output"
+        terminalDraft={null}
+        rawTerminalDraft={null}
+        prefs={{ wrap: true, fontSize: 11, draftFontSize: 14, chatFontSize: 14, fontFamily: "system", rawTerminal: false, tapToFocus: true, expandClippedReply: true, stretchText: false }}
+        display={{ open: false, onToggle: vi.fn() }}
+        onSent={vi.fn()}
+        changesPill={{ onClick: vi.fn(), label: "Files" }}
+        pins={{
+          count: rows.length,
+          rows,
+          onUnpin: (id) => setRows((held) => held.filter((row) => row.id !== id)),
+          onOpened: onOpened ?? vi.fn(),
+          onShow: onShow ?? (() => true),
+        }}
+      />
+    );
+  }
+  const mountPinned = (props: ComponentProps<typeof Pinned> = {}) =>
+    render(<RouterProvider router={createMemoryRouter([{ path: "/", element: <Pinned {...props} /> }])} />);
+
+  it("has no pins mark when the pane passes no pins, or none are left", () => {
+    renderComposer();
+    expect(document.querySelector('[data-slot="belt-pins"]')).toBeNull();
+    cleanup();
+    renderComposer({ pins: { count: 0, rows: [], onUnpin: vi.fn(), onOpened: vi.fn(), onShow: () => true } });
+    expect(document.querySelector('[data-slot="belt-pins"]')).toBeNull();
+  });
+
+  it("names the mark by the count, stands it in the fixed block left of Files, and opens the sheet with the list", async () => {
+    const user = userEvent.setup();
+    const onOpened = vi.fn();
+    mountPinned({ onOpened });
+    const mark = screen.getByRole("button", { name: "2 pinned" });
+    expect(mark).toHaveAttribute("data-slot", "belt-pins");
+    expect(mark.querySelector('[data-slot="belt-pins-count"]')!.textContent).toBe("2");
+    const scroller = document.querySelector<HTMLElement>('[data-slot="composer-controls"]')!;
+    expect(scroller.contains(mark)).toBe(false);
+    const files = screen.getByRole("button", { name: "Files" });
+    expect(Array.from(files.parentElement!.querySelectorAll("button")).map((b) => b.getAttribute("aria-label"))).toEqual(["2 pinned", "Files"]);
+    expect(onOpened).not.toHaveBeenCalled();
+
+    await user.click(mark);
+    expect(mark).toHaveAttribute("aria-expanded", "true");
+    const sheet = screen.getByRole("dialog", { name: "Pinned messages" });
+    expect(within(sheet).getByText("One commit: abc1234.")).toBeInTheDocument();
+    expect(within(sheet).getByText("what changed today?")).toBeInTheDocument();
+    expect(onOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the sheet and takes the mark away after the last Unpin", async () => {
+    const user = userEvent.setup();
+    mountPinned();
+    await user.click(screen.getByRole("button", { name: "2 pinned" }));
+    const sheet = screen.getByRole("dialog", { name: "Pinned messages" });
+    await user.click(within(sheet).getAllByRole("button", { name: "Unpin" })[0]!);
+    expect(screen.getByRole("button", { name: "1 pinned" })).toBeInTheDocument();
+    await user.click(within(screen.getByRole("dialog", { name: "Pinned messages" })).getByRole("button", { name: "Unpin" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.querySelector('[data-slot="belt-pins"]')).toBeNull());
+  });
+
+  it("moves focus to the belt when the last Unpin takes the sheet and the mark away", async () => {
+    const user = userEvent.setup();
+    mountPinned();
+    await user.click(screen.getByRole("button", { name: "2 pinned" }));
+    for (let left = 2; left > 0; left -= 1) {
+      const sheet = screen.getByRole("dialog", { name: "Pinned messages" });
+      await user.click(within(sheet).getAllByRole("button", { name: "Unpin" })[0]!);
+    }
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const belt = document.querySelector('[data-slot="composer-actions"]')!;
+    await waitFor(() => expect(belt.contains(document.activeElement)).toBe(true));
+  });
+
+  it("opens the sheet for a pins intent a column's tap left, once", async () => {
+    queueBeltIntent(paneScopeKey(undefined, "w1:p1"), { kind: "pins" });
+    mountPinned();
+    expect(await screen.findByRole("dialog", { name: "Pinned messages" })).toBeInTheDocument();
+    expect(takeBeltIntent(paneScopeKey(undefined, "w1:p1"))).toBeNull();
+  });
+
+  it("ignores a pins intent when the pane holds no pins", () => {
+    queueBeltIntent(paneScopeKey(undefined, "w1:p1"), { kind: "pins" });
+    renderComposer();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
 describe("Composer command suggestions (#458)", () => {
   beforeEach(() => __resetOperatorCommands());
   afterEach(() => __resetOperatorCommands());
@@ -5758,255 +5863,6 @@ describe("Composer command suggestions (#458)", () => {
     ).toBe("closed");
   });
 });
-
-// A TALL DRAFT STACKS THE TWO BUTTONS (ADR 0057, amended 2026-10-19). Dictate a paragraph and the
-// field is three lines of text beside a column of free space; attach moves up over the primary action
-// and the field takes the width it gave back. jsdom lays nothing out, so the field's scroll height is
-// modelled here: a line holds NARROW characters beside two buttons and WIDE beside one (the column
-// is 40px narrower than the row, about five characters of this face). What each assertion stops is
-// named at it.
-describe("Composer — a tall draft stacks attach over the primary action", () => {
-  const NARROW = 28;
-  const WIDE = 33;
-  const LINE = 24;
-  const PADDING = 12;
-  const field = () => {
-    const el = screen.getByPlaceholderText(/type a reply/i);
-    if (!(el instanceof HTMLTextAreaElement)) throw new Error("the composer's field is a textarea");
-    return el;
-  };
-  const group = () => document.querySelector<HTMLElement>('[data-slot="composer-buttons"]')!;
-  const stackedNow = () => group()?.dataset.stacked === "true";
-  const linesOf = (text: string, perLine: number) =>
-    Math.max(1, text.split("\n").reduce((sum, row) => sum + Math.max(1, Math.ceil(row.length / perLine)), 0));
-  const draft = (lines: number) => "x".repeat(NARROW * (lines - 1) + 1);
-
-  beforeEach(() => {
-    __resetOperatorCommands();
-    Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
-      configurable: true,
-      get(this: HTMLTextAreaElement) {
-        const wide = this.parentElement?.querySelector<HTMLElement>('[data-slot="composer-buttons"]')?.dataset.stacked === "true";
-        return linesOf(this.value, wide ? WIDE : NARROW) * LINE + PADDING;
-      },
-    });
-  });
-
-  afterEach(() => {
-    __resetOperatorCommands();
-    uninstallFakeMediaRecorder();
-    Reflect.deleteProperty(HTMLTextAreaElement.prototype, "scrollHeight");
-  });
-
-  /** The composer, its field wearing the line height and padding the stylesheet gives it (jsdom has no stylesheet). */
-  function renderStyled(overrides: Partial<ComponentProps<typeof Composer>> = {}) {
-    const props = renderComposer(overrides);
-    field().style.lineHeight = `${LINE}px`;
-    field().style.paddingTop = `${PADDING / 2}px`;
-    field().style.paddingBottom = `${PADDING / 2}px`;
-    return props;
-  }
-
-  /** Every change of the group's layout from here on, in order. */
-  function watchLayout(): boolean[] {
-    const seen: boolean[] = [];
-    new MutationObserver(() => seen.push(stackedNow())).observe(group(), { attributes: true, attributeFilter: ["data-stacked"] });
-    return seen;
-  }
-
-  it("keeps the empty box, one line and two lines in the row, exactly the one-row box it was", () => {
-    renderStyled();
-    expect(stackedNow()).toBe(false);
-    expect(group().className).toMatch(/(?:^|\s)items-end(?=\s|$)/);
-    expect(group().className).not.toMatch(/flex-col/);
-    for (const lines of [1, 2]) {
-      fireEvent.change(field(), { target: { value: draft(lines) } });
-      expect(stackedNow()).toBe(false);
-    }
-  });
-
-  it("stacks at three lines: a column, attach over the primary action, bottom-pinned", async () => {
-    renderStyled();
-    fireEvent.change(field(), { target: { value: draft(3) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    expect(group().className).toMatch(/(?:^|\s)flex-col(?=\s|$)/);
-    expect(group().className).toMatch(/(?:^|\s)self-end(?=\s|$)/);
-    // 36px faces whose 4px reaches meet in the middle of the gap, and cross nowhere.
-    expect(group().className).toMatch(/(?:^|\s)gap-2(?=\s|$)/);
-    const buttons = [...group().querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
-    expect(buttons).toEqual(["Attach file", "Send"]);
-  });
-
-  it("only restyles: the field and both buttons are the same nodes, and the caret stays, across the toggle", async () => {
-    renderStyled();
-    const before = field();
-    const beforeAttach = screen.getByRole("button", { name: "Attach file" });
-    field().focus();
-    fireEvent.change(field(), { target: { value: "ab" } });
-    const beforeSend = screen.getByRole("button", { name: "Send" });
-    field().setSelectionRange(1, 1);
-
-    fireEvent.change(field(), { target: { value: draft(3) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-
-    expect(field()).toBe(before);
-    expect(screen.getByRole("button", { name: "Attach file" })).toBe(beforeAttach);
-    expect(screen.getByRole("button", { name: "Send" })).toBe(beforeSend);
-    expect(document.activeElement).toBe(field());
-  });
-
-  it("cannot flicker: growing one character at a time across the boundary changes the layout once", async () => {
-    renderStyled();
-    const seen = watchLayout();
-    let value = "";
-    for (let i = 0; i < NARROW * 5; i++) {
-      value += "x";
-      fireEvent.change(field(), { target: { value } });
-    }
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    // Stacking made the field wider, so the same text wraps to two lines at the boundary. It stays
-    // stacked: a flip-flop would show here as more than one record.
-    expect(linesOf(value.slice(0, NARROW * 2 + 1), WIDE)).toBe(2);
-    expect(seen).toEqual([true]);
-  });
-
-  it("cannot flicker: shrinking one character at a time back through the boundary changes the layout once, at one line", async () => {
-    renderStyled();
-    let value = draft(5);
-    fireEvent.change(field(), { target: { value } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    const seen = watchLayout();
-    const leftAt: number[] = [];
-    while (value.length > 0) {
-      value = value.slice(0, -1);
-      fireEvent.change(field(), { target: { value } });
-      if (!stackedNow() && leftAt.length === 0) leftAt.push(value.length);
-    }
-    await waitFor(() => expect(stackedNow()).toBe(false));
-    expect(seen).toEqual([false]);
-    // It let go only once the draft read one line at the stacked width, and that is a draft that
-    // cannot reach three lines at the narrow one.
-    expect(linesOf("x".repeat(leftAt[0]!), WIDE)).toBeLessThanOrEqual(1);
-    expect(linesOf("x".repeat(leftAt[0]!), NARROW)).toBeLessThan(3);
-  });
-
-  it("a draft at the field's cap, scrolling inside itself, stays stacked", async () => {
-    renderStyled();
-    fireEvent.change(field(), { target: { value: draft(40) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    fireEvent.change(field(), { target: { value: draft(41) } });
-    expect(stackedNow()).toBe(true);
-  });
-
-  it("an explicit newline counts as a line: three short rows stack", async () => {
-    renderStyled();
-    fireEvent.change(field(), { target: { value: "one\ntwo\nthree" } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-  });
-
-  it("clearing the draft (as a send does) puts the buttons back in the row", async () => {
-    renderStyled();
-    fireEvent.change(field(), { target: { value: draft(4) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    fireEvent.change(field(), { target: { value: "" } });
-    await waitFor(() => expect(stackedNow()).toBe(false));
-  });
-
-  it("left: the row reverses with the box, and the column has no sides to reverse", async () => {
-    renderStyled({ hand: "left" });
-    expect(group().className).toMatch(/(?:^|\s)flex-row-reverse(?=\s|$)/);
-    fireEvent.change(field(), { target: { value: draft(3) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    expect(group().className).not.toMatch(/flex-row-reverse/);
-    expect(group().className).toMatch(/(?:^|\s)flex-col(?=\s|$)/);
-  });
-
-  it("Ctrl+Enter still sends from a stacked composer", async () => {
-    const props = renderStyled();
-    fireEvent.change(field(), { target: { value: draft(3) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    fireEvent.keyDown(field(), { key: "Enter", ctrlKey: true });
-    await waitFor(() => expect(props.onSent).toHaveBeenCalled());
-  });
-
-  it("does not stack while a wide text button stands in the primary slot (Answer the dialog or Really send?)", async () => {
-    const user = userEvent.setup();
-    renderStyled({ surface: ASK_MENU });
-    fireEvent.change(field(), { target: { value: draft(4) } });
-    expect(screen.getByRole("button", { name: "Answer the dialog" })).toBeInTheDocument();
-    expect(stackedNow()).toBe(false);
-    cleanup();
-
-    renderStyled();
-    fireEvent.change(field(), { target: { value: `rm -rf build\n${draft(3)}` } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    await user.click(screen.getByRole("button", { name: "Send" }));
-    expect(screen.getByRole("button", { name: "Really send?" })).toBeInTheDocument();
-    expect(stackedNow()).toBe(false);
-  });
-
-  it("waits until five lines to stack when the draft microphone is shown, avoiding a +40px jump at three lines", async () => {
-    installFakeMediaRecorder();
-    server.use(
-      http.get("/api/config", () =>
-        HttpResponse.json({
-          push: false,
-          vapidPublicKey: "",
-          stt: { provider: "openai-compatible", available: true },
-        }),
-      ),
-    );
-    renderStyled();
-    await screen.findByRole("button", { name: /record a voice message/i });
-
-    // At 3 and 4 lines, three stacked buttons (124px) would exceed the field's height (84px / 108px)
-    // and jump the box taller, so the group stays in the row until 5 lines (132px).
-    for (const lines of [3, 4]) {
-      fireEvent.change(field(), { target: { value: draft(lines) } });
-      expect(document.querySelector('[data-slot="composer-mic-draft"]')).not.toBeNull();
-      expect(stackedNow()).toBe(false);
-    }
-
-    fireEvent.change(field(), { target: { value: draft(5) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-    const buttons = [...group().querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
-    expect(buttons).toEqual(["Attach file", "Record a voice message", "Send"]);
-  });
-
-  it("un-stacks a 3-line draft when the draft microphone arrives asynchronously from /api/config", async () => {
-    installFakeMediaRecorder();
-    let releaseConfig: () => void = () => {};
-    server.use(
-      http.get("/api/config", async () => {
-        await new Promise<void>((resolve) => {
-          releaseConfig = resolve;
-        });
-        return HttpResponse.json({
-          push: false,
-          vapidPublicKey: "",
-          stt: { provider: "openai-compatible", available: true },
-        });
-      }),
-    );
-    renderStyled();
-
-    // Before /api/config resolves, only 2 buttons are shown, so a 3-line draft stacks at 80px.
-    fireEvent.change(field(), { target: { value: draft(3) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-
-    // When /api/config resolves and the draft microphone appears (raising stackAt to 5), the 3-line
-    // draft un-stacks back into the row so the 124px 3-button column does not jump the box taller.
-    act(() => releaseConfig());
-    await screen.findByRole("button", { name: /record a voice message/i });
-    await waitFor(() => expect(stackedNow()).toBe(false));
-
-    // Extending the draft to 5 lines stacks all three buttons cleanly.
-    fireEvent.change(field(), { target: { value: draft(5) } });
-    await waitFor(() => expect(stackedNow()).toBe(true));
-  });
-});
-
-
 
 describe("Composer — known launch startup send-lock", () => {
   it("keeps a local draft editable and blocks button, keyboard and Quick without a request", async () => {

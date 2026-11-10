@@ -59,7 +59,11 @@ unset "${!GIT_@}" 2>/dev/null || true
 # here while Linux CI stayed green, and every push became a question of whether to skip. Point the
 # suites at the same folder by its real path; on Linux this resolves to what it already was.
 if tmp_real="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)"; then
-  export TMPDIR="$tmp_real/"
+  if [ "${#tmp_real}" -gt 40 ] && [ -d /private/tmp ] && [ -w /private/tmp ]; then
+    export TMPDIR="/private/tmp/"
+  else
+    export TMPDIR="$tmp_real/"
+  fi
 fi
 
 # ── Typecheck (the Vite build does NOT typecheck; catch it before it ships) ──

@@ -1,85 +1,60 @@
+// generated: sha256=8fa8112af3e93d80ac1c517373d73d05abb22978c7355375ed03b9f1fca3b7d8 from=gaddi-mark-art.ts
 // The Gaddi mark: the pixel-art head of a Gaddi dog. Fork-only (FORK.md, "Gaddi brand"): upstream's
 // generated orbit mark is ColliePWA's logo, which its TRADEMARKS.md keeps out of a fork.
 //
 //   <CollieMark size={132} />                            the mark
-//   <CollieMark size={132} loading />                    while something is fetching
+//   <CollieMark size={132} state="loading" />            while something is fetching
 //   <CollieMark size={40} weight="header" />             below about 80px
 //
-// The component keeps upstream's name and props so the hosts (header, splash, idle lock, tour) and
-// their tests stay as they are. What they read is unchanged: `cm-live` on the root while loading,
-// and the per-instance CSS custom properties on the element.
+// Implements mark-contract.ts so every host (header, splash, idle lock, tour, theme preview) and
+// the mark conformance suite drive it through the same props, CSS variables and imperative handle.
 //
 // LOADING IS A COLOUR AS WELL AS A MOVE. The head trots (a short hop) and its outline takes the
-// accent colour. Under `prefers-reduced-motion` the hop stops and the colour still says "working".
-//
-// The outline is drawn on every weight: the head is dark brown, and without it a dark page swallows
-// the silhouette.
+// accent or forced bead colour. Under `prefers-reduced-motion` the hop stops and the colour still
+// says what state the mark is in.
 
-import type { CSSProperties } from "react";
+import { useMemo } from "react";
 
 import { GADDI_HEAD, GADDI_OUTLINE, GADDI_VIEW } from "./gaddi-mark-art";
+import { MARK_STYLE, useMark, type MarkProps, type MarkSpec } from "./mark-contract";
 
 // A <style> inside an inline SVG is document-scoped, so the rules are shared by every instance and
 // everything that varies per instance is a custom property on the element.
 const STYLE =
-  "@keyframes gm-trot{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}" +
-  ".cm-live .gm-head{animation:gm-trot .45s steps(2) infinite}" +
-  ".gm-line{fill:var(--cm-a1)}" +
-  "@media (prefers-reduced-motion:reduce){.cm-live .gm-head{animation:none}}";
+  MARK_STYLE +
+  "@keyframes cm-trot{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}" +
+  ".cm-live .cm-head,.cm-drift .cm-head{animation:cm-trot var(--cm-turn) steps(2) infinite}" +
+  ".cm-line{fill:var(--mark-bead-0, var(--mark-bead, var(--cm-a1, var(--mark-ink, currentColor))))}" +
+  "@media (prefers-reduced-motion:reduce){.cm-head{animation:none!important}}";
 
-const vars = (loading: boolean, paper: string): CSSProperties => {
-  const set = {
-    "--cm-a1": loading ? "oklch(0.68 0 0)" : "oklch(0.96 0 0)",
-    "--cm-paper": paper,
-  };
-  // SAFETY: every key is a CSS custom property and every value is a string. React passes unknown
-  // style keys straight through to the DOM, so they are used exactly as written. The cast exists
-  // only because CSSProperties has no index signature for `--*`; it widens nothing.
-  return set as CSSProperties;
+const MARKUP = `<g shape-rendering="crispEdges"><g class="cm-line">${GADDI_OUTLINE}</g><g class="cm-head">${GADDI_HEAD}</g></g>`;
+
+const VIEW = { full: GADDI_VIEW, header: "0 4 60 52" };
+
+const SPEC: MarkSpec = {
+  id: "collie",
+  beads: 8,
+  paced: /^cm-/,
+  liveClass: "cm-live",
+  look: {
+    rest: { "--cm-a1": "oklch(0.96 0 0)", "--cm-a2": "oklch(0.82 0 0)" },
+    live: { "--cm-a1": "oklch(0.68 0 0)", "--cm-a2": "oklch(0.58 0 0)" },
+  },
+  accents: ["--cm-a1", "--cm-a2"],
+  turnVar: "--cm-turn",
+  paperVar: "--cm-paper",
+  view: VIEW,
 };
 
-const BODY = { __html: `<g class="gm-line">${GADDI_OUTLINE}</g><g class="gm-head">${GADDI_HEAD}</g>` };
+export type CollieMarkProps = MarkProps;
 
-export interface CollieMarkProps {
-  /** Rendered width and height, in pixels. */
-  size?: number;
-  /** While something is fetching: the head trots and its outline takes the accent colour. */
-  loading?: boolean;
-  /**
-   * Whatever the mark is sitting on. The pixel head has no knockout, so nothing paints with it; it
-   * is kept on the element because the hosts still name their surface through it.
-   */
-  paper?: string;
-  /** An accessible name. Without one the mark is decorative and hidden from assistive tech. */
-  title?: string;
-  /** Forwarded to the element. The mark is often muted or dimmed by its host. */
-  className?: string;
-  /** Kept for the hosts' call sites: the pixel head reads the same at every size. */
-  weight?: "full" | "header";
-}
-
-export function CollieMark({
-  size = 32,
-  loading = false,
-  paper = "var(--background)",
-  title,
-  className,
-}: CollieMarkProps) {
-  const live = loading ? "cm-live" : "";
-  const classes = className === undefined ? live || undefined : (live + " " + className).trim();
+export function CollieMark(props: CollieMarkProps) {
+  const m = useMark(SPEC, props);
+  const body = useMemo(() => ({ __html: MARKUP }), []);
   return (
-    <svg
-      width={size}
-      height={size}
-      className={classes}
-      viewBox={GADDI_VIEW}
-      shapeRendering="crispEdges"
-      role={title === undefined ? "presentation" : "img"}
-      aria-label={title}
-      style={{ display: "block", flex: "none", ...vars(loading, paper) }}
-    >
+    <svg {...m.root}>
       <style>{STYLE}</style>
-      <g dangerouslySetInnerHTML={BODY} />
+      <g className={m.live ? undefined : "cm-drift"} dangerouslySetInnerHTML={body} />
     </svg>
   );
 }

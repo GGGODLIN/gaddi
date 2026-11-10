@@ -16,6 +16,9 @@ async function select(page: Page, from: string, fromOffset: number, to: string) 
       const first = nodes.find((n) => n.textContent?.includes(start));
       const last = nodes.find((n) => n.textContent?.includes(end));
       if (first === undefined || last === undefined) throw new Error(`no text node for ${start} / ${end}`);
+      // On a touch screen a pinnable block has `user-select: none` until Select text sets `data-selectable`.
+      first.parentElement?.closest("[data-block]")?.setAttribute("data-selectable", "");
+      last.parentElement?.closest("[data-block]")?.setAttribute("data-selectable", "");
       const range = document.createRange();
       range.setStart(first, offset);
       range.setEnd(last, last.textContent?.length ?? 0);
@@ -42,6 +45,9 @@ test.beforeEach(async ({ page }) => {
 test("a selection across a reply's paragraphs and list lands in the draft as one quote", async ({ page }) => {
   const quote = page.getByRole("button", { name: "Quote" });
   await expect(quote).toHaveCount(0);
+  await page.getByText("The first paragraph explains the plan.").click();
+  await page.getByRole("button", { name: "Message actions" }).nth(1).click();
+  await page.getByRole("button", { name: "Select text", exact: true }).click();
   await select(page, "The first paragraph", 4, "one bullet");
   await quote.click();
   const box = page.getByRole("textbox").last();

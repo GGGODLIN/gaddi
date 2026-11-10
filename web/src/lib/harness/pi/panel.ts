@@ -49,9 +49,9 @@ import { keyHintPairs, listDialogHint } from "./footer";
 
 /** How far up from the tail a sign is looked for: the reader's own bound on a dialog. */
 const MAX_SCAN_ROWS = 200;
-/** A rule run, then text with no space between. A box glyph after the run is a table, not a panel. */
-const BARE_SIGN = /^(─{8,})(?=[^\s─-╿])/;
-const LABELLED_SIGN = /^(─{2,} \S.*? ─{3,})(?=[^\s─-╿])/;
+/** A rule run, then text with no space between, or two or more spaces before a side-rail border (#710). A box glyph right after the run is a table, not a panel. */
+const BARE_SIGN = /^(─{8,})(?:(?=[^\s─-╿])| {2,}(?=[│┌└]))/;
+const LABELLED_SIGN = /^(─{2,} \S.*? ─{3,})(?:(?=[^\s─-╿])| {2,}(?=[│┌└]))/;
 /** Sign (b): a row padded with at least two spaces up to column W, then text. */
 const PADDED_TO_EDGE = / {2}$/;
 /** The rule run a row opens with: labelled (a running turn's) or bare. */
