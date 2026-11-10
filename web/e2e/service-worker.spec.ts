@@ -109,7 +109,7 @@ const BAND = en["pwa.updateAvailable"];
  *  tap, it changes its words: a download the operator can see is a download they wait out. */
 const DOWNLOADING = en["pwa.updateInstalling"];
 /** The header mark's accessible name while the app updates (2026-11-06). */
-const MARK_UPDATING = en["nav.home.aria.updating"];
+const MARK_UPDATING = t("nav.home.aria.updating");
 
 /** Where the reload counter lives. Read back after a navigation, so `sessionStorage`, not a variable. */
 const RELOADS_KEY = "e2e:reloads";

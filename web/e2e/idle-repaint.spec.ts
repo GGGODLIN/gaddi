@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { en } from "@/lib/i18n/messages/en";
+import { t } from "@/lib/i18n";
 import { MARKS } from "@/lib/mark-ids";
 import type { AgentView, PaneChatResponse, SnapshotResponse } from "@/lib/types";
 import { FIXTURE_CHAT_GEN, FIXTURE_SEQ_BASE, fixtureAgents, fixtureShellPanes, fixtureSnapshot, fixtureTranscript } from "@/test/handlers";
@@ -45,7 +45,7 @@ for (const { id } of MARKS) {
     );
     await installApiStub(page);
     await page.goto("/");
-    const mark = page.getByRole("button", { name: en["nav.home.aria.default"] }).locator(`svg[data-mark="${id}"]`);
+    const mark = page.getByRole("button", { name: t("nav.home.aria.default") }).locator(`svg[data-mark="${id}"]`);
     await expect(mark).toHaveAttribute("data-state", "rest");
     // The load itself may turn the mark (a route loader is work the operator waits on), and a mark
     // that leaves a live state finishes its lap first, up to one live turn. Then nothing runs.
@@ -68,7 +68,7 @@ test("a dashboard at rest runs no animation at all", async ({ page }) => {
   await pinLocale(page, "en");
   await installApiStub(page);
   await page.goto("/");
-  const mark = page.getByRole("button", { name: en["nav.home.aria.default"] }).locator("svg[data-mark]");
+  const mark = page.getByRole("button", { name: t("nav.home.aria.default") }).locator("svg[data-mark]");
   await expect(mark).toHaveAttribute("data-rest", "", { timeout: 5000 });
   await expect.poll(() => runningOnPage(page)).toEqual([]);
 });

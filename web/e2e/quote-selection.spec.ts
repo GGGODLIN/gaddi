@@ -46,7 +46,7 @@ test("a selection across a reply's paragraphs and list lands in the draft as one
   const quote = page.getByRole("button", { name: "Quote" });
   await expect(quote).toHaveCount(0);
   await page.getByText("The first paragraph explains the plan.").click();
-  await page.getByRole("button", { name: "More actions" }).first().click();
+  await page.getByRole("button", { name: "Message actions" }).nth(1).click();
   await page.getByRole("button", { name: "Select text", exact: true }).click();
   await select(page, "The first paragraph", 4, "one bullet");
   await quote.click();
