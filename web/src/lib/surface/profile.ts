@@ -227,6 +227,21 @@ export interface CommandListRows {
    */
   readonly pointerBold?: boolean;
   /**
+   * The highlighted entry carries no pointer glyph: it is the one entry-shaped row whose command
+   * stands on a background other than the box's own fill (what the box's top edge row paints in the
+   * column where the command starts), and `pointer` then names the same shape as `entry`. Every other
+   * entry sits on that fill. A read with no styled rows at hand finds no pointer, and one with more
+   * than one entry off the fill finds no list. Never with `pointerBold`. Optional.
+   */
+  readonly pointerFill?: boolean;
+  /**
+   * The list is drawn in the box's own edge run, right over its top edge: its rows carry the box's
+   * edge glyph, so the interior walk (`idle.frame.walk`) ends at the list's lowest entry and the top
+   * edge is the row under it. A command is then pressed over such a list only when the list's pointer
+   * is read and rests on the typed command. Needs the side `above`. Optional.
+   */
+  readonly inEdgeRun?: boolean;
+  /**
    * The harness paints a bracketed argument hint (` [<model-id>]`) after a complete command in
    * the box, in the bottom rule's colour, and takes it away the moment an argument is typed: it
    * is no draft text, so the frame leaves it out of the draft it reads. Only a trailing bracketed
@@ -822,12 +837,6 @@ export interface Profile {
      * the token as plain text. Collie's own pastes never carry the token in their text, so they pass.
      */
     readonly refuseLiteral?: boolean;
-    /**
-     * True when the `lines` group of `pattern` counts total lines rather than line breaks (opencode's
-     * `[Pasted ~N lines]` prints 1 for a single long line and 30 for 30 lines, whereas Claude Code's
-     * `+M lines` counts `\n`s). Optional: absent counts line breaks (`lines.length - 1`).
-     */
-    readonly countsLines?: boolean;
   };
   /**
    * The leads the harness reads as something other than text: a command (`/`), a shell line (`!`), or
@@ -859,11 +868,19 @@ export interface Profile {
     readonly settleMs?: number;
     /**
      * The harness takes ONE bracketed paste of a whole multi-line text and folds a long one into its
-     * collapse form, whose `lines` group counts the paste's line breaks. Measured per harness in the
-     * lab: where it is true and the multiplexer frames a paste itself (`pasteBlock`), a send is one
-     * paste instead of a write per line, so a long dictation never grows the box past the screen.
+     * collapse form, whose `lines` group counts the paste's lines as {@link foldLines} says. Measured
+     * per harness in the lab: where it is true and the multiplexer frames a paste itself (`pasteBlock`),
+     * a send is one paste instead of a write per line, so a long dictation never grows the box past the
+     * screen.
      */
     readonly block?: boolean;
+    /**
+     * What the collapse form's `lines` group counts on a whole paste (`block`): the line breaks
+     * (`breaks`, Claude Code 2.1.304: 30 lines fold to `+29 lines`) or the lines (`lines`, opencode
+     * 1.19.5 and 2.2.6: 30 lines fold to `[Pasted ~30 lines]`, one long line to `~1`). Optional, and
+     * only with `block`: absent reads `breaks`.
+     */
+    readonly foldLines?: "breaks" | "lines";
     /**
      * The token the harness draws for an image file it takes off a whole-text paste, as a regular
      * expression source (Claude Code: `[Image #N]`). Optional, and only with `block`: without it, a
@@ -1226,11 +1243,17 @@ function commandList(value: JsonValue | undefined): CommandListRows {
   if (node.leadOpens !== undefined && node.leadOpens !== true && node.leadOpens !== false) fail(`${path}.leadOpens`, "must be true or false");
   if (node.leadOpens === true && (node.lead === undefined || node.lead === "")) fail(`${path}.leadOpens`, "needs a lead");
   if (node.staleWhenEmpty !== undefined && node.staleWhenEmpty !== true && node.staleWhenEmpty !== false) fail(`${path}.staleWhenEmpty`, "must be true or false");
+  if (node.pointerFill !== undefined && node.pointerFill !== true && node.pointerFill !== false) fail(`${path}.pointerFill`, "must be true or false");
+  if (node.pointerFill === true && node.pointerBold === true) fail(`${path}.pointerFill`, "cannot go with pointerBold");
+  if (node.inEdgeRun !== undefined && node.inEdgeRun !== true && node.inEdgeRun !== false) fail(`${path}.inEdgeRun`, "must be true or false");
+  if (node.inEdgeRun === true && !(withSides.sides ?? ["under", "above"]).includes("above")) fail(`${path}.inEdgeRun`, 'needs the side "above"');
   const withPointerBold = node.pointerBold === true ? { ...withNamespaces, pointerBold: true } : withNamespaces;
   const withArgumentHint = node.argumentHint === true ? { ...withPointerBold, argumentHint: true } : withPointerBold;
   const withArgumentList = node.argumentList === true ? { ...withArgumentHint, argumentList: true } : withArgumentHint;
   const withLeadOpens = node.leadOpens === true ? { ...withArgumentList, leadOpens: true } : withArgumentList;
-  const withStale = node.staleWhenEmpty === true ? { ...withLeadOpens, staleWhenEmpty: true } : withLeadOpens;
+  const withStaleOnly = node.staleWhenEmpty === true ? { ...withLeadOpens, staleWhenEmpty: true } : withLeadOpens;
+  const withFill = node.pointerFill === true ? { ...withStaleOnly, pointerFill: true } : withStaleOnly;
+  const withStale = node.inEdgeRun === true ? { ...withFill, inEdgeRun: true } : withFill;
   if (node.notForText === undefined) return withStale;
   const notFor = pattern(node.notForText, `${path}.notForText`);
   if (notFor.test("")) fail(`${path}.notForText`, "must not match an empty text");
@@ -1656,9 +1679,7 @@ export function parseProfile(raw: JsonValue): Profile {
   const collapseNode = object(field(root, "collapse", ""), "collapse");
   const collapseBase = { pattern: pattern(field(collapseNode, "pattern", "collapse"), "collapse.pattern").source };
   if (collapseNode.refuseLiteral !== undefined && collapseNode.refuseLiteral !== true && collapseNode.refuseLiteral !== false) fail("collapse.refuseLiteral", "must be true or false");
-  if (collapseNode.countsLines !== undefined && collapseNode.countsLines !== true && collapseNode.countsLines !== false) fail("collapse.countsLines", "must be true or false");
-  const collapseWithRefuse = collapseNode.refuseLiteral === true ? { ...collapseBase, refuseLiteral: true } : collapseBase;
-  const collapse = collapseNode.countsLines === true ? { ...collapseWithRefuse, countsLines: true } : collapseWithRefuse;
+  const collapse = collapseNode.refuseLiteral === true ? { ...collapseBase, refuseLiteral: true } : collapseBase;
 
   const reservedLeads = textList(field(root, "reservedLeads", ""), "reservedLeads", 1);
   let reservedLeadNotes: Readonly<Record<string, string>> | undefined;
@@ -1710,6 +1731,12 @@ export function parseProfile(raw: JsonValue): Profile {
     if (block === true && bracketed !== true) fail("paste.block", "needs paste.bracketed");
     paste = settleMs === undefined ? { bracketed: bracketed === true } : { bracketed: bracketed === true, settleMs };
     if (block === true) paste = { ...paste, block: true };
+    const foldLines = pasteNode.foldLines;
+    if (foldLines !== undefined) {
+      if (foldLines !== "breaks" && foldLines !== "lines") fail("paste.foldLines", 'must be "breaks" or "lines"');
+      if (block !== true) fail("paste.foldLines", "needs paste.block");
+      paste = { ...paste, foldLines };
+    }
     if (pasteNode.image !== undefined) {
       if (block !== true) fail("paste.image", "needs paste.block");
       paste = { ...paste, image: pattern(pasteNode.image, "paste.image").source };
