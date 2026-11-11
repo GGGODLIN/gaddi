@@ -129,7 +129,7 @@ describe("the Windows check runs the flake's Bun", () => {
   test("windows-suites.ps1 gives each suite its own skip budget, each skip named", () => {
     const script = readFileSync(join(ROOT, "scripts", "windows-suites.ps1"), "utf8");
     const budget = (suite: string): number => Number(new RegExp(`\\[int\\]\\$MaxSkips${suite} = (\\d+)`).exec(script)?.[1] ?? Number.NaN);
-    expect([budget("Bridge"), budget("Cli"), budget("Scripts")]).toEqual([115, 63, 35]);
+    expect([budget("Bridge"), budget("Cli"), budget("Scripts")]).toEqual([115, 66, 35]);
     // The scripts allowance includes the pre-push describe's tests and hooks; Bun counts both.
     const prePush = readFileSync(join(ROOT, "scripts", "pre-push.test.ts"), "utf8");
     const prePushTests = [...prePush.matchAll(/^\s*test\("/gm)].length;
@@ -190,9 +190,9 @@ describe("the Windows check runs the flake's Bun", () => {
     expect(script).toContain("protocol.unstyled.test.ts");
     expect(budget("Bridge")).toBe(posixOnly.length + 1 + etcLinks.length + holdSocket.length + walkySkips.length + siblingSkips.length + telemetrySkips.length + 30 + 10 + 36 + boundedRunSkips.length + 1 + 2 + rawEnterSkips + fakeGitSkips.length + offPathSkips);
     // The cli allowance adds the three real runs of the POSIX install leg a crew member runs, and the
-    // 41 tests of cli/walky.test.ts that talk to a real walky socket (`socketTest`).
+    // 42 tests of cli/walky.test.ts that talk to a real walky socket (`socketTest`).
     const walkySocketTests = readFileSync(join(ROOT, "cli", "walky.test.ts"), "utf8").match(/^ {2}socketTest\(/gm) ?? [];
-    expect(walkySocketTests).toHaveLength(41);
+    expect(walkySocketTests).toHaveLength(42);
     // The statusLine wrapper's "runShell stops the whole command" block (3 tests) is skipped off Linux.
     expect(readFileSync(join(ROOT, "cli", "statusline.test.ts"), "utf8")).toContain('describe.skipIf(process.platform !== "linux")("runShell stops the whole command"');
     expect(script).toContain("runShell stops the whole command");
@@ -204,7 +204,11 @@ describe("the Windows check runs the flake's Bun", () => {
     const hcProbe = "the real probe on an hc-only home reports the core and Gaddi's own config dir";
     expect(readFileSync(join(ROOT, "cli", "remote.test.ts"), "utf8")).toContain(hcProbe);
     expect(script).toContain(hcProbe);
-    expect(budget("Cli")).toBe(sysSkips.length + 1 + 12 + 3 + walkySocketTests.length + 3 + 1);
+    // The probe's dirty check runs the same POSIX probe with /bin/sh against a real git checkout: 2 tests.
+    const dirtyProbe = "the probe's dirty check, run for real";
+    expect(readFileSync(join(ROOT, "cli", "remote.test.ts"), "utf8")).toContain(`("${dirtyProbe}"`);
+    expect(script).toContain(dirtyProbe);
+    expect(budget("Cli")).toBe(sysSkips.length + 1 + 12 + 3 + walkySocketTests.length + 3 + 1 + 2);
     for (const name of posixOnly) expect(script).toContain(name);
     expect(script).toContain("a 13 s WAV becomes text through a real child of this Collie");
     expect(script).toContain("a child of this checkout's CLI turns 10.4 s of speech into text");
