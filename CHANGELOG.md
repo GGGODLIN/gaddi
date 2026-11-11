@@ -39,6 +39,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **pi's question cards and permission prompts read on pi's default theme.** On that theme the footer rows of pi's dialogs are only faint, and Collie did not see the dialog; now it does, and the card shows. Thanks @mithyer (#726).
 - **omp 18.18's batched questions show their answer buttons again.** With omp 18.18, a batch of questions moved its current tab onto a background without bold, and the card lost its buttons; the card now follows the batch, and a review with unanswered questions is never submitted. Thanks @minigold92 (#753).
 - **A pi pane with the pi-zentui editor takes sends again.** pi-zentui draws its input box with a rail on every row and the model name on the last row. Collie read the rails and the model row as a draft, so it refused every send to an empty box and held every WalkyTalky message. Collie now reads that box in its own shape: the text after the rail is the draft, and an empty box takes the send. Thanks @HickeyHsu (#747).
+- **Claude Code's background-agents footer on macOS walks and shows on the phone.** On macOS, Claude Code draws the footer's header row as `⏺ main` rather than `● main`, so the surface reader left the panel unnamed, refused sends into a turn when the panel held focus, and hid the collapsed agents bar above the composer. The profile, the chrome extractor and the footer bar now match `⏺ main` alongside `● main`.
 
 ## [2.13.0] - 2026-11-10
 

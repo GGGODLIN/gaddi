@@ -339,6 +339,24 @@ describe("extractAgentsFooter — the background-agents block under the statusli
   it("is empty when there is no input box at the tail", () => {
     expect(extractAgentsFooter(splitLines(parseAnsi("hello\nworld")))).toEqual([]);
   });
+
+  it("extracts the macOS ⏺ main header (idle and focused)", () => {
+    const idle = boxWithStatusRows("❯ ", [
+      "  ⏸ manual mode on · ? for shortcuts · ← for agents · ↓ to manage",
+      "",
+      "  ⏺ main",
+      "  ◯ general-purpose  audit layout metrics… 4s · ↓ 307 tokens",
+    ]);
+    expect(footerText(idle)).toEqual(["⏺ main", "◯ general-purpose  audit layout metrics… 4s · ↓ 307 tokens"]);
+
+    const focused = boxWithStatusRows("❯ ", [
+      "  ↑/↓ to select",
+      "",
+      "❯ ⏺ main",
+      "  ◯ general-purpose  audit layout metrics… 2s · ↓ 29 tokens",
+    ]);
+    expect(footerText(focused)).toEqual(["❯ ⏺ main", "◯ general-purpose  audit layout metrics… 2s · ↓ 29 tokens"]);
+  });
 });
 
 describe("extractInputDraft — recovers a stranded prompt-line draft", () => {
