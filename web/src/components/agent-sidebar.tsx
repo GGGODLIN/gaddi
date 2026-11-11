@@ -9,12 +9,14 @@ import { pinnedRows, shownGroups } from "@/lib/dash-view";
 import { paneRowKey } from "@/lib/hosts";
 import { groupPanesByWorkspace } from "@/lib/pane-groups";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
+import { nestPanes, parentRowKeyOf, toggleFoldedParent, useFoldedParents, type PaneTreeRow } from "@/lib/pane-tree";
 import { pinMatcher, type Pin } from "@/lib/pins";
 import { descriptionNow } from "@/lib/description-now";
 import { paneName, panePlaceParts } from "@/lib/pane-name";
 import { paneSubtitle } from "@/lib/pane-marks";
 import { PaneBadge } from "@/components/pane-badge";
 import { PaneGlyph } from "@/components/ui/pane-glyph";
+import { PaneTreeFoldButton, PaneTreeGuides } from "@/components/ui/pane-tree-chrome";
 import { UnseenMark } from "@/components/ui/unseen-mark";
 import { shortenHome } from "@/lib/shorten-home";
 import { bucketOf, isAttention, isUnseen, triage, worstTriage, type TriageKey } from "@/lib/triage";
@@ -177,6 +179,7 @@ export function ThreadSidebar({
   roomy = false,
 }: ThreadSidebarProps) {
   useLocale();
+  const folded = useFoldedParents();
   // THE ORDER, AND WHY IT IS READ ONCE: see `useFrozenRanks` and the long note below. Called here, above
   // the early return, because a hook cannot sit behind one.
   const { ranks, reread } = useFrozenRanks(order === "attention" ? "place" : order, [...agents, ...shellPanes]);
@@ -242,10 +245,23 @@ export function ThreadSidebar({
     ...pinnedShown,
     ...(ranked ? rankedRows : sections.flatMap((g) => g.rows)),
   ].find((a) => URGENT.has(bucketOf(a)));
+  const byRowKey = new Map([...agents, ...shellPanes].map((p) => [paneRowKey(p), p]));
   const jumpTo = (pane: AgentView) => {
-    const row = document.getElementById(rowDomId(pane));
-    row?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    row?.focus({ preventScroll: true });
+    let cur: AgentView | undefined = pane;
+    const seen = new Set<string>();
+    while (cur !== undefined) {
+      const key = paneRowKey(cur);
+      if (seen.has(key)) break;
+      seen.add(key);
+      const row = document.getElementById(rowDomId(cur));
+      if (row !== null) {
+        row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        row.focus({ preventScroll: true });
+        return;
+      }
+      const parentKey = parentRowKeyOf(cur);
+      cur = parentKey === null ? undefined : byRowKey.get(parentKey);
+    }
   };
 
   return (
@@ -375,16 +391,21 @@ export function ThreadSidebar({
                 count={rankedRows.length}
                 tone={roomy ? "quiet" : "strong"}
               >
-                {rankedRows.map((a) => (
-                  <PaneRow
-                    key={paneRowKey(a)}
-                    id={rowDomId(a)}
-                    pane={a}
-                    active={paneRowKey(a) === currentPaneKey}
-                    onSelect={onSelect}
-                    roomy={roomy}
-                  />
-                ))}
+                {nestPanes(rankedRows, folded).map((entry) => {
+                  const key = paneRowKey(entry.pane);
+                  return (
+                    <PaneRow
+                      key={key}
+                      id={rowDomId(entry.pane)}
+                      pane={entry.pane}
+                      active={key === currentPaneKey}
+                      onSelect={onSelect}
+                      roomy={roomy}
+                      tree={entry}
+                      onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
+                    />
+                  );
+                })}
               </Section>
             )
           ) : (
@@ -399,16 +420,21 @@ export function ThreadSidebar({
                   mark={worstTriage(g.panes) === "needs" ? "blocked" : undefined}
                   trailing={<StatusCounts panes={g.panes} className="shrink-0 text-[11px] text-muted-foreground" />}
                 >
-                  {rows.map((a) => (
-                    <PaneRow
-                      key={paneRowKey(a)}
-                      id={rowDomId(a)}
-                      pane={a}
-                      active={paneRowKey(a) === currentPaneKey}
-                      onSelect={onSelect}
-                      roomy={roomy}
-                    />
-                  ))}
+                  {nestPanes(rows, folded).map((entry) => {
+                    const key = paneRowKey(entry.pane);
+                    return (
+                      <PaneRow
+                        key={key}
+                        id={rowDomId(entry.pane)}
+                        pane={entry.pane}
+                        active={key === currentPaneKey}
+                        onSelect={onSelect}
+                        roomy={roomy}
+                        tree={entry}
+                        onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
+                      />
+                    );
+                  })}
                 </Section>
               ))}
               {shellRows.length > 0 && (
@@ -536,6 +562,8 @@ function PaneRow({
   active,
   onSelect,
   roomy = false,
+  tree,
+  onToggleFold,
 }: {
   /** The row's DOM id, for the summary line's jump. Every row has one, shells too. */
   id?: string;
@@ -544,8 +572,11 @@ function PaneRow({
   onSelect: (pane: AgentView) => void;
   /** The large screen's sidebar ({@link ThreadSidebarProps.roomy}). */
   roomy?: boolean;
+  tree?: PaneTreeRow;
+  onToggleFold?: () => void;
 }) {
   const isShell = pane.kind === "shell";
+  const hasFold = (tree?.childCount ?? 0) > 0 && onToggleFold !== undefined;
   // ONE NAME, ONE PLACE (lib/pane-name.ts), the same way round as every other row in the app: the
   // pane's name on line 1, where it sits underneath. This row used to be the other way up — the
   // place bold on line 1, the name muted below — which made the switcher the one list where you
@@ -559,7 +590,7 @@ function PaneRow({
   // jump to, so it must not be the one list that still says only the name.
   const described = pane.description === undefined ? undefined : descriptionNow(pane.description);
   const subtitle = paneSubtitle(pane);
-  return (
+  const mainButton = (
     <button
       id={id}
       type="button"
@@ -574,7 +605,8 @@ function PaneRow({
         // changes the paint. Added by state it would pull the text 1px in and grow the row 2px,
         // which is the zig-zag every switcher row above and below it would then sit out of line
         // with. This is a gap list, not a divide-y one, so a four-sided edge is the right mark.
-        "flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-transparent text-left transition-colors",
+        "flex min-w-0 items-center gap-2.5 rounded-lg border border-transparent text-left transition-colors",
+        hasFold ? "flex-1" : "w-full",
         // The sidebar's 16px inset is the list's 8 plus the row's 8, and its 44px floor a little more air.
         roomy ? "min-h-11 px-2 py-2.5" : "px-2.5 py-2",
         active ? "bg-accent text-accent-foreground" : "hover:bg-muted/60 active:bg-muted",
@@ -590,6 +622,7 @@ function PaneRow({
         !active && isAttention(pane.status) && "bg-status-blocked/5",
       )}
     >
+      {tree !== undefined && <PaneTreeGuides guides={tree.guides} className="-mr-1" />}
       {isShell ? (
         <Icon name="shell-pane" className="size-3.5 shrink-0 text-muted-foreground" />
       ) : (
@@ -653,6 +686,20 @@ function PaneRow({
         )}
       </div>
     </button>
+  );
+  if (!hasFold || tree === undefined) return mainButton;
+  return (
+    <div className="flex items-stretch gap-0.5">
+      {mainButton}
+      <PaneTreeFoldButton
+        count={tree.childCount}
+        status={tree.childStatus}
+        folded={tree.folded}
+        onToggle={onToggleFold}
+        surface="bg-card"
+        className="rounded-lg"
+      />
+    </div>
   );
 }
 

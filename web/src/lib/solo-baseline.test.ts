@@ -183,6 +183,10 @@ const AGENT_VIEW_KEYS = {
   walkyOff: true,
   // How many pins the pane's session holds (M90). Present only above zero, so a solo golden body carries no such key.
   pins: true,
+  // Not crew dimensions: herdr-core parent-child terminal link and unpaned flag (ADR 9014). Present
+  // only when a live local parent exists, so no solo golden byte moved.
+  parentPaneId: true,
+  unpaned: true,
 } satisfies Record<keyof AgentView, true>;
 
 const DEVICE_AUTH_KEYS = {
@@ -308,6 +312,7 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "model",
       "paneId",
       "paneLabel",
+      "parentPaneId",
       "pins",
       "progress",
       "readableLines",
@@ -326,6 +331,7 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "terminalTitleStale",
       "todos",
       "turnId",
+      "unpaned",
       "usage",
       "walkyOff",
       "workspaceId",

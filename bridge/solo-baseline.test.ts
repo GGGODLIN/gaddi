@@ -399,6 +399,10 @@ const PANE_WIRE_KEYS = {
   // time from the statusLine wrapper's file, and this harness builds its body with no reader, so no
   // golden byte moved.
   usage: true,
+  // Not crew dimensions: herdr-core parent-child terminal link and unpaned flag (ADR 9014). Present
+  // only when a live local parent exists, so no solo golden byte moved.
+  parentPaneId: true,
+  unpaned: true,
 } satisfies Record<keyof PaneWire, true>;
 
 const DEVICE_AUTH_KEYS = {

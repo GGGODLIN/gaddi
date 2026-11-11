@@ -15,6 +15,7 @@ import { ATTENTION, bucketOf, triage, worstTriage } from "@/lib/triage";
 import { groupHost, pinnedRows, shownGroups, stripEntries } from "@/lib/dash-view";
 import type { AgentView, BridgeStatus, ServerSummary, SessionSummary, TabView, WorkspaceView } from "@/lib/types";
 import { paneRowKey, paneScope } from "@/lib/hosts";
+import { nestPanes, parentRowKeyOf, toggleFoldedParent, useFoldedParents, type PaneTreeRow } from "@/lib/pane-tree";
 import { machinesHiddenFrom } from "@/lib/hidden-machines";
 import { pinMatcher, type Pin } from "@/lib/pins";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
@@ -305,6 +306,7 @@ export function AgentList({
   // Whether the multiplexer can say which agent a pane holds. Read unconditionally — a hook cannot
   // sit behind the early return below, and the answer is only consulted in the empty branch.
   const agentDetection = useMuxCapability("agentDetection", viewScope);
+  const folded = useFoldedParents();
   // Whether this device retired the pin hint (lib/pin-hint.ts). Read here for the same
   // reason: above the early return.
   const pinHintRetired = usePinHintRetired();
@@ -452,9 +454,22 @@ export function AgentList({
     }
     document.getElementById(groupDomId(g.key))?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  const byRowKey = new Map([...agents, ...shellPanes].map((p) => [paneRowKey(p), p]));
   const jumpToRow = (pane: AgentView) => {
-    const el = document.getElementById(rowDomId(paneRowKey(pane)));
-    if (el) revealElement(el);
+    let cur: AgentView | undefined = pane;
+    const seen = new Set<string>();
+    while (cur !== undefined) {
+      const key = paneRowKey(cur);
+      if (seen.has(key)) break;
+      seen.add(key);
+      const el = document.getElementById(rowDomId(key));
+      if (el) {
+        revealElement(el);
+        return;
+      }
+      const parentKey = parentRowKeyOf(cur);
+      cur = parentKey === null ? undefined : byRowKey.get(parentKey);
+    }
   };
   const jumpToPinned = () =>
     document.getElementById(PINNED_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -515,23 +530,28 @@ export function AgentList({
   // A pinned row is the same 44px row at `scope="herd"`: it sits outside its workspace heading, so
   // line 2 names the place (`space › tab`). Same tap, same scope (`onOpen` resolves it from the pane),
   // same hold.
-  const row = (a: AgentView, scope: "place" | "herd" = "place") => (
-    <AgentCard
-      key={paneRowKey(a)}
-      id={rowDomId(paneRowKey(a))}
-      agent={a}
-      onClick={(el) => onOpen(a, el)}
-      glideKey={glideKeyOf?.(a)}
-      onPress={onPress && (() => onPress(a))}
-      onHold={onHold && (() => onHold(a))}
-      scope={scope}
-      statusStyle="dot"
-      density="row"
-      unseen={bucketOf(a) === "ready"}
-      tint
-      stale={stale}
-    />
-  );
+  const row = (a: AgentView, scope: "place" | "herd" = "place", tree?: PaneTreeRow) => {
+    const key = paneRowKey(a);
+    return (
+      <AgentCard
+        key={key}
+        id={rowDomId(key)}
+        agent={a}
+        onClick={(el) => onOpen(a, el)}
+        glideKey={glideKeyOf?.(a)}
+        onPress={onPress && (() => onPress(a))}
+        onHold={onHold && (() => onHold(a))}
+        scope={scope}
+        statusStyle="dot"
+        density="row"
+        unseen={bucketOf(a) === "ready"}
+        tint
+        stale={stale}
+        tree={tree}
+        onToggleFold={tree !== undefined && tree.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
+      />
+    );
+  };
 
   const summary = (
     <StatusSummaryLine
@@ -685,7 +705,7 @@ export function AgentList({
             tone="strong"
             className="min-h-7"
           />
-          <ListGroup>{rankedRows.map((a) => row(a, "herd"))}</ListGroup>
+          <ListGroup>{nestPanes(rankedRows, folded).map((entry) => row(entry.pane, "herd", entry))}</ListGroup>
         </section>
       )}
 
@@ -703,7 +723,11 @@ export function AgentList({
               </>
             }
           />
-          <ListGroup>{rows.map((a) => row(a, workspaceGroupKey(a) === g.key ? "place" : "herd"))}</ListGroup>
+          <ListGroup>
+            {nestPanes(rows, folded).map((entry) =>
+              row(entry.pane, workspaceGroupKey(entry.pane) === g.key ? "place" : "herd", entry),
+            )}
+          </ListGroup>
         </section>
       ))}
     </div>

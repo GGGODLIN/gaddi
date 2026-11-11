@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { ThreadSidebar } from "./agent-sidebar";
 import { CrewProvider } from "./crew-provider";
 import { paneRowKey } from "@/lib/hosts";
+import { __resetFoldedParents } from "@/lib/pane-tree";
 import { currentPins, setPinned } from "@/lib/pins";
 import { fixtureAgents, fixtureCrewAgents, fixtureServers, fixtureShellPanes } from "@/test/handlers";
 import type { AgentView, Launcher, WorkspaceView } from "@/lib/types";
@@ -958,5 +959,24 @@ describe("ThreadSidebar: each row says its own status (#695)", () => {
     rerender(<ThreadSidebar agents={[{ ...resting, status: "working" }, working]} currentPaneKey="" onSelect={vi.fn()} />);
     expect(order()).toEqual(before);
     expect(within(row("reader")).getByRole("img", { name: "working" })).toBeInTheDocument();
+  });
+
+  it("nests child panes under their parent in place order, expanded by default, with fold toggle", async () => {
+    __resetFoldedParents();
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const parent = inSpace("t1", "main-session", { status: "idle" });
+    const worker = inSpace("t2", "fix-qnx", { parentPaneId: "t1", status: "working" });
+
+    render(<ThreadSidebar agents={[parent, worker]} currentPaneKey="" onSelect={onSelect} order="place" />);
+    expect(screen.getByText("fix-qnx")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Collapse sub-agents (1)" }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.queryByText("fix-qnx")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Expand sub-agents (1)" }));
+    expect(screen.getByText("fix-qnx")).toBeInTheDocument();
+    __resetFoldedParents();
   });
 });

@@ -292,6 +292,10 @@ export interface AgentView {
    * queued row per entry, with the text and Cancel (Resend on an ended one).
    */
   held?: HeldRow[];
+  /** Live local parent pane on the same machine and session (ADR 9014). Absent when none is live. */
+  parentPaneId?: string;
+  /** Unlabelled child terminal sharing its ancestor's tab without a split pane of its own. */
+  unpaned?: true;
 }
 
 /** The icon names a program may give a belt action. Mirrors `PANE_ACTION_ICONS` in bridge/types.ts. */

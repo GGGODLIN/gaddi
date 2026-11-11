@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-agents started on `herdr-core` nest under their parent pane.** A terminal started with `hc run --parent` now joins its live parent's workspace and tab instead of an extra `herdr-core` space, draws indented under its parent across the dashboard, space view and pane switcher with a fold toggle, stays out of the top pane strip until opened, and suppresses intermediate unread marks and finished pushes while keeping blocked alerts, matching Herdr App.
+
 ### Changed
 
 - **The strings 1.28.0 added now speak all twelve languages.** Community themes, pasting a theme, the theme About sheet and the Make Collie your own card, plus the composer's expand and collapse buttons and the Nunito note, are now translated in German, Spanish, French, Italian, Japanese, Korean, Portuguese, Russian, Turkish and both Chinese variants. Before, they showed in English.
