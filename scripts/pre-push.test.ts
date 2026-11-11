@@ -109,8 +109,10 @@ describe.skipIf(process.platform === "win32")("pre-push collie.prepush=ci", () =
     expect(r.err).toContain("left to CI");
   });
 
-  test("a push carrying a release commit still runs them here, tip or not", () => {
-    ranEverything(push(line(sha.after, sha.base), "ci"));
+  test("a push carrying a release commit still runs them here, tip or not, with LC_ALL=C", () => {
+    const r = push(line(sha.after, sha.base), "ci", 0, { LANG: "zh_TW.UTF-8", LC_ALL: "zh_TW.UTF-8" });
+    ranEverything(r);
+    for (const entry of r.calls.trim().split("\n")) expect(entry).toContain("[LC_ALL=C]");
     ranEverything(push(line(sha.release, sha.base), "ci"));
   });
 
@@ -141,13 +143,5 @@ describe.skipIf(process.platform === "win32")("pre-push collie.prepush=ci", () =
 
   test("a failing suite still refuses a release push", () => {
     expect(push(line(sha.after, sha.base), "ci", 1).code).not.toBe(0);
-  });
-
-  test("pins LC_ALL=C across every suite even when the caller shell uses a non-English locale", () => {
-    const r = push(line(sha.after, sha.base), "ci", 0, { LANG: "zh_TW.UTF-8", LC_ALL: "zh_TW.UTF-8" });
-    expect(r.code).toBe(0);
-    const lines = r.calls.trim().split("\n");
-    expect(lines.length).toBeGreaterThanOrEqual(4);
-    for (const entry of lines) expect(entry).toContain("[LC_ALL=C]");
   });
 });
