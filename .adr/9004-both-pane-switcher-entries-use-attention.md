@@ -35,3 +35,7 @@ and space view do not change their order.
   address; this snapshot promises a stable choice, not a fresh existence check.
 - The attention-section ordering from 9003 now applies to the in-pane sheet too, without changing
   any place-ordered surface.
+- **Addendum (2026-11-12):** Live `herdr-core` child terminals ([9014](./9014-a-child-terminal-reports-completion-to-its-parent.md))
+  stay nested under their unpinned root parent inside the attention sections (`triageTrees`), and the
+  family takes the most urgent bucket and newest transition timestamp among its members, matching
+  Herdr App's Priority view.

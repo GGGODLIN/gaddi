@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Added
 
 - **Sub-agents started on `herdr-core` nest under their parent pane.** A terminal started with `hc run --parent` now joins its live parent's workspace and tab instead of an extra `herdr-core` space, draws indented under its parent across the dashboard, space view and pane switcher with a fold toggle, stays out of the top pane strip until opened, and suppresses intermediate unread marks and finished pushes while keeping blocked alerts, matching Herdr App.
+- **The attention switcher groups sub-agents under their parent and lifts urgent families.** In the swipe-up and summary pane switcher, live child workers now stay nested under their parent row and promote the parent's group to the family's most urgent attention bucket when a child is working or blocked.
 
 ### Changed
 

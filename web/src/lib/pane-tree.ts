@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import { hostKey, paneRowKey } from "./hosts";
 import { asJsonString, parseJson } from "./json";
-import { shownStatus } from "./triage";
+import { bucketOf, shownStatus, triage, worstTriage, type TriageKey, type TriageSection } from "./triage";
 import type { AgentStatus, AgentView } from "./types";
 
 export type TreeGuide = "│" | "├" | "└" | " ";
@@ -245,4 +245,84 @@ export function nestPanes(
   }
 
   return rows;
+}
+
+export interface TriageTreeSection {
+  readonly section: TriageSection;
+  readonly rows: readonly PaneTreeRow[];
+  readonly count: number;
+}
+
+/**
+ * Bucket unpinned panes for the attention switcher (ADR 9003, ADR 9004, ADR 9014): each root agent
+ * takes the most urgent bucket of its live family (`needs` > `ready` > `working` > `recent`), sorts
+ * newest transition first across its family, and carries its nested children directly underneath.
+ */
+export function triageTrees(
+  agents: readonly AgentView[],
+  folded: ReadonlySet<string> = EMPTY_FOLDED,
+): TriageTreeSection[] {
+  const byKey = new Map<string, AgentView>();
+  for (const pane of agents) byKey.set(paneRowKey(pane), pane);
+
+  const parentByKey = new Map<string, string>();
+  const childrenByKey = new Map<string, string[]>();
+  for (const pane of agents) {
+    const key = paneRowKey(pane);
+    const parentKey = validParentKey(key, byKey);
+    if (parentKey === null) continue;
+    parentByKey.set(key, parentKey);
+    const siblings = childrenByKey.get(parentKey);
+    if (siblings === undefined) childrenByKey.set(parentKey, [key]);
+    else siblings.push(key);
+  }
+
+  const collectFamily = (key: string, out: AgentView[]): void => {
+    const node = byKey.get(key);
+    if (node === undefined) return;
+    out.push(node);
+    for (const kidKey of childrenByKey.get(key) ?? []) collectFamily(kidKey, out);
+  };
+
+  interface FamilyGroup {
+    readonly members: readonly AgentView[];
+    readonly bucket: TriageKey;
+    readonly latestAt: number | undefined;
+    readonly order: number;
+  }
+
+  const byBucket = new Map<TriageKey, FamilyGroup[]>();
+  let seq = 0;
+  for (const pane of agents) {
+    const key = paneRowKey(pane);
+    if (parentByKey.has(key)) continue;
+    const members: AgentView[] = [];
+    collectFamily(key, members);
+    let latestAt: number | undefined;
+    for (const member of members) {
+      if (member.lastActiveAt !== undefined && (latestAt === undefined || member.lastActiveAt > latestAt)) {
+        latestAt = member.lastActiveAt;
+      }
+    }
+    const bucket = worstTriage(members) ?? bucketOf(pane);
+    const group: FamilyGroup = { members, bucket, latestAt, order: seq++ };
+    const list = byBucket.get(bucket);
+    if (list === undefined) byBucket.set(bucket, [group]);
+    else list.push(group);
+  }
+
+  return triage([]).map((emptySection) => {
+    const families = (byBucket.get(emptySection.key) ?? []).toSorted((a, b) => {
+      if (a.latestAt === undefined && b.latestAt === undefined) return a.order - b.order;
+      if (a.latestAt === undefined) return 1;
+      if (b.latestAt === undefined) return -1;
+      return b.latestAt - a.latestAt || a.order - b.order;
+    });
+    const flatMembers = families.flatMap((f) => f.members);
+    return {
+      section: { ...emptySection, agents: flatMembers },
+      rows: nestPanes(flatMembers, folded),
+      count: families.length,
+    };
+  });
 }

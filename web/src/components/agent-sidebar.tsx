@@ -9,7 +9,7 @@ import { pinnedRows, shownGroups } from "@/lib/dash-view";
 import { paneRowKey } from "@/lib/hosts";
 import { groupPanesByWorkspace } from "@/lib/pane-groups";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
-import { nestPanes, parentRowKeyOf, toggleFoldedParent, useFoldedParents, type PaneTreeRow } from "@/lib/pane-tree";
+import { nestPanes, parentRowKeyOf, toggleFoldedParent, triageTrees, useFoldedParents, type PaneTreeRow } from "@/lib/pane-tree";
 import { pinMatcher, type Pin } from "@/lib/pins";
 import { descriptionNow } from "@/lib/description-now";
 import { paneName, panePlaceParts } from "@/lib/pane-name";
@@ -19,7 +19,7 @@ import { PaneGlyph } from "@/components/ui/pane-glyph";
 import { PaneTreeFoldButton, PaneTreeGuides } from "@/components/ui/pane-tree-chrome";
 import { UnseenMark } from "@/components/ui/unseen-mark";
 import { shortenHome } from "@/lib/shorten-home";
-import { bucketOf, isAttention, isUnseen, triage, worstTriage, type TriageKey } from "@/lib/triage";
+import { bucketOf, isAttention, isUnseen, worstTriage, type TriageKey } from "@/lib/triage";
 import type { AgentStatus, AgentView, Launcher, ServerSummary, SessionSummary, TabView, WorkspaceView } from "@/lib/types";
 import type { Scope } from "@/lib/scope";
 import { t } from "@/lib/i18n";
@@ -287,31 +287,35 @@ export function ThreadSidebar({
               ))}
             </Section>
           )}
-          {triage(pins.length === 0 ? agents : agents.filter((a) => !isPinned(a)))
-            .toSorted((a, b) => Number(a.key === "working") - Number(b.key === "working"))
-            .map((g) => {
-              const members = g.agents;
-              if (members.length === 0) return null;
+          {triageTrees(pins.length === 0 ? agents : agents.filter((a) => !isPinned(a)), folded)
+            .toSorted((a, b) => Number(a.section.key === "working") - Number(b.section.key === "working"))
+            .map(({ section: g, rows, count }) => {
+              if (count === 0) return null;
               return (
                 <Section
                   roomy={roomy}
                   key={g.key}
                   id={`switch-${g.key}`}
                   label={g.label}
-                  count={members.length}
+                  count={count}
                   mark={BUCKET_MARK[g.key]}
                   {...(g.accent !== undefined ? { accent: g.accent } : {})}
                 >
-                  {members.map((a) => (
-                    <PaneRow
-                      key={paneRowKey(a)}
-                      id={rowDomId(a)}
-                      pane={a}
-                      active={paneRowKey(a) === currentPaneKey}
-                      onSelect={onSelect}
-                      roomy={roomy}
-                    />
-                  ))}
+                  {rows.map((entry) => {
+                    const key = paneRowKey(entry.pane);
+                    return (
+                      <PaneRow
+                        key={key}
+                        id={rowDomId(entry.pane)}
+                        pane={entry.pane}
+                        active={key === currentPaneKey}
+                        onSelect={onSelect}
+                        roomy={roomy}
+                        tree={entry}
+                        onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
+                      />
+                    );
+                  })}
                 </Section>
               );
             })}

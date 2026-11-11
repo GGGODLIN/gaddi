@@ -979,4 +979,35 @@ describe("ThreadSidebar: each row says its own status (#695)", () => {
     expect(screen.getByText("fix-qnx")).toBeInTheDocument();
     __resetFoldedParents();
   });
+
+  it("nests workers under their parent in attention order and lifts the parent to a blocked child's bucket", async () => {
+    __resetFoldedParents();
+    const user = userEvent.setup();
+    const idleMain = inSpace("t1", "X貼文分析", { status: "idle", lastActiveAt: 100, lastSeenAt: 100 });
+    const doneWorker = inSpace("t2", "fix-qnx", { parentPaneId: "t1", status: "done", lastActiveAt: 200, lastSeenAt: 100 });
+    const blockedWorker = inSpace("t3", "mf2-cli", { parentPaneId: "t1", status: "blocked", lastActiveAt: 300, lastSeenAt: 100 });
+    const quietMain = inSpace("t4", "solo-idle", { status: "idle", lastActiveAt: 50, lastSeenAt: 50 });
+
+    const { container } = render(
+      <ThreadSidebar
+        agents={[idleMain, doneWorker, blockedWorker, quietMain]}
+        currentPaneKey=""
+        onSelect={vi.fn()}
+        order="attention"
+      />,
+    );
+
+    const needsSection = container.querySelector<HTMLElement>("#switch-needs");
+    expect(needsSection).not.toBeNull();
+    if (needsSection === null) return;
+    expect(within(needsSection).getByText("X貼文分析")).toBeInTheDocument();
+    expect(within(needsSection).getByText("fix-qnx")).toBeInTheDocument();
+    expect(within(needsSection).getByText("mf2-cli")).toBeInTheDocument();
+    expect(container.querySelector("#switch-ready")).toBeNull();
+
+    await user.click(within(needsSection).getByRole("button", { name: "Collapse sub-agents (2)" }));
+    expect(within(needsSection).queryByText("fix-qnx")).toBeNull();
+    expect(within(needsSection).getByRole("button", { name: "Expand sub-agents (2)" })).toBeInTheDocument();
+    __resetFoldedParents();
+  });
 });
