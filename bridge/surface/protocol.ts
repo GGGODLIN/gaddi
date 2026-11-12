@@ -2035,9 +2035,11 @@ export interface WholePaste {
    */
   readonly folds?: false;
   /**
-   * True when the profile's collapse token counts total lines rather than line breaks (`collapse.countsLines`).
+   * The collapse form's `lines` group counts the paste's lines, not its line breaks (the profile's
+   * `paste.foldLines: "lines"`, opencode: one line folds to `[Pasted ~1 lines]`). Absent: the line
+   * breaks, as Claude Code counts them.
    */
-  readonly countsLines?: boolean;
+  readonly foldsLines?: true;
 }
 
 /**
@@ -2075,16 +2077,13 @@ export function wholePaste(match: ProfileMatch | null, lines: readonly string[],
   const text = lines.join("\n");
   if (lines.length === 1 && text.length <= WHOLE_PASTE_MIN_CHARS) return null;
   if (reservedLead(lines[0] ?? "", match.profile.reservedLeads) !== null) return null;
-  const countsLines = match.profile.collapse.countsLines === true;
-  if (paste.image === undefined) {
-    return countsLines ? { images: 0, image: null, lines, literal: lines, countsLines: true } : { images: 0, image: null, lines, literal: lines };
-  }
+  const counted: Pick<WholePaste, "foldsLines"> = paste.foldLines === "lines" ? { foldsLines: true } : {};
+  if (paste.image === undefined) return { images: 0, image: null, lines, literal: lines, ...counted };
   const image = new RegExp(paste.image, "uy");
   const pieces = pastePieces(text);
   const kept = pieces.filter((piece) => !(isUploadImagePath(piece) && imageFile(piece.trim())));
   const images = pieces.length - kept.length;
-  const keptLines = images === 0 ? lines : kept.join("\n").split("\n");
-  return countsLines ? { images, image, lines: keptLines, literal: lines, countsLines: true } : { images, image, lines: keptLines, literal: lines };
+  return { images, image, lines: images === 0 ? lines : kept.join("\n").split("\n"), literal: lines, ...counted };
 }
 
 /**
@@ -2138,7 +2137,9 @@ function boxHolds(frame: Frame, prefix: string, lines: readonly string[], collap
  * carries one, must say one line: each written line is its own write. A text written as ONE paste
  * (`whole`) first shows its image tokens, then may stand as one collapse form for all of it, whose
  * line count is exactly the line breaks the kept text holds (Claude Code counts `+M lines` as the
- * `\n`s in the paste; lab, 2.1.304), or else lands literally, never one line of it folded. Its tokens
+ * `\n`s in the paste; lab, 2.1.304), or its lines where the profile says the harness counts so
+ * (`paste.foldLines`, {@link WholePaste.foldsLines}: opencode, #749), or else lands literally, never
+ * one line of it folded. Its tokens
  * are read with white space taken out, since the box may wrap inside one. Without `whole` none of this
  * is read: a profile that writes per line keeps the rule above.
  */
@@ -2203,8 +2204,8 @@ function boxMatchesForm(box: string, prefix: string, lines: readonly string[], c
     const after = q;
     const m = whole.folds === false ? null : take(collapse);
     const count = m?.groups?.lines;
-    const expectedLines = whole.countsLines === true ? lines.length : lines.length - 1;
-    if (m !== null && q === squeezed.length && (count === undefined ? lines.length === 1 : Number(count) === expectedLines)) return true;
+    const expected = whole.foldsLines === true ? lines.length : lines.length - 1;
+    if (m !== null && q === squeezed.length && (count === undefined ? lines.length === 1 : Number(count) === expected)) return true;
     p = at[after]!;
   }
   for (const line of lines) {

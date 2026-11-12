@@ -79,3 +79,47 @@ export const newestAttentionAgents = [
   regressionAgent("new", "blocked", { active: 900, seen: 0 }),
   regressionAgent("mid", "blocked", { active: 500, seen: 0 }),
 ];
+
+export const parentChildAgents: AgentView[] = [
+  {
+    ...regressionAgent("t1", "idle", { active: 100, seen: 100 }),
+    workspaceId: "spProj",
+    workspaceLabel: "projects",
+    tabId: "tbMain",
+    tabLabel: "main-task",
+    soleTabName: "main-task",
+    tabPosition: 0,
+  },
+  {
+    ...regressionAgent("t2", "done", { active: 250, seen: 100 }),
+    workspaceId: "spProj",
+    workspaceLabel: "projects",
+    tabId: "tbMain",
+    tabLabel: "main-task",
+    paneLabel: "fix-qnx",
+    parentPaneId: "t1",
+    unpaned: true,
+    tabPosition: 1,
+  },
+  {
+    ...regressionAgent("t3", "blocked", { active: 300, seen: 100 }),
+    workspaceId: "spProj",
+    workspaceLabel: "projects",
+    tabId: "tbMain",
+    tabLabel: "main-task",
+    paneLabel: "mf2-cli",
+    parentPaneId: "t1",
+    unpaned: true,
+    tabPosition: 2,
+  },
+  {
+    ...regressionAgent("t4", "working", { active: 150, seen: 100 }),
+    workspaceId: "spProj",
+    workspaceLabel: "projects",
+    tabId: "tbMail",
+    tabLabel: "inbox-watch",
+    soleTabName: "inbox-watch",
+    tabPosition: 0,
+  },
+];
+

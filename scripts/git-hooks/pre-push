@@ -54,6 +54,10 @@ fi
 # environment rather than a trap. ROOT is resolved above, while they still apply.
 unset "${!GIT_@}" 2>/dev/null || true
 
+# Non-English shell locales (e.g. LANG=zh_TW.UTF-8) make Node's `toLocaleDateString(undefined)` format
+# dates in the host locale while the app's test DOM defaults to English, and localise git error text.
+export LC_ALL=C
+
 # macOS hands out TMPDIR under /var/folders, and /var is a symlink to /private/var. The durable mux
 # refuses a socket under a symlinked folder (a privacy check), so on a Mac 31 of its tests failed
 # here while Linux CI stayed green, and every push became a question of whether to skip. Point the

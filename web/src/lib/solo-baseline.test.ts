@@ -183,6 +183,10 @@ const AGENT_VIEW_KEYS = {
   walkyOff: true,
   // How many pins the pane's session holds (M90). Present only above zero, so a solo golden body carries no such key.
   pins: true,
+  // Not crew dimensions: herdr-core parent-child terminal link and unpaned flag (ADR 9014). Present
+  // only when a live local parent exists, so no solo golden byte moved.
+  parentPaneId: true,
+  unpaned: true,
 } satisfies Record<keyof AgentView, true>;
 
 const DEVICE_AUTH_KEYS = {
@@ -238,6 +242,9 @@ const UPDATE_INFO_KEYS = {
   // neither, and that reads as Stable with no way back to offer.
   line: true,
   back: true,
+  // The build the lead answers the crew with (2026-11-09). Optional and ABSENT on a solo install: the
+  // bridge sends it only while a trust store exists.
+  build: true,
 } satisfies Record<keyof UpdateInfo, true>;
 
 describe("solo zero-tax — the client's mirror types carry no crew dimension", () => {
@@ -305,6 +312,7 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "model",
       "paneId",
       "paneLabel",
+      "parentPaneId",
       "pins",
       "progress",
       "readableLines",
@@ -323,6 +331,7 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "terminalTitleStale",
       "todos",
       "turnId",
+      "unpaned",
       "usage",
       "walkyOff",
       "workspaceId",
@@ -334,6 +343,9 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       // The way back to Stable (M60 spec 01) — optional, sent only in that one case.
       "back",
       "bridgeStale",
+      // The build the lead answers the crew with (2026-11-09) — optional, sent only while a trust
+      // store exists, so a solo payload carries none.
+      "build",
       "checkedAt",
       "current",
       // The two bands the operator can close (M17/08) — optional here, because a bridge older than

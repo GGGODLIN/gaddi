@@ -1090,58 +1090,49 @@ describe("the draft of a soft-wrapped box joins the rows the way they were broke
     expect(draftOf([cjk.slice(0, 18), cjk.slice(18, 36), cjk.slice(36)], 40)).toBe(cjk);
   });
 
-  it("Claude background agents panel (#740): wrapped agent rows and a full panel with wrapped rows stay named footer rows, never a checkbox modal cue", () => {
+  it("Claude background agents panel on macOS (2.1.322): ⏺ main and focused ❯ ⏺ main walk as named footer rows", () => {
     const claude = requireProfile("claude").idle;
-    const wrappedRows = plainRows([
-      "● Done.",
+    const macRows = plainRows([
+      "⏺ READY",
       "",
       "✻ Waiting for 2 background agents to finish",
       "────────────────────────────────────────────────────────────────────────────────",
       "❯ ",
       "────────────────────────────────────────────────────────────────────────────────",
-      "  ⏵⏵ bypass permissions on (shift+tab to cycle) · 2 background tasks · ↓ to view",
+      "  ⏸ manual mode on · ? for shortcuts · ← for agents · ↓ to manage",
+      "                                                            ◐ medium · /effort",
       "",
-      "  ● main",
-      "  ◯ general-purpose · running a very long background task that wraps",
-      "    onto the next line (12m 34s)",
-      "  ◯ general-purpose · second background worker (8m 10s)",
-      "",
-      "  ↓ to manage",
+      "  ⏺ main",
+      "  ◯ general-purpose  audit layout metrics across narrow vie… 4s · ↓ 307 tokens",
+      "  ◯ general-purpose  verify build types                      3s · ↓ 284 tokens",
     ]);
-    const wrappedFrame = findInputFrame(wrappedRows, claude);
-    expect(wrappedFrame?.volatile.footer).not.toBeNull();
-    expect(wrappedFrame?.volatile.named.length).toBeGreaterThanOrEqual(4);
-    expect(surfaceOfScreen({ seq: 1, source: "screen", at: 1000, revision: 1, rows: wrappedRows, ask: null }, claude).surface).toEqual({
+    const macFrame = findInputFrame(macRows, claude);
+    expect(macFrame?.volatile.footer).toEqual({ first: 9, last: 11 });
+    expect(macFrame?.volatile.named.map((hit) => hit.name)).toEqual(["agents-panel-main", "agents-panel-agent", "agents-panel-agent"]);
+    expect(surfaceOfScreen({ seq: 1, source: "screen", at: 1000, revision: 1, rows: macRows, ask: null }, claude).surface).toEqual({
       revision: 1,
       turn: "idle",
       modal: "none",
       composer: "empty",
     });
 
-    const fullWrappedRows = plainRows([
-      "● Done.",
+    const focusedRows = plainRows([
+      "⏺ READY",
       "",
-      "✻ Waiting for 7 background agents to finish",
+      "✻ Waiting for 2 background agents to finish",
       "────────────────────────────────────────────────────────────────────────────────",
       "❯ ",
       "────────────────────────────────────────────────────────────────────────────────",
-      "  ⏵⏵ bypass permissions on (shift+tab to cycle) · 2 background tasks · ↓ to view",
+      "  ↑/↓ to select                                             ◐ medium · /effort",
       "",
-      "  ● main",
-      "  ◯ general-purpose · worker 1 with a very long description that wraps",
-      "    onto a continuation line (12m 34s)",
-      "  ◯ general-purpose · worker 2",
-      "  ◯ general-purpose · worker 3",
-      "  ◯ general-purpose · worker 4",
-      "  ◯ general-purpose · worker 5",
-      "  ↓ 2 more",
-      "",
-      "  ↓ to manage",
+      "❯ ⏺ main",
+      "  ◯ general-purpose  audit responsive layout metrics and ove… 2s · ↓ 29 tokens",
+      "  ◯ general-purpose  verify build types                       1s · ↓ 31 tokens",
     ]);
-    const fullFrame = findInputFrame(fullWrappedRows, claude);
-    expect(fullFrame?.volatile.footer).not.toBeNull();
-    expect(fullFrame?.volatile.named.length).toBeGreaterThanOrEqual(9);
-    expect(surfaceOfScreen({ seq: 1, source: "screen", at: 1000, revision: 1, rows: fullWrappedRows, ask: null }, claude).surface).toEqual({
+    const focusedFrame = findInputFrame(focusedRows, claude);
+    expect(focusedFrame?.volatile.footer).toEqual({ first: 8, last: 10 });
+    expect(focusedFrame?.volatile.named.map((hit) => hit.name)).toEqual(["agents-panel-main", "agents-panel-agent", "agents-panel-agent"]);
+    expect(surfaceOfScreen({ seq: 1, source: "screen", at: 1000, revision: 1, rows: focusedRows, ask: null }, claude).surface).toEqual({
       revision: 1,
       turn: "idle",
       modal: "none",

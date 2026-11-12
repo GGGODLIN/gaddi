@@ -42,7 +42,7 @@ interface Run {
   calls: string;
 }
 
-function push(lines: string, mode: string | null, bunExit = 0): Run {
+function push(lines: string, mode: string | null, bunExit = 0, extraEnv: Record<string, string> = {}): Run {
   if (mode === null) Bun.spawnSync(["git", "config", "--unset", "collie.prepush"], { cwd: repo, env: baseEnv });
   else git("config", "collie.prepush", mode);
   rmSync(log, { force: true });
@@ -54,6 +54,7 @@ function push(lines: string, mode: string | null, bunExit = 0): Run {
       PATH: `${join(root, "bin")}:${process.env.PATH ?? ""}`,
       FAKE_LOG: log,
       FAKE_BUN_EXIT: String(bunExit),
+      ...extraEnv,
     },
   });
   return { code: r.exitCode ?? -1, err: r.stderr.toString(), calls: existsSync(log) ? readFileSync(log, "utf8") : "" };
@@ -76,9 +77,9 @@ describe.skipIf(process.platform === "win32")("pre-push collie.prepush=ci", () =
     mkdirSync(join(root, "bin"));
     mkdirSync(join(repo, "web"), { recursive: true });
     mkdirSync(join(repo, "scripts"));
-    writeFileSync(join(root, "bin", "bun"), '#!/bin/sh\necho "bun $*" >> "$FAKE_LOG"\nexit "${FAKE_BUN_EXIT:-0}"\n');
+    writeFileSync(join(root, "bin", "bun"), '#!/bin/sh\necho "bun $* [LC_ALL=${LC_ALL:-}]" >> "$FAKE_LOG"\nexit "${FAKE_BUN_EXIT:-0}"\n');
     chmodSync(join(root, "bin", "bun"), 0o755);
-    writeFileSync(join(repo, "scripts", "collie-ctl.test.sh"), 'echo ctl >> "$FAKE_LOG"\n');
+    writeFileSync(join(repo, "scripts", "collie-ctl.test.sh"), 'echo "ctl [LC_ALL=${LC_ALL:-}]" >> "$FAKE_LOG"\n');
     writeFileSync(join(repo, "scripts", "check-tag.sh"), "exit 0\n");
     git("init", "-q", "-b", "dev");
     git("config", "user.email", "test@example.invalid");
@@ -108,8 +109,10 @@ describe.skipIf(process.platform === "win32")("pre-push collie.prepush=ci", () =
     expect(r.err).toContain("left to CI");
   });
 
-  test("a push carrying a release commit still runs them here, tip or not", () => {
-    ranEverything(push(line(sha.after, sha.base), "ci"));
+  test("a push carrying a release commit still runs them here, tip or not, with LC_ALL=C", () => {
+    const r = push(line(sha.after, sha.base), "ci", 0, { LANG: "zh_TW.UTF-8", LC_ALL: "zh_TW.UTF-8" });
+    ranEverything(r);
+    for (const entry of r.calls.trim().split("\n")) expect(entry).toContain("[LC_ALL=C]");
     ranEverything(push(line(sha.release, sha.base), "ci"));
   });
 

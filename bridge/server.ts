@@ -165,6 +165,7 @@ import {
   rollbackVerdict,
   updateStartVerdict,
   type PreflightReport,
+  type UpdateStartResult,
 } from "./update-action.ts";
 import { type ReleaseLine, type UpdateLineRecord, withLine } from "./update-line.ts";
 import { parseTelemetryRequest, parseTroubleSignal, type Telemetry } from "./telemetry.ts";
@@ -220,6 +221,7 @@ import {
   type PairedDeviceWire,
   type PairingStore,
 } from "./pairing.ts";
+import { pairAuditEntry, pairRoute } from "./pair-audit.ts";
 import { createPairLimiter, pairSourceKey } from "./pair-limit.ts";
 import { LOCAL_LABEL, type LocalCredential } from "./local-secret.ts";
 import { modeForWire } from "./crew/mode.ts";
@@ -602,6 +604,14 @@ const WALKY_DROP_ROUTE = /^\/api\/pane\/([^/]+)\/walky\/([^/]+)\/drop$/;
  * gives up. The phone waits 75 s (web/src/lib/api.ts).
  */
 const WORKTREE_ROUTE_BUDGET_S = 90;
+
+/**
+ * How long the three update starts (`/api/update`, `/rollback`, `/back`) may hold their connection, in
+ * seconds: the forced preflight's own 30 s ceiling (`PREFLIGHT_TIMEOUT_MS` in `index.ts`) plus the
+ * launch's 8 s manager budget (`SYSTEMD_PROBE_BUDGET_MS`), rounded up. Without it Bun closes a
+ * connection that is idle for 10 s, and a launch that waited out a slow manager answered nobody.
+ */
+const UPDATE_ROUTE_BUDGET_S = 40;
 
 /**
  * `GET /api/workspace/<id>/changes` — the Changes view asked by workspace rather than by pane
@@ -1169,8 +1179,12 @@ export interface UpdateActionDeps {
   preflight: (force?: boolean) => Promise<PreflightReport | null>;
   /** Whether the updater's lock is held by a process that is still alive (spec 04's lock). */
   lockHeld: () => boolean;
-  /** Start `collie update`, detached from this process. Never awaits the update itself. */
-  start: (a: { major: boolean; runId: string }) => { ok: true } | { ok: false; reason: string };
+  /**
+   * Start `collie update`, detached from this process. Never awaits the update itself. It may await
+   * the LAUNCH decision (the bridge asks the service manager, patiently, before it picks a tier), and
+   * it may refuse with a code of its own (`refusal`) when no tier is safe (`updateLaunchRefusal`).
+   */
+  start: (a: { major: boolean; runId: string }) => UpdateStartResult | Promise<UpdateStartResult>;
   /**
    * Mint an opaque run id (M16/04). A seam because the source of randomness is index.ts's, exactly
    * as the two spawns above are — and because a test must be able to pin the id it asserts on.
@@ -1185,12 +1199,12 @@ export interface UpdateActionDeps {
    * Start `collie update --rollback --run-id <id>`, detached (M60 spec 01). Undefined disables
    * `POST /api/update/rollback`, which then answers 503 like the update route without its deps.
    */
-  rollback?: (a: { runId: string }) => { ok: true } | { ok: false; reason: string };
+  rollback?: (a: { runId: string }) => UpdateStartResult | Promise<UpdateStartResult>;
   /**
    * Start "Go back now" (M60 spec 01): `collie update --to-tag v<to> --downgrade --run-id <id>`,
    * detached. Undefined disables `POST /api/update/back`, which then answers 503.
    */
-  back?: (a: { runId: string; to: string }) => { ok: true } | { ok: false; reason: string };
+  back?: (a: { runId: string; to: string }) => UpdateStartResult | Promise<UpdateStartResult>;
 }
 
 /**
@@ -3825,6 +3839,9 @@ export function startServer(opts: {
         // operator's and by nothing else (ADR 0024).
         const denied = browserGate("write");
         if (denied) return denied;
+        // The forced preflight and the launch's patient manager probe can outlast Bun's 10 s idle
+        // cut, which drops the connection and loses the answer, refusal included.
+        server.timeout(req, UPDATE_ROUTE_BUDGET_S);
         const action = opts.updateAction;
         if (!action) return text("update action unavailable", 503);
         let body: JsonValue;
@@ -3853,6 +3870,9 @@ export function startServer(opts: {
           // The one gate a green preflight cannot express: a package manager owns this folder, so there is
           // nothing here Collie may replace (ADR 0035).
           installKind: status.installKind,
+          // The build this process answers the crew with, not `package.json`'s plain `current`: a
+          // development build can never hand a member the turn, so the crew's start is refused.
+          build: opts.version,
           // One confirm covers the crew (M16/03): the members' banked verdicts gate this start the
           // same way the lead's own does. Read, never fetched — the sweep is the only thing that
           // talks to a member.
@@ -3886,13 +3906,10 @@ export function startServer(opts: {
             202,
           );
         }
-        const started = action.start({ major: verdict.major, runId });
+        const started = await action.start({ major: verdict.major, runId });
         if (!started.ok) {
-          return jsonError(
-            apiError("update.start_failed", { reason: started.reason }),
-            500,
-            req.headers.get("accept-encoding"),
-          );
+          const refused = updateNotStarted(started);
+          return jsonError(refused.body, refused.status, req.headers.get("accept-encoding"));
         }
         // The peers ride the SAME confirm and the same id. Their turns are granted once this lead's
         // own health gate settles — a lead that announced a version it has not finished taking would
@@ -3926,6 +3943,9 @@ export function startServer(opts: {
         // update. The verdict is `rollbackVerdict`; the request id the phone minted IS the run id.
         const denied = browserGate("write");
         if (denied) return denied;
+        // The forced preflight and the launch's patient manager probe can outlast Bun's 10 s idle
+        // cut, which drops the connection and loses the answer, refusal included.
+        server.timeout(req, UPDATE_ROUTE_BUDGET_S);
         const action = opts.updateAction;
         if (!action?.rollback) return text("rollback action unavailable", 503);
         let body: JsonValue;
@@ -3962,13 +3982,10 @@ export function startServer(opts: {
             202,
           );
         }
-        const started = action.rollback({ runId: verdict.runId });
+        const started = await action.rollback({ runId: verdict.runId });
         if (!started.ok) {
-          return jsonError(
-            apiError("update.start_failed", { reason: started.reason }),
-            500,
-            req.headers.get("accept-encoding"),
-          );
+          const refused = updateNotStarted(started);
+          return jsonError(refused.body, refused.status, req.headers.get("accept-encoding"));
         }
         // No crew run opens here. The crew levels DOWN once this lead's own rollback is done: the
         // settle gate reads the record and `crewTurnStart` marks the run as one that goes down.
@@ -3994,6 +4011,9 @@ export function startServer(opts: {
         // ordinary way when it does not (`collie update --to-tag v<to> --downgrade`).
         const denied = browserGate("write");
         if (denied) return denied;
+        // The forced preflight and the launch's patient manager probe can outlast Bun's 10 s idle
+        // cut, which drops the connection and loses the answer, refusal included.
+        server.timeout(req, UPDATE_ROUTE_BUDGET_S);
         const action = opts.updateAction;
         if (!action?.back) return text("go back action unavailable", 503);
         let body: JsonValue;
@@ -4030,13 +4050,10 @@ export function startServer(opts: {
             202,
           );
         }
-        const started = action.back({ runId: verdict.runId, to: verdict.to });
+        const started = await action.back({ runId: verdict.runId, to: verdict.to });
         if (!started.ok) {
-          return jsonError(
-            apiError("update.start_failed", { reason: started.reason }),
-            500,
-            req.headers.get("accept-encoding"),
-          );
+          const refused = updateNotStarted(started);
+          return jsonError(refused.body, refused.status, req.headers.get("accept-encoding"));
         }
         // No crew run opens here either: the crew follows the lead's switch DOWN once it is done.
         audit.record({
@@ -4368,7 +4385,11 @@ export function startServer(opts: {
           // name is not the person who added them. Before the watch can see the label come back.
           await forgetDevice(parsed.label, "expired-replaced");
         }
-        audit.record({ action: "pair", device: parsed.label, detail: { label: parsed.label } });
+        // One line per pairing, with where the claim came from (the address class, never the address)
+        // and the pane `collie pair` ran in. Never the code or the token (bridge/pair-audit.ts).
+        audit.record(
+          pairAuditEntry(parsed.label, pairRoute(peer, isLoopbackPeer(peer), req.headers.get("x-forwarded-for")), claimed.mintedIn),
+        );
         // The ONLY time this token exists outside the requesting device. Nothing stores it here.
         return json({ token: claimed.token, label: parsed.label }, req.headers.get("accept-encoding"));
       }
@@ -8950,6 +8971,26 @@ function jsonError(
       headers: { "content-type": "application/json; charset=utf-8" },
     }),
   );
+}
+
+/** The status and body {@link updateNotStarted} answers with. */
+export interface UpdateNotStartedAnswer {
+  readonly status: number;
+  readonly body: ApiErrorBody;
+}
+
+/**
+ * The answer to an update start (`/api/update`, `/rollback`, `/back`) that did not start. A refusal the
+ * launcher decided on carries its own code: `update.manager_unreachable` is a 503, the manager is the
+ * service that is not available, and nothing was started or written. Anything else is the spawn
+ * itself failing, `update.start_failed` with its reason, as before.
+ */
+export function updateNotStarted(started: {
+  readonly reason: string;
+  readonly refusal?: "update.manager_unreachable";
+}): UpdateNotStartedAnswer {
+  if (started.refusal !== undefined) return { status: 503, body: apiError(started.refusal) };
+  return { status: 500, body: apiError("update.start_failed", { reason: started.reason }) };
 }
 
 /** The message of a thrown value, without assuming the `catch` handed us an Error. */

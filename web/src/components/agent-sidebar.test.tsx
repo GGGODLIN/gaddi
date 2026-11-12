@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { ThreadSidebar } from "./agent-sidebar";
 import { CrewProvider } from "./crew-provider";
 import { paneRowKey } from "@/lib/hosts";
+import { __resetFoldedParents } from "@/lib/pane-tree";
 import { currentPins, setPinned } from "@/lib/pins";
 import { fixtureAgents, fixtureCrewAgents, fixtureServers, fixtureShellPanes } from "@/test/handlers";
 import type { AgentView, Launcher, WorkspaceView } from "@/lib/types";
@@ -958,5 +959,55 @@ describe("ThreadSidebar: each row says its own status (#695)", () => {
     rerender(<ThreadSidebar agents={[{ ...resting, status: "working" }, working]} currentPaneKey="" onSelect={vi.fn()} />);
     expect(order()).toEqual(before);
     expect(within(row("reader")).getByRole("img", { name: "working" })).toBeInTheDocument();
+  });
+
+  it("nests child panes under their parent in place order, expanded by default, with fold toggle", async () => {
+    __resetFoldedParents();
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const parent = inSpace("t1", "main-session", { status: "idle" });
+    const worker = inSpace("t2", "fix-qnx", { parentPaneId: "t1", status: "working" });
+
+    render(<ThreadSidebar agents={[parent, worker]} currentPaneKey="" onSelect={onSelect} order="place" />);
+    expect(screen.getByText("fix-qnx")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Collapse sub-agents (1)" }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.queryByText("fix-qnx")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Expand sub-agents (1)" }));
+    expect(screen.getByText("fix-qnx")).toBeInTheDocument();
+    __resetFoldedParents();
+  });
+
+  it("nests workers under their parent in attention order and lifts the parent to a blocked child's bucket", async () => {
+    __resetFoldedParents();
+    const user = userEvent.setup();
+    const idleMain = inSpace("t1", "X貼文分析", { status: "idle", lastActiveAt: 100, lastSeenAt: 100 });
+    const doneWorker = inSpace("t2", "fix-qnx", { parentPaneId: "t1", status: "done", lastActiveAt: 200, lastSeenAt: 100 });
+    const blockedWorker = inSpace("t3", "mf2-cli", { parentPaneId: "t1", status: "blocked", lastActiveAt: 300, lastSeenAt: 100 });
+    const quietMain = inSpace("t4", "solo-idle", { status: "idle", lastActiveAt: 50, lastSeenAt: 50 });
+
+    const { container } = render(
+      <ThreadSidebar
+        agents={[idleMain, doneWorker, blockedWorker, quietMain]}
+        currentPaneKey=""
+        onSelect={vi.fn()}
+        order="attention"
+      />,
+    );
+
+    const needsSection = container.querySelector<HTMLElement>("#switch-needs");
+    expect(needsSection).not.toBeNull();
+    if (needsSection === null) return;
+    expect(within(needsSection).getByText("X貼文分析")).toBeInTheDocument();
+    expect(within(needsSection).getByText("fix-qnx")).toBeInTheDocument();
+    expect(within(needsSection).getByText("mf2-cli")).toBeInTheDocument();
+    expect(container.querySelector("#switch-ready")).toBeNull();
+
+    await user.click(within(needsSection).getByRole("button", { name: "Collapse sub-agents (2)" }));
+    expect(within(needsSection).queryByText("fix-qnx")).toBeNull();
+    expect(within(needsSection).getByRole("button", { name: "Expand sub-agents (2)" })).toBeInTheDocument();
+    __resetFoldedParents();
   });
 });

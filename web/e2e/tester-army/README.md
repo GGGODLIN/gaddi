@@ -12,6 +12,7 @@
 - [本次整批結果](/web/e2e/tester-army/runs/baseline-2026-10-04.md)、[建案失敗](/web/e2e/tester-army/runs/setup-failures.md)、[錯預期控制](/web/e2e/tester-army/runs/negative-control.md)
 - [另分支找錯與修補試跑](/web/e2e/tester-army/runs/sweep-2026-10-04.md)：新增六案與原 26 案獨立實跑通過；產品只修無 mux 時品牌不可見。這是一次有限試跑，不是原契約的期待改版。
 - [連續批次找錯紀錄](/web/e2e/tester-army/runs/sweep-loop-2026-10-04.md)：按人寫來源的候選流程逐批測、修、獨立驗證；各項通過與未驗分開記，不能當全產品零 bug 保證。
+- [herdr-core 父子 Agent 契約](/web/e2e/tester-army/contracts/parent-child-agents.v1.md)與[實跑紀錄](/web/e2e/tester-army/runs/parent-child-agents-2026-11-12.md)：保護 ADR 9014 與 ADR 9004 的五個父子樹狀、收合記憶、未讀降噪與孤兒保底案例。
 - 後續結果保存於 runs/，原失敗與成功證據不覆寫。
 
 ## 測試邊界

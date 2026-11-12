@@ -2,7 +2,7 @@
 // mark it is given, and `components/mark-conformance.test.tsx` gives it the whole registry.
 //
 // What it asks is only what `components/mark-contract.ts` makes public: the props, the `--mark-*`
-// variables, `data-mark`, `data-state`, `data-bead`, `data-still`, `data-rest` and `setRate`. A mark's own class
+// variables, `data-mark`, `data-state`, `data-bead`, `data-still`, `data-slow`, `drift` and `setRate`. A mark's own class
 // names and parts are never asked for, so a regeneration that renames them cannot break this suite.
 // What it DOES ask about private names is the opposite question: that they stay private, which means
 // every keyframe and every inline custom property a mark invents starts with its own prefix.
@@ -17,7 +17,7 @@ import { createRef, type ComponentType } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  MARK_HOME,
+  MARK_DRIFT,
   MARK_STATES,
   MARK_STATE_LOOK,
   MARK_STYLE,
@@ -143,7 +143,9 @@ export function describeMarkConformance(entries: readonly MarkEntry[]): void {
           expect(root.getAttribute("data-state")).toBe(state);
           expect(root.getAttribute("width")).toBe("64");
           expect(root.hasAttribute("data-bead")).toBe(MARK_STATE_LOOK[state].bead !== null);
-          expect(root.hasAttribute("data-still")).toBe(false);
+          // Before any input a drifting state is held too: only a `run` state turns on a page nobody touched.
+          expect(root.hasAttribute("data-still")).toBe(MARK_STATE_LOOK[state].motion !== "run");
+          expect(root.hasAttribute("data-slow")).toBe(MARK_STATE_LOOK[state].pace !== "live");
           expect(root.getAttribute("viewBox")).not.toBeNull();
         });
       }
@@ -222,6 +224,9 @@ export function describeMarkConformance(entries: readonly MarkEntry[]): void {
       const loading = rootOf(render(<Mark state="loading" />).container);
       expect(inlineVars(rest)[turnVarOf(rest)]).toBe(`var(--mark-turn, ${MARK_TURN.rest}s)`);
       expect(inlineVars(loading)[turnVarOf(loading)]).toBe(`var(--mark-turn, ${MARK_TURN.live}s)`);
+      // The update turns at the calm pace, between the drift and the live turn.
+      const applying = rootOf(render(<Mark state="applying" />).container);
+      expect(inlineVars(applying)[turnVarOf(applying)]).toBe(`var(--mark-turn, ${MARK_TURN.calm}s)`);
       const own = rootOf(render(<Mark state="loading" turn={3} />).container);
       expect(Object.values(inlineVars(own))).toContain("3s");
       expect(Object.values(inlineVars(own)).some((value) => value.includes("--mark-turn"))).toBe(false);
@@ -234,53 +239,191 @@ export function describeMarkConformance(entries: readonly MarkEntry[]): void {
       expect(rootOf(render(<Mark state="loading" turn={2} />).container).hasAttribute("data-still")).toBe(false);
     });
 
-    // Issue 748: a resting mark runs no animation. The engine half of this (no running animation
-    // in a real browser, for every character) is web/e2e/mark-rest.spec.ts.
-    it("holds still in rest and idle, and only there", () => {
-      for (const state of MARK_STATES) {
-        const root = rootOf(render(<Mark state={state} />).container);
-        expect(root.hasAttribute("data-rest"), state).toBe(MARK_STATE_LOOK[state].pace === "rest");
+    // Issue 748: a page left alone draws no frame. A resting mark drifts while the page is in use and
+    // holds once it is not; the update always turns, at the calm pace. The engine half (what a real
+    // browser runs, for every character) is web/e2e/idle-repaint.spec.ts.
+    it("drifts at rest while the page is in use, slow and smooth, and holds idle where it is", () => {
+      const roots = MARK_STATES.map((state) => ({ state, root: rootOf(render(<Mark state={state} />).container) }));
+      // Opening a page is not use: only the update and the fast states turn before the first input.
+      for (const { state, root } of roots) {
+        const turns = state === "loading" || state === "applying" || state === "reconnected";
+        expect(root.hasAttribute("data-still"), `${state} before input`).toBe(!turns);
       }
-      const root = rootOf(render(<Mark />).container);
-      expect(sheetOf(root)).toContain(MARK_STYLE);
-      expect(MARK_STYLE).toContain("[data-mark][data-rest] *{animation:none!important}");
-      // A host that asks for a turn at rest gets the turn, so nothing holds it still.
-      expect(rootOf(render(<Mark turn={48} />).container).hasAttribute("data-rest")).toBe(false);
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+      });
+      for (const { state, root } of roots) {
+        expect(root.hasAttribute("data-still"), state).toBe(state === "idle");
+        expect(root.hasAttribute("data-slow"), state).toBe(state === "rest" || state === "idle" || state === "applying");
+      }
+      expect(MARK_STYLE).toBe("[data-mark][data-still] *{animation-play-state:paused!important}");
     });
 
-    it("finishes the lap it is on, at the live pace, before it rests", () => {
-      vi.useFakeTimers();
-      const names = keyframeNames(sheetOf(rootOf(render(<Mark />).container)));
-      // 30% of the way round a live turn of 1800 ms: 1260 ms to go.
-      const fakes = names.map((name) => new FakeAnimation(name, 540));
+    it("rests from the first frame on a page nobody has touched, and an input starts the drift", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance", "Date"] });
+      const probe = render(<Mark />);
+      const names = keyframeNames(sheetOf(rootOf(probe.container)));
+      probe.unmount();
+      const fakes = names.map((name) => new FakeAnimation(name, 0));
       installAnimations(fakes);
-      const { container, rerender } = render(<Mark state="loading" />);
-      const liveClass = rootOf(container).getAttribute("class");
-      rerender(<Mark state="rest" />);
+      const { container, unmount } = render(<Mark />);
       const root = rootOf(container);
-      expect(root.getAttribute("data-state")).toBe("rest");
-      expect(root.hasAttribute("data-rest")).toBe(false);
-      expect(root.getAttribute("class")).toBe(liveClass);
-      expect(inlineVars(root)[turnVarOf(root)]).toBe(`var(--mark-turn, ${MARK_TURN.live}s)`);
-      act(() => vi.advanceTimersByTime(1250));
-      expect(root.hasAttribute("data-rest")).toBe(false);
-      act(() => vi.advanceTimersByTime(20));
-      expect(root.hasAttribute("data-rest")).toBe(true);
-      expect(inlineVars(root)[turnVarOf(root)]).toBe(`var(--mark-turn, ${MARK_TURN.rest}s)`);
+      // A fresh page is not in use: held at once, and a long wait with no input changes nothing.
+      expect(root.hasAttribute("data-still")).toBe(true);
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.windowMs + MARK_DRIFT.easeMs + 1000));
+      expect(root.hasAttribute("data-still")).toBe(true);
+      expect(fakes.flatMap((a) => a.rates)).toEqual([]);
+      // One input arms the window; with no second input it ends after `windowMs` and the mark holds again.
+      act(() => {
+        window.dispatchEvent(new Event("keydown"));
+      });
+      expect(root.hasAttribute("data-still")).toBe(false);
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.windowMs - 1));
+      expect(root.hasAttribute("data-still")).toBe(false);
+      act(() => vi.advanceTimersByTime(1));
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.easeMs + 200));
+      expect(root.hasAttribute("data-still")).toBe(true);
+      unmount();
     });
 
-    it("rests at once when the orbit is already home, or nothing turns", () => {
-      const names = keyframeNames(sheetOf(rootOf(render(<Mark />).container)));
-      // A spin round lands within a frame or two of home, a hair past it here.
-      installAnimations(names.map((name) => new FakeAnimation(name, 1800 * (1 + MARK_HOME / 2))));
+    it("is not armed by a scroll alone, even inside a nested scroller", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance", "Date"] });
+      const { container, unmount } = render(
+        <div data-testid="thread">
+          <Mark />
+        </div>,
+      );
+      const root = rootOf(container);
+      // A scroll no person made: a chat that follows new output, scroll anchoring, scrollIntoView.
+      act(() => {
+        window.dispatchEvent(new Event("scroll"));
+        document.dispatchEvent(new Event("scroll"));
+        container.firstElementChild?.dispatchEvent(new Event("scroll"));
+      });
+      expect(root.hasAttribute("data-still")).toBe(true);
+      // Real input inside the nested scroller reaches the capture listener on window and arms the window.
+      act(() => {
+        container.firstElementChild?.dispatchEvent(new Event("touchstart", { bubbles: true }));
+      });
+      expect(root.hasAttribute("data-still")).toBe(false);
+      unmount();
+    });
+
+    it("starts at rest on a page that opens hidden, and stays there after it shows with no input", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance", "Date"] });
+      const visibility = vi.spyOn(document, "visibilityState", "get");
+      visibility.mockReturnValue("hidden");
+      const { container, unmount } = render(<Mark />);
+      const root = rootOf(container);
+      expect(root.hasAttribute("data-still")).toBe(true);
+      visibility.mockReturnValue("visible");
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.windowMs));
+      expect(root.hasAttribute("data-still")).toBe(true);
+      unmount();
+    });
+
+    it("stops at once on pagehide, and a quiet timer left over cannot start the drift again", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance", "Date"] });
+      const { container, unmount } = render(<Mark />);
+      const root = rootOf(container);
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+      });
+      expect(root.hasAttribute("data-still")).toBe(false);
+      // The page is still "visible" as pagehide fires, as a page going into the back-forward cache can be.
+      act(() => {
+        window.dispatchEvent(new Event("pagehide"));
+      });
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.easeMs + 200));
+      expect(root.hasAttribute("data-still")).toBe(true);
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.windowMs * 2));
+      expect(root.hasAttribute("data-still")).toBe(true);
+      unmount();
+    });
+
+    it("counts no input as use on a hidden page, and stops at once when the page turns hidden", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance", "Date"] });
+      const visibility = vi.spyOn(document, "visibilityState", "get");
+      visibility.mockReturnValue("hidden");
+      const { container, unmount } = render(<Mark />);
+      const root = rootOf(container);
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+      });
+      expect(root.hasAttribute("data-still")).toBe(true);
+      visibility.mockReturnValue("visible");
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+      });
+      expect(root.hasAttribute("data-still")).toBe(false);
+      visibility.mockReturnValue("hidden");
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.easeMs + 200));
+      expect(root.hasAttribute("data-still")).toBe(true);
+      unmount();
+    });
+
+    it("eases to a stop when nobody uses the page, holds, and drifts on at the next input", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance", "Date"] });
+      const probe = render(<Mark />);
+      const names = keyframeNames(sheetOf(rootOf(probe.container)));
+      probe.unmount();
+      const fakes = names.map((name) => new FakeAnimation(name, 0));
+      installAnimations(fakes);
+      const { container, unmount } = render(<Mark />);
+      const root = rootOf(container);
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+      });
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.windowMs - 1));
+      expect(root.hasAttribute("data-still")).toBe(false);
+      act(() => vi.advanceTimersByTime(1));
+      // The ease: still running, its rate falling, for MARK_DRIFT.easeMs.
+      expect(root.hasAttribute("data-still")).toBe(false);
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.easeMs / 2));
+      const falling = fakes.find((a) => a.rates.length > 0)?.rates.at(-1) ?? 1;
+      expect(falling).toBeGreaterThan(0);
+      expect(falling).toBeLessThan(1);
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.easeMs / 2 + 200));
+      expect(root.hasAttribute("data-still")).toBe(true);
+      // Held, and the rate is back at 1 for when it runs again.
+      for (const a of fakes.filter((f) => f.rates.length > 0)) expect(a.rates.at(-1)).toBe(1);
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+      });
+      expect(root.hasAttribute("data-still")).toBe(false);
+      unmount();
+    });
+
+    it("never stops drifting with drift=always, and always turns while applying", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance", "Date"] });
+      const always = render(<Mark drift="always" />);
+      const applying = render(<Mark state="applying" />);
+      act(() => vi.advanceTimersByTime(MARK_DRIFT.windowMs + MARK_DRIFT.easeMs + 1000));
+      expect(rootOf(always.container).hasAttribute("data-still")).toBe(false);
+      expect(rootOf(applying.container).hasAttribute("data-still")).toBe(false);
+      always.unmount();
+      applying.unmount();
+    });
+
+    it("comes off a fast state with no last lap: rest drifts on at once, idle holds", () => {
       const { container, rerender } = render(<Mark state="loading" />);
+      expect(rootOf(container).hasAttribute("data-slow")).toBe(false);
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+      });
       rerender(<Mark state="rest" />);
-      expect(rootOf(container).hasAttribute("data-rest")).toBe(true);
-      // No animations at all (reduced motion, or an engine without getAnimations): rest now too.
-      installAnimations([]);
-      const other = render(<Mark state="applying" />);
-      other.rerender(<Mark state="idle" />);
-      expect(rootOf(other.container).hasAttribute("data-rest")).toBe(true);
+      expect(rootOf(container).hasAttribute("data-still")).toBe(false);
+      expect(rootOf(container).hasAttribute("data-slow")).toBe(true);
+      expect(inlineVars(rootOf(container))[turnVarOf(rootOf(container))]).toBe(`var(--mark-turn, ${MARK_TURN.rest}s)`);
+      rerender(<Mark state="reconnected" />);
+      rerender(<Mark state="idle" />);
+      expect(rootOf(container).hasAttribute("data-still")).toBe(true);
     });
 
     it("hands the caller's paper to the knockout, and falls back to --mark-paper", () => {
@@ -338,8 +481,8 @@ export function describeMarkConformance(entries: readonly MarkEntry[]): void {
       const ref = createRef<MarkHandle>();
       render(<Mark ref={ref} />);
       expect(ref.current).not.toBeNull();
-      ref.current?.setRate(2.5);
-      ref.current?.setRate(1);
+      act(() => ref.current?.setRate(2.5));
+      act(() => ref.current?.setRate(1));
       const rated = fakes.filter((a) => a.rates.length > 0);
       expect(rated.length).toBeGreaterThan(0);
       for (const a of rated) {
@@ -355,11 +498,11 @@ export function describeMarkConformance(entries: readonly MarkEntry[]): void {
       installAnimations([]);
       const ref = createRef<MarkHandle>();
       render(<Mark ref={ref} />);
-      ref.current?.setRate(2);
+      act(() => ref.current?.setRate(2));
       const names = keyframeNames(sheetOf(rootOf(render(<Mark />).container)));
       const fakes = names.map((name) => new FakeAnimation(name, 0));
       installAnimations(fakes);
-      ref.current?.setRate(3);
+      act(() => ref.current?.setRate(3));
       expect(fakes.some((a) => a.rates.includes(3))).toBe(true);
     });
 

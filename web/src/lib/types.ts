@@ -292,6 +292,10 @@ export interface AgentView {
    * queued row per entry, with the text and Cancel (Resend on an ended one).
    */
   held?: HeldRow[];
+  /** Live local parent pane on the same machine and session (ADR 9014). Absent when none is live. */
+  parentPaneId?: string;
+  /** Unlabelled child terminal sharing its ancestor's tab without a split pane of its own. */
+  unpaned?: true;
 }
 
 /** The icon names a program may give a belt action. Mirrors `PANE_ACTION_ICONS` in bridge/types.ts. */
@@ -1002,6 +1006,12 @@ export interface UpdateInfo {
    * here would be a second thing to drift.
    */
   packageCommand?: string;
+  /**
+   * The build the lead answers the crew with (`<semver>` or `<semver>+<sha>`); `current` is its plain
+   * `package.json` version. A `-dev` build here leads no crew run (`leadLevelsCrew` in
+   * `lib/crew-level.ts`). Absent on an older bridge, which reads as a release.
+   */
+  build?: string;
   /**
    * The release whose OFFER the operator closed, or null. Held by the BRIDGE, so the decision holds
    * on every screen (M17/08). Absent on an older bridge, which reads as "nothing dismissed".

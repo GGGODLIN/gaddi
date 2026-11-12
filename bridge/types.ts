@@ -259,6 +259,10 @@ export interface AgentView {
    * what they were. The phone shows the Pins mark from it. An older bridge never sends it.
    */
   pins?: number;
+  /** Live local parent pane on the same machine and session (ADR 9014). Absent when none is live. */
+  parentPaneId?: string;
+  /** Unlabelled child terminal sharing its ancestor's tab without a split pane of its own. */
+  unpaned?: true;
 }
 
 /**
@@ -1219,6 +1223,13 @@ export interface UpdateStatus {
    * derivation on the phone would be a second thing to drift.
    */
   packageCommand?: string;
+  /**
+   * The build this process answers the crew with (`<semver>` or `<semver>+<sha>`), where `current`
+   * is `package.json`'s plain version. A `-dev` build here leads no crew run: it states no release,
+   * so no member would take a turn from it. Absent on a solo instance (no trust store, §11) and on an
+   * older bridge, both of which read as a release.
+   */
+  build?: string;
   /**
    * The release whose OFFER the operator closed, or null when none was closed.
    *
