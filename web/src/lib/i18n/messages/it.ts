@@ -629,6 +629,7 @@ export const it: Dictionary = {
   "chat.switcher.aria": "Cambia riquadro",
   "chat.switcher.ariaNeedsYou": "Cambia riquadro, un altro riquadro richiede attenzione",
   "chat.switcher.title": "Cambia riquadro",
+  "chat.switcher.lastViewed": "Visto di recente",
   "chat.switcher.launch.here": "qui",
   "wide.sidebar.label": "Riquadri",
   "wide.space.position": "spazio {index} di {total}",

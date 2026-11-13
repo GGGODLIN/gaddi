@@ -669,6 +669,7 @@ export const zh: Dictionary = {
   "chat.switcher.aria": "切换窗格",
   "chat.switcher.ariaNeedsYou": "切换窗格，另一个窗格需要你",
   "chat.switcher.title": "切换窗格",
+  "chat.switcher.lastViewed": "上次查看",
   "chat.switcher.launch.here": "当前位置",
   "wide.sidebar.label": "窗格",
   "wide.space.position": "工作区 {index} / {total}",

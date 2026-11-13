@@ -625,6 +625,7 @@ export const tr: Dictionary = {
   "chat.switcher.aria": "Bölmeyi değiştir",
   "chat.switcher.ariaNeedsYou": "Bölmeyi değiştir, başka bir bölmenin size ihtiyacı var",
   "chat.switcher.title": "Bölmeyi değiştir",
+  "chat.switcher.lastViewed": "Son görüntülenen",
   "chat.switcher.launch.here": "burada",
   "wide.sidebar.label": "Bölmeler",
   "wide.space.position": "{index} / {total} alan",

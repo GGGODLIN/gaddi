@@ -625,6 +625,7 @@ export const pt: Dictionary = {
   "chat.switcher.aria": "Trocar painel",
   "chat.switcher.ariaNeedsYou": "Troque de painel, outro painel precisa de você",
   "chat.switcher.title": "Trocar painel",
+  "chat.switcher.lastViewed": "Visto por último",
   "chat.switcher.launch.here": "aqui",
   "wide.sidebar.label": "Painéis",
   "wide.space.position": "espaço {index} de {total}",

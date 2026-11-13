@@ -698,6 +698,7 @@ export const de: Dictionary = {
   "chat.switcher.aria": "Pane wechseln",
   "chat.switcher.ariaNeedsYou": "Pane wechseln, ein anderes Pane braucht dich",
   "chat.switcher.title": "Pane wechseln",
+  "chat.switcher.lastViewed": "Zuletzt angesehen",
   "chat.switcher.launch.here": "hier",
   "wide.sidebar.label": "Panes",
   "wide.space.position": "Space {index} von {total}",

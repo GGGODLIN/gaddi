@@ -10,6 +10,7 @@ import { paneRowKey } from "@/lib/hosts";
 import { groupPanesByWorkspace } from "@/lib/pane-groups";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
 import { nestPanes, parentRowKeyOf, toggleFoldedParent, triageTrees, useFoldedParents, type PaneTreeRow } from "@/lib/pane-tree";
+import { useLastViewedShortcut } from "@/lib/last-viewed";
 import { pinMatcher, type Pin } from "@/lib/pins";
 import { descriptionNow } from "@/lib/description-now";
 import { paneName, panePlaceParts } from "@/lib/pane-name";
@@ -107,6 +108,8 @@ interface ThreadSidebarProps {
    * muted ink, so the pane's name is the one thing in full ink.
    */
   roomy?: boolean;
+  /** Active filter text; when non-empty, the Last viewed shortcut hides so search matches lead. */
+  query?: string;
 }
 
 // The pane switcher supports place order for callers that need fixed workspace groups (ADR 0063).
@@ -177,12 +180,15 @@ export function ThreadSidebar({
   onOrderChange,
   className,
   roomy = false,
+  query = "",
 }: ThreadSidebarProps) {
   useLocale();
   const folded = useFoldedParents();
+  const allPanes = [...agents, ...shellPanes];
+  const lastViewed = useLastViewedShortcut(order === "attention", allPanes, currentPaneKey, query);
   // THE ORDER, AND WHY IT IS READ ONCE: see `useFrozenRanks` and the long note below. Called here, above
   // the early return, because a hook cannot sit behind one.
-  const { ranks, reread } = useFrozenRanks(order === "attention" ? "place" : order, [...agents, ...shellPanes]);
+  const { ranks, reread } = useFrozenRanks(order === "attention" ? "place" : order, allPanes);
   const showLaunch = launchers.length > 0 && onLaunch !== undefined;
   const noPanes = agents.length === 0 && shellPanes.length === 0;
 
@@ -272,6 +278,22 @@ export function ThreadSidebar({
 
       {order === "attention" ? (
         <>
+          {lastViewed !== undefined && (
+            <Section
+              roomy={roomy}
+              id="switch-last-viewed"
+              headingId="switch-last-viewed-heading"
+              label={t("chat.switcher.lastViewed")}
+            >
+              <PaneRow
+                id={`switch-last-viewed-${paneRowKey(lastViewed).replace(/[^A-Za-z0-9_-]/gu, "_")}`}
+                pane={lastViewed}
+                active={false}
+                onSelect={onSelect}
+                roomy={roomy}
+              />
+            </Section>
+          )}
           {/* Pinned leads here too (ADR 0070): a pinned pane leaves its attention bucket, listed once. */}
           {pinned.length > 0 && (
             <Section roomy={roomy} id="switch-pinned" headingId="switch-pinned-heading" label={t("home.pinned.title")}>

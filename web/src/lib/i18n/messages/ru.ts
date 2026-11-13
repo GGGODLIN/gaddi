@@ -633,6 +633,7 @@ export const ru: Dictionary = {
   "chat.switcher.aria": "Переключить панель",
   "chat.switcher.ariaNeedsYou": "Переключить панель: требуется действие в другой панели",
   "chat.switcher.title": "Переключить панель",
+  "chat.switcher.lastViewed": "Недавно открытая",
   "chat.switcher.launch.here": "здесь",
   "wide.sidebar.label": "Панели",
   "wide.space.position": "пространство {index} из {total}",

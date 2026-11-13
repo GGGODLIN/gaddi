@@ -627,6 +627,7 @@ export const fr: Dictionary = {
   "chat.switcher.aria": "Changer de volet",
   "chat.switcher.ariaNeedsYou": "Changer de volet, un autre volet a besoin de vous",
   "chat.switcher.title": "Changer de volet",
+  "chat.switcher.lastViewed": "Consulté récemment",
   "chat.switcher.launch.here": "ici",
   "wide.sidebar.label": "Volets",
   "wide.space.position": "espace {index} sur {total}",

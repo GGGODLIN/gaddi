@@ -680,6 +680,7 @@ export const ja: Dictionary = {
   "chat.switcher.aria": "ペインを切り替え",
   "chat.switcher.ariaNeedsYou": "ペインを切り替え、別のペインが対応を待っています",
   "chat.switcher.title": "ペインを切り替え",
+  "chat.switcher.lastViewed": "直前に表示",
   "chat.switcher.launch.here": "ここ",
   "wide.sidebar.label": "ペイン",
   "wide.space.position": "Space {index} / {total}",

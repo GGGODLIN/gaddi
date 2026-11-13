@@ -1011,3 +1011,69 @@ describe("ThreadSidebar: each row says its own status (#695)", () => {
     __resetFoldedParents();
   });
 });
+
+describe("ThreadSidebar — last viewed shortcut", () => {
+  it("shows at most 1 last-viewed pane at the top of the attention switcher when query is empty, excluding currentPaneKey", async () => {
+    const { notePaneViewed } = await import("@/lib/last-viewed");
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const first = { ...fixtureAgents[0]!, paneLabel: "tidepool-main", status: "idle" as const };
+    const second = { ...fixtureAgents[1]!, paneLabel: "lumen-approve", status: "blocked" as const };
+    const third = { ...idleAgent, paneLabel: "sandbox-old" };
+
+    // Empty history -> no Last viewed section.
+    const { unmount } = render(
+      <ThreadSidebar agents={[first, second, third]} currentPaneKey="" onSelect={onSelect} order="attention" />,
+    );
+    expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
+    unmount();
+
+    // Viewed `first`, then `second`: from Home (`currentPaneKey === ""`), renders ONLY 1 row (`second`) at the very top.
+    notePaneViewed(first);
+    notePaneViewed(second);
+    const homeRender = render(
+      <ThreadSidebar agents={[first, second, third]} currentPaneKey="" onSelect={onSelect} order="attention" />,
+    );
+    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.firstChild?.textContent ?? h.textContent);
+    expect(headings[0]).toBe("Last viewed");
+    const homeRegion = screen.getByRole("region", { name: "Last viewed" });
+    const homeRows = within(homeRegion).getAllByRole("button");
+    expect(homeRows).toHaveLength(1);
+    expect(homeRows[0]).toHaveTextContent("lumen-approve");
+    homeRender.unmount();
+
+    // Opened from inside `second` (`currentPaneKey === paneRowKey(second)`): skips `second` and shows `first`.
+    const inPaneRender = render(
+      <ThreadSidebar
+        agents={[first, second, third]}
+        currentPaneKey={paneRowKey(second)}
+        onSelect={onSelect}
+        order="attention"
+      />,
+    );
+    const inPaneRegion = screen.getByRole("region", { name: "Last viewed" });
+    const inPaneRows = within(inPaneRegion).getAllByRole("button");
+    expect(inPaneRows).toHaveLength(1);
+    expect(inPaneRows[0]).toHaveTextContent("tidepool-main");
+    await user.click(inPaneRows[0]!);
+    expect(onSelect).toHaveBeenCalledWith(first);
+    inPaneRender.unmount();
+
+    // Hidden when filter query is non-empty or when running in standing place/activity order.
+    const filteredRender = render(
+      <ThreadSidebar
+        agents={[first, second, third]}
+        currentPaneKey=""
+        onSelect={onSelect}
+        order="attention"
+        query="tidepool"
+      />,
+    );
+    expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
+    filteredRender.unmount();
+
+    render(<ThreadSidebar agents={[first, second, third]} currentPaneKey="" onSelect={onSelect} order="place" />);
+    expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
+  });
+});
+

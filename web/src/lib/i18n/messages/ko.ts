@@ -681,6 +681,7 @@ export const ko: Dictionary = {
   "chat.switcher.aria": "창 전환",
   "chat.switcher.ariaNeedsYou": "창 전환, 다른 창이 응답을 기다립니다",
   "chat.switcher.title": "창 전환",
+  "chat.switcher.lastViewed": "방금 본 창",
   "chat.switcher.launch.here": "여기",
   "wide.sidebar.label": "창",
   "wide.space.position": "{total}개 중 {index}번째 스페이스",

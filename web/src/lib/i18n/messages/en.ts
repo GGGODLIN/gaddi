@@ -740,6 +740,7 @@ export const en = {
   "chat.switcher.aria": "Switch pane",
   "chat.switcher.ariaNeedsYou": "Switch pane, another pane needs you",
   "chat.switcher.title": "Switch pane",
+  "chat.switcher.lastViewed": "Last viewed",
   "chat.switcher.launch.here": "here",
   "wide.sidebar.label": "Panes",
   "wide.space.position": "space {index} of {total}",
