@@ -163,6 +163,7 @@ export function PaneStrip({
           onRenamed={onRenamed}
           onClosed={onClosed}
           onSeenChange={onSeenChange}
+          openHere={sheetPane?.paneId === currentPaneId}
           herd={herd}
         />
       )}

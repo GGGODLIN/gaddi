@@ -108,8 +108,6 @@ interface ThreadSidebarProps {
    * muted ink, so the pane's name is the one thing in full ink.
    */
   roomy?: boolean;
-  /** Active filter text; when non-empty, the Last viewed shortcut hides so search matches lead. */
-  query?: string;
 }
 
 // The pane switcher supports place order for callers that need fixed workspace groups (ADR 0063).
@@ -180,12 +178,11 @@ export function ThreadSidebar({
   onOrderChange,
   className,
   roomy = false,
-  query = "",
 }: ThreadSidebarProps) {
   useLocale();
   const folded = useFoldedParents();
   const allPanes = [...agents, ...shellPanes];
-  const lastViewed = useLastViewedShortcut(order === "attention", allPanes, currentPaneKey, query);
+  const lastViewed = useLastViewedShortcut(order === "attention", allPanes, currentPaneKey);
   // THE ORDER, AND WHY IT IS READ ONCE: see `useFrozenRanks` and the long note below. Called here, above
   // the early return, because a hook cannot sit behind one.
   const { ranks, reread } = useFrozenRanks(order === "attention" ? "place" : order, allPanes);

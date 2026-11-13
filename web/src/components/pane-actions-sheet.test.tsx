@@ -791,6 +791,26 @@ describe("PaneActionsSheet — manual mark unread / read", () => {
     expect(status.result.current).toMatchObject({ text: "Marked as read", tone: "success" });
   });
 
+  it("treats the currently open pane (openHere) as already seen even before the next snapshot poll refreshes lastSeenAt", async () => {
+    const user = userEvent.setup();
+    const onSeenChange = vi.fn();
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    const staleSnapshotPane: AgentView = { ...agent, status: "done", lastActiveAt: 500, lastSeenAt: 100 };
+    renderSheet({ pane: staleSnapshotPane, openHere: true, onSeenChange });
+    expect(screen.queryByRole("button", { name: "Mark as read" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Mark as unread" }));
+    await waitFor(() => expect(onSeenChange).toHaveBeenCalledExactlyOnceWith("w1:p1", false));
+    expect(bodies).toEqual([{ seen: false }]);
+  });
+
   it("hides the row on bare shells, child sub-agents, active/blocked turns, conversations, read-only, and saved copies", () => {
     for (const candidate of [
       { ...agent, kind: "shell" as const, agent: "shell", status: "unknown" as const },

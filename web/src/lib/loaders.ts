@@ -25,6 +25,7 @@ import {
   isApiErrorStatus,
   isPairingRefusal,
   readFailureKind,
+  seenEpoch,
 } from "@/lib/api";
 import { parseAnsi } from "@/lib/ansi";
 import { noteUpdateRun } from "./self-update";
@@ -852,7 +853,11 @@ export async function paneLoader({
     const older = olderAsked.has(key);
     const prefetched = isNavigation && !older ? takePanePrefetch(paneId, scope, lines) : undefined;
     if (prefetched) {
-      const markSeen = () => fetchPane(paneId, lines, scope).catch(() => {});
+      const epoch = seenEpoch(paneId, scope);
+      const markSeen = () => {
+        if (seenEpoch(paneId, scope) !== epoch || request?.signal.aborted) return;
+        void fetchPane(paneId, lines, scope, request?.signal).catch(() => {});
+      };
       void prefetched.then(markSeen, markSeen);
     }
     const reading = prefetched ?? fetchPane(paneId, lines, scope, request?.signal, { older });

@@ -1059,19 +1059,7 @@ describe("ThreadSidebar — last viewed shortcut", () => {
     expect(onSelect).toHaveBeenCalledWith(first);
     inPaneRender.unmount();
 
-    // Hidden when filter query is non-empty or when running in standing place/activity order.
-    const filteredRender = render(
-      <ThreadSidebar
-        agents={[first, second, third]}
-        currentPaneKey=""
-        onSelect={onSelect}
-        order="attention"
-        query="tidepool"
-      />,
-    );
-    expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
-    filteredRender.unmount();
-
+    // Hidden in standing place/activity order (ADR 0063).
     render(<ThreadSidebar agents={[first, second, third]} currentPaneKey="" onSelect={onSelect} order="place" />);
     expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
   });

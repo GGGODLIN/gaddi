@@ -12,7 +12,11 @@ import type { AgentView } from "./types";
 // Keyed by `{ row: paneRowKey(pane), space: panePlaceParts(pane).space }` for the same reason
 // `lib/pins.ts` and `lib/slots.ts` carry the workspace name: multiplexer pane ids are reused across
 // workspaces and restarts, and an id now belonging to another workspace must not read as the pane
-// the operator was just looking at. Wiped at unpair alongside `collie:slot:v1:`.
+// the operator was just looking at.
+//
+// Read directly from `localStorage` on each access (like `lib/slots.ts` and `lib/pairing.ts`) so a
+// wipe in another tab cannot be resurrected from a stale module cache; `fallback` is consulted only
+// when `localStorage` itself is blocked or throws.
 
 const STORAGE_KEY = "collie:last-viewed:v1";
 
@@ -26,13 +30,8 @@ export interface LastViewed {
 
 const NONE: readonly LastViewed[] = [];
 
-function storage(): Storage | null {
-  try {
-    return globalThis.localStorage ?? null;
-  } catch {
-    return null;
-  }
-}
+/** Used only when `localStorage` is unavailable or throws (locked-down / private storage). */
+let fallback: readonly LastViewed[] = NONE;
 
 function decode(raw: string | null): readonly LastViewed[] {
   if (raw === null) return NONE;
@@ -51,35 +50,35 @@ function decode(raw: string | null): readonly LastViewed[] {
   return out;
 }
 
-function load(): readonly LastViewed[] {
-  const store = storage();
-  if (!store) return NONE;
-  try {
-    return decode(store.getItem(STORAGE_KEY));
-  } catch {
-    return NONE;
-  }
-}
-
-let entries: readonly LastViewed[] = load();
-
-function save(next: readonly LastViewed[]): void {
-  entries = next;
-  try {
-    storage()?.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Quota or private mode: keep the in-memory trail for this session.
-  }
-}
-
 /** The device's recent-viewed trail, newest first. */
 export function currentLastViewed(): readonly LastViewed[] {
-  return entries;
+  try {
+    const store = globalThis.localStorage;
+    if (!store) return fallback;
+    return decode(store.getItem(STORAGE_KEY));
+  } catch {
+    return fallback;
+  }
+}
+
+function save(next: readonly LastViewed[]): void {
+  try {
+    const store = globalThis.localStorage;
+    if (!store) {
+      fallback = next;
+      return;
+    }
+    store.setItem(STORAGE_KEY, JSON.stringify(next));
+    fallback = NONE;
+  } catch {
+    fallback = next;
+  }
 }
 
 /** Record that the operator opened `(row, space)` on this device. */
 export function recordLastViewed(row: string, space: string): void {
   if (row === "") return;
+  const entries = currentLastViewed();
   if (entries[0]?.row === row && entries[0]?.space === space) return;
   const next: LastViewed[] = [{ row, space }];
   for (const prev of entries) {
@@ -126,35 +125,34 @@ export function useLastViewedMemory(pane: AgentView | undefined): void {
 
 /**
  * Freeze the recent-viewed trail when the attention switcher opens (ADR 0063 / ADR 9004) and return
- * the single non-current live pane to show at the top while `query` is empty.
+ * the single non-current live pane to show at the top.
  */
 export function useLastViewedShortcut(
   enabled: boolean,
   panes: readonly AgentView[],
   currentPaneKey: string,
-  query: string,
 ): AgentView | undefined {
-  const [frozen] = useState<readonly LastViewed[]>(() => (enabled ? entries : NONE));
-  if (!enabled || query.trim() !== "") return undefined;
+  const [frozen] = useState<readonly LastViewed[]>(() => (enabled ? currentLastViewed() : NONE));
+  if (!enabled) return undefined;
   return resolveLastViewed(frozen, panes, currentPaneKey);
 }
 
 /** Forget every remembered pane on unpair/revoke/expiry (`lib/wipe.ts`). */
 export function forgetLastViewed(): void {
-  entries = NONE;
+  fallback = NONE;
   try {
-    storage()?.removeItem(STORAGE_KEY);
+    globalThis.localStorage?.removeItem(STORAGE_KEY);
   } catch {
     // Locked-down storage: nothing persisted to remove.
   }
 }
 
-/** Test seam: clear both memory and storage between cases (`test/setup.ts`). */
+/** Test seam: clear both fallback memory and storage between cases (`test/setup.ts`). */
 export function __resetLastViewed(): void {
   forgetLastViewed();
 }
 
-/** Test seam: reload from `localStorage` as a fresh boot would. */
+/** Test seam: retained for explicit reload symmetry in tests. */
 export function __reloadLastViewed(): void {
-  entries = load();
+  fallback = NONE;
 }

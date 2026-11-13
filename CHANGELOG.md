@@ -25,7 +25,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ### Added
 
-- **The pane switcher leads with the last session you viewed.** Opening Switch pane shows a single **Last viewed** row at the top while the filter is empty, skipping the pane currently open so one tap jumps back to the session you just left without taking space on the dashboard.
+- **The pane switcher leads with the last session you viewed.** Opening Switch pane shows a single **Last viewed** row at the top, skipping the pane currently open so one tap jumps back to the session you just left without taking space on the dashboard.
 - **Mark a settled pane as unread or read from its actions menu.** Long-pressing a pane row or opening the pane menu now offers **Mark as unread** (or **Mark as read** while unseen) on settled top-level agents, updating the shared seen mark across devices and stepping back out of an open pane when marked unread so the next poll does not clear it.
 
 ### Changed

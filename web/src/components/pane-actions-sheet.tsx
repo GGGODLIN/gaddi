@@ -148,6 +148,8 @@ interface PaneActionsSheetProps {
    * pane view navigates up when its own pane is marked unread so the next poll does not clear it.
    */
   onSeenChange?: (paneId: string, seen: boolean) => void;
+  /** True when `pane` is the route currently open on screen, so it reads as seen before the next snapshot poll. */
+  openHere?: boolean;
   /**
    * Open "New agent in a worktree" for this pane (ADR 0089): the New page with "New worktree" on,
    * on this pane's repo.
@@ -208,6 +210,7 @@ export function PaneActionsSheet({
   herd = NO_HERD,
   onPinChange,
   onSeenChange,
+  openHere = false,
   onBranchOff,
   conversation = false,
 }: PaneActionsSheetProps) {
@@ -222,7 +225,7 @@ export function PaneActionsSheet({
     pane.kind !== "shell" &&
     pane.parentPaneId === undefined &&
     (pane.status === "done" || pane.status === "idle");
-  const paneUnseen = pane !== null && isUnseen(pane);
+  const paneUnseen = pane !== null && !openHere && isUnseen(pane);
   const [markingSeen, setMarkingSeen] = useState(false);
   // A session that turned its walky talky off (M89): the Messages row says so.
   const walkyOff = pane?.walkyOff === true;

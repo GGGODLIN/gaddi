@@ -1001,7 +1001,7 @@ export const ru: Dictionary = {
   "paneActions.branchOff.label": "Новый агент в worktree",
   "paneActions.unpin.label": "Открепить",
   "paneActions.pin.done": "Закреплено вверху",
-  "paneActions.unpin.done": "Открепить",
+  "paneActions.unpin.done": "Откреплено",
   "paneActions.unread.label": "Отметить как непрочитанное",
   "paneActions.read.label": "Отметить как прочитанное",
   "paneActions.unread.done": "Отмечено как непрочитанное",

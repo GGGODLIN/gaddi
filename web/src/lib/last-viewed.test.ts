@@ -87,4 +87,18 @@ describe("last-viewed store", () => {
     expect(currentLastViewed()).toEqual([]);
     expect(resolveLastViewed(currentLastViewed(), [pA], "")).toBeUndefined();
   });
+
+  it("does not resurrect wiped entries from another tab's unpair when recording a new visit", () => {
+    const oldPane = pane("w1:p1", "old-space");
+    const newPane = pane("w2:p2", "new-space");
+    notePaneViewed(oldPane);
+    expect(currentLastViewed().map((r) => r.space)).toEqual(["old-space"]);
+
+    // Simulate another open tab running wipeDevice("unpair"), which deletes the key in localStorage.
+    localStorage.removeItem("collie:last-viewed:v1");
+    expect(currentLastViewed()).toEqual([]);
+
+    notePaneViewed(newPane);
+    expect(currentLastViewed()).toEqual([{ row: paneRowKey(newPane), space: "new-space" }]);
+  });
 });
