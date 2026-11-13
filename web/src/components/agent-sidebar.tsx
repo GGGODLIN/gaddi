@@ -283,7 +283,7 @@ export function ThreadSidebar({
               label={t("chat.switcher.lastViewed")}
             >
               <PaneRow
-                id={`switch-last-viewed-${paneRowKey(lastViewed).replace(/[^A-Za-z0-9_-]/gu, "_")}`}
+                id={rowDomId(lastViewed)}
                 pane={lastViewed}
                 active={false}
                 onSelect={onSelect}
@@ -291,74 +291,85 @@ export function ThreadSidebar({
               />
             </Section>
           )}
-          {/* Pinned leads here too (ADR 0070): a pinned pane leaves its attention bucket, listed once. */}
-          {pinned.length > 0 && (
-            <Section roomy={roomy} id="switch-pinned" headingId="switch-pinned-heading" label={t("home.pinned.title")}>
-              {pinned.map((a) => (
-                <PaneRow
-                  key={paneRowKey(a)}
-                  id={rowDomId(a)}
-                  pane={a}
-                  active={paneRowKey(a) === currentPaneKey}
-                  onSelect={onSelect}
-                  roomy={roomy}
-                />
-              ))}
-            </Section>
-          )}
-          {triageTrees(pins.length === 0 ? agents : agents.filter((a) => !isPinned(a)), folded)
-            .toSorted((a, b) => Number(a.section.key === "working") - Number(b.section.key === "working"))
-            .map(({ section: g, rows, count }) => {
-              if (count === 0) return null;
-              return (
-                <Section
-                  roomy={roomy}
-                  key={g.key}
-                  id={`switch-${g.key}`}
-                  label={g.label}
-                  count={count}
-                  mark={BUCKET_MARK[g.key]}
-                  {...(g.accent !== undefined ? { accent: g.accent } : {})}
-                >
-                  {rows.map((entry) => {
-                    const key = paneRowKey(entry.pane);
-                    return (
+          {/* Pinned leads here too (ADR 0070): a pinned pane leaves its attention bucket, listed once;
+              a pane already promoted to Last viewed leaves both Pinned and the buckets below. */}
+          {(() => {
+            const lastKey = lastViewed === undefined ? null : paneRowKey(lastViewed);
+            const attentionPinned = lastKey === null ? pinned : pinned.filter((a) => paneRowKey(a) !== lastKey);
+            const attentionAgents = agents.filter((a) => !isPinned(a) && paneRowKey(a) !== lastKey);
+            const attentionShells = shellRows.filter((p) => paneRowKey(p) !== lastKey);
+            return (
+              <>
+                {attentionPinned.length > 0 && (
+                  <Section roomy={roomy} id="switch-pinned" headingId="switch-pinned-heading" label={t("home.pinned.title")}>
+                    {attentionPinned.map((a) => (
                       <PaneRow
-                        key={key}
-                        id={rowDomId(entry.pane)}
-                        pane={entry.pane}
-                        active={key === currentPaneKey}
+                        key={paneRowKey(a)}
+                        id={rowDomId(a)}
+                        pane={a}
+                        active={paneRowKey(a) === currentPaneKey}
                         onSelect={onSelect}
                         roomy={roomy}
-                        tree={entry}
-                        onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
                       />
+                    ))}
+                  </Section>
+                )}
+                {triageTrees(attentionAgents, folded)
+                  .toSorted((a, b) => Number(a.section.key === "working") - Number(b.section.key === "working"))
+                  .map(({ section: g, rows, count }) => {
+                    if (count === 0) return null;
+                    return (
+                      <Section
+                        roomy={roomy}
+                        key={g.key}
+                        id={`switch-${g.key}`}
+                        label={g.label}
+                        count={count}
+                        mark={BUCKET_MARK[g.key]}
+                        {...(g.accent !== undefined ? { accent: g.accent } : {})}
+                      >
+                        {rows.map((entry) => {
+                          const key = paneRowKey(entry.pane);
+                          return (
+                            <PaneRow
+                              key={key}
+                              id={rowDomId(entry.pane)}
+                              pane={entry.pane}
+                              active={key === currentPaneKey}
+                              onSelect={onSelect}
+                              roomy={roomy}
+                              tree={entry}
+                              onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
+                            />
+                          );
+                        })}
+                      </Section>
                     );
                   })}
-                </Section>
-              );
-            })}
-          {shellRows.length > 0 && (
-            <Section
-              roomy={roomy}
-              id="switch-shells"
-              label={t("home.sidebar.shells")}
-              count={shellRows.length}
-              dot="bg-status-unknown"
-              {...(onShellsOpenChange ? { open: shellsOpen, onToggle: onShellsOpenChange } : {})}
-            >
-              {shellRows.map((pane) => (
-                <PaneRow
-                  key={paneRowKey(pane)}
-                  pane={pane}
-                  active={paneRowKey(pane) === currentPaneKey}
-                  id={rowDomId(pane)}
-                  onSelect={onSelect}
-                  roomy={roomy}
-                />
-              ))}
-            </Section>
-          )}
+                {attentionShells.length > 0 && (
+                  <Section
+                    roomy={roomy}
+                    id="switch-shells"
+                    label={t("home.sidebar.shells")}
+                    count={attentionShells.length}
+                    dot="bg-status-unknown"
+                    {...(onShellsOpenChange ? { open: shellsOpen, onToggle: onShellsOpenChange } : {})}
+                  >
+                    {attentionShells.map((pane) => (
+                      <PaneRow
+                        key={paneRowKey(pane)}
+                        pane={pane}
+                        active={paneRowKey(pane) === currentPaneKey}
+                        id={rowDomId(pane)}
+                        onSelect={onSelect}
+                        roomy={roomy}
+                      />
+                    ))}
+                  </Section>
+                )}
+              </>
+            );
+          })()}
         </>
       ) : (
         <>

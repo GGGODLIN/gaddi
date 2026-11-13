@@ -1040,6 +1040,8 @@ describe("ThreadSidebar — last viewed shortcut", () => {
     const homeRows = within(homeRegion).getAllByRole("button");
     expect(homeRows).toHaveLength(1);
     expect(homeRows[0]).toHaveTextContent("lumen-approve");
+    // Listed once across the whole sheet (leaves Needs you below, matching Pinned's single-listing rule).
+    expect(screen.getAllByText("lumen-approve")).toHaveLength(1);
     homeRender.unmount();
 
     // Opened from inside `second` (`currentPaneKey === paneRowKey(second)`): skips `second` and shows `first`.
