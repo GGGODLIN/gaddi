@@ -583,6 +583,20 @@ the status band does: the panel's whole job is that a state change repaints it a
 it, and `e2e/update-screen.spec.ts` measures that to half a pixel in Chromium and WebKit, and
 once more at 150% text, where it also fails a box that spills or a clamp that cuts a line in half.
 
+### A pane's row leads with its name
+
+**In a row that stands for a pane, line 1 is the pane's name and line 2 is what changes.** The
+dashboard row (`agent-card.tsx`) and the switcher row (`agent-sidebar.tsx`) both draw a described
+pane this way: the name in the row's main size, and under it the description
+(`bridge/description/resolve.ts`) in the smaller one. Any other list of panes owes the same
+order. The description never takes line 1.
+
+Why the name leads: it is the fixed thing the operator finds a row by, and the description is
+rewritten every turn. The smaller line also fits more of a sentence. The first build led with
+the description, and the operator turned it round after seeing it on a phone (2026-09-24): the
+title is fixed and so easier to recognise, the recap is the helper, and smaller type shows more
+of it.
+
 ---
 
 ## 7. Tailwind v4 traps
