@@ -23,6 +23,15 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Changed
+
+- **The WalkyTalky skill moves out of your instruction files into each agent's skills folder.** Codex, opencode, pi and Gemini CLI got the skill as a block in `AGENTS.md` or `GEMINI.md`, so its whole text rode in every prompt, and its last line changed with every Collie build, which cost each session after an update its prompt cache. Now they get `collie-walky-talky/SKILL.md` in their own skills folder, as Claude Code already did, and keep only its one-line description in the prompt; omp gets the file too, and Antigravity, Grok and Muse read it from a folder Collie already writes. Codex needs 0.150.0 or later and Gemini CLI 0.26.0 or later to read it; an older one keeps working through the message line typed into its pane. `collie update` and `collie skill sync` cut the old block once the file is in place, after a copy of the file as it was, `<file>.collie-pre-skill-move`, and leave every other line as it was; a block with damaged or doubled markers, or edited by hand, stays, and `collie skill status` and `collie doctor` name the file to clean by hand. Thanks @tangentyh (#770).
+
+### Fixed
+
+- **Claude's Remote Control row coming or going no longer fails a send.** Claude Code draws its Remote Control status (`/rc`, `/rc active`, `/rc connecting…`, `/rc reconnecting`, `/rc failed`) as a row under the box. Had that row come or gone while Collie typed, the send's probe failed, the send was held as "Something is open at the box", and each retry could fail the same way. The Claude profile now names the row as a hint, so it no longer counts as the screen moving; its focused form, which takes Enter, still counts. Thanks @hubrix (#767).
+- **A long `/rewind` list reads as a menu again.** Claude Code opens the list under a plain `─` border, and once it held ten turns or more that border sat more than 30 rows above its footer. Collie found no top, and the phone showed the unread-dialog card instead of Continue and Cancel. A border now counts out to 60 rows.
+
 ## [2.14.0] - 2026-11-12
 
 ### Changed
