@@ -2094,6 +2094,14 @@ export function focusPane(paneId: string, scope?: Scope): Promise<ActionResponse
   });
 }
 
+/** Set or clear a pane's shared seen mark (`true` = read, `false` = unread). */
+export function setPaneSeen(paneId: string, seen: boolean, scope?: Scope): Promise<ActionResponse> {
+  return req<ActionResponse>(withScope(`/api/pane/${encodeURIComponent(paneId)}/seen`, scope), {
+    method: "POST",
+    body: JSON.stringify({ seen }),
+  });
+}
+
 /** The bridge waits up to 20s for the old Claude to exit before it types the new one. */
 const SWITCH_ACCOUNT_TIMEOUT_MS = 45_000;
 

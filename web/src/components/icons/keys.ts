@@ -163,6 +163,8 @@ export const ICON_KEYS = {
   "machine": { meaning: "a machine (host)", area: "settings", lucide: "Server" },
   "machine-activity": { meaning: "machine activity", area: "settings", lucide: "Activity" },
   "machine-offline": { meaning: "a machine that is offline", area: "status", lucide: "ServerOff" },
+  "mark-read": { meaning: "mark a pane as read", area: "sheets", lucide: "MailOpen" },
+  "mark-unread": { meaning: "mark a pane as unread", area: "sheets", lucide: "Mail" },
   "masked": { meaning: "content is masked", area: "status", lucide: "EyeOff" },
   "math": { meaning: "math setting", area: "settings", lucide: "Sigma" },
   "message-agent": { meaning: "a message from the agent", area: "chat", lucide: "Bot" },

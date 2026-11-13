@@ -31,6 +31,8 @@ interface PaneStripProps {
   onRenamed?: () => void;
   /** Navigate/refresh after a close (Home if it's the open pane). Enables long-press with onRenamed. */
   onClosed?: (paneId: string) => void;
+  /** Navigate/refresh after marking a pane read or unread. */
+  onSeenChange?: (paneId: string, seen: boolean) => void;
   /** Every pane of the herd, for the sheet's Pin to top row (lib/pins.ts reads it on a pin). */
   herd?: readonly AgentView[];
 }
@@ -71,6 +73,7 @@ export function PaneStrip({
   savedCopy,
   onRenamed,
   onClosed,
+  onSeenChange,
   herd,
 }: PaneStripProps) {
   useLocale();
@@ -159,6 +162,7 @@ export function PaneStrip({
           savedCopy={savedCopy}
           onRenamed={onRenamed}
           onClosed={onClosed}
+          onSeenChange={onSeenChange}
           herd={herd}
         />
       )}
