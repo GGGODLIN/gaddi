@@ -26,9 +26,17 @@ import {
   isPairingRefusal,
   readFailureKind,
 } from "@/lib/api";
+import {
+  clearUnreadHold,
+  getLastPaneUrl,
+  notePaneRouteLeft,
+  seenEpoch,
+  setLastPaneUrl,
+} from "@/lib/seen-state";
 import { parseAnsi } from "@/lib/ansi";
 import { splitTrickSessions } from "@/lib/tricks/places";
 import { syncTricks } from "@/lib/tricks/store";
+import { mounted } from "./base-path";
 import { noteUpdateRun } from "./self-update";
 import { splitLines } from "@/lib/blocks";
 import { type CacheHold, holdCacheReadings } from "@/lib/cache-hold";
@@ -356,16 +364,18 @@ function isAuthError<TThrown>(error: TThrown): boolean {
 // a pane is mounted, so `lastRootUrl` also CLEARS `lastPaneUrl` whenever we're on a non-pane URL — that
 // way re-entering the same pane (pane → home → same pane) reads as a fresh navigation, not a poll.
 let lastRootUrl: string | undefined;
-let lastPaneUrl: string | undefined;
 
 function isPaneUrl(url: string | undefined): boolean {
   if (!url) return false;
+  const prefix = mounted("/pane/");
   try {
-    return new URL(url).pathname.startsWith("/pane/");
+    return new URL(url).pathname.startsWith(prefix);
   } catch {
-    return url.includes("/pane/");
+    return url.includes(prefix);
   }
 }
+
+export { notePaneRouteLeft };
 
 // The last reading seen for each pane address, carried from one snapshot to the next by
 // {@link holdCacheReadings}. Module state, like the keep-previous-data caches above and for the same
@@ -500,7 +510,7 @@ export async function rootLoader({ request }: { request?: Request } = {}): Promi
   const isNavigation = lastRootUrl !== url;
   lastRootUrl = url;
   // Leaving a pane clears the pane loader's discriminator so a later return to it reads as a fresh nav.
-  if (!isPaneUrl(url)) lastPaneUrl = undefined;
+  if (!isPaneUrl(url)) setLastPaneUrl(undefined);
 
   // Fast path: a navigation during a known, escalated outage returns last-known data INSTANTLY rather
   // than hanging on a doomed fetch. Revalidations fall through and really fetch (so recovery lands and
@@ -839,8 +849,9 @@ export async function paneLoader({
   // a non-pane URL, so opening a pane (even one just left) reads as a navigation, and polling within it
   // (same URL) reads as a revalidation.
   const url = request?.url;
-  const isNavigation = lastPaneUrl !== url;
-  lastPaneUrl = url;
+  const isNavigation = getLastPaneUrl() !== url;
+  setLastPaneUrl(url);
+  if (isNavigation) clearUnreadHold(paneId, scope);
 
   // Fast path: navigating to a pane during a known, escalated outage shows its last-known mirror (or an
   // empty degraded pane if never visited) INSTANTLY — never a 10s hang on a fetch that can't land.
@@ -886,7 +897,11 @@ export async function paneLoader({
     const older = olderAsked.has(key);
     const prefetched = isNavigation && !older ? takePanePrefetch(paneId, scope, lines) : undefined;
     if (prefetched) {
-      const markSeen = () => fetchPane(paneId, lines, scope).catch(() => {});
+      const epoch = seenEpoch(paneId, scope);
+      const markSeen = () => {
+        if (seenEpoch(paneId, scope) !== epoch || request?.signal.aborted) return;
+        void fetchPane(paneId, lines, scope, request?.signal).catch(() => {});
+      };
       void prefetched.then(markSeen, markSeen);
     }
     const reading = prefetched ?? fetchPane(paneId, lines, scope, request?.signal, { older });
@@ -1148,6 +1163,7 @@ export async function historyLoader({
   const { paneId } = params;
   if (!paneId) throw new Error("historyLoader: missing :paneId route param");
   const scope = scopeFromRequest(request);
+  clearUnreadHold(paneId, scope);
   const base = { paneId, scope, entries: [], hasMore: false, total: 0, fileTruncated: false };
 
   try {

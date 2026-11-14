@@ -131,6 +131,8 @@ export const ICONOIR = {
   "machine": "server", // a machine (host) · lucide Server
   "machine-activity": "activity", // machine activity · lucide Activity
   "machine-offline": "cloud-desync", // a machine that is offline · lucide ServerOff
+  "mark-read": "mail-open", // mark a pane as read · lucide MailOpen
+  "mark-unread": "mail", // mark a pane as unread · lucide Mail
   "masked": "eye-closed", // content is masked · lucide EyeOff
   "math": "sigma-function", // math setting · lucide Sigma
   "message-agent": "sparks", // a message from the agent · lucide Bot

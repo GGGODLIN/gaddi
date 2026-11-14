@@ -1,4 +1,5 @@
 import { delay, http, HttpResponse } from "msw";
+import { createMemoryRouter } from "react-router";
 
 import { paneScopeKey, scopeKey } from "@/lib/scope";
 import { FakeIDBFactory, uninstallFakeIndexedDB } from "@/test/fake-indexeddb";
@@ -1602,3 +1603,95 @@ describe("readPins and the last list of a pane's pinned messages (M90)", () => {
     expect(heldPins("w1:p1", undefined)).toBeNull();
   });
 });
+
+describe("paneLoader and historyLoader — unreadHold across revalidation vs navigation", () => {
+  afterEach(async () => (await import("./store")).__storeIdle());
+
+  it("keeps unreadHold during a same-URL pane revalidation, then clears it on fresh pane or history navigation", async () => {
+    const seenHeaders: Array<string | null> = [];
+    server.use(
+      http.get(/\/api\/pane\/[^/]+$/, ({ request }) => {
+        seenHeaders.push(request.headers.get("x-collie-seen"));
+        return HttpResponse.json({ paneId: "w1:p1", text: "live", truncated: false, revision: 1 });
+      }),
+      http.get(/\/api\/pane\/[^/]+\/history$/, ({ request }) => {
+        seenHeaders.push(request.headers.get("x-collie-seen"));
+        return HttpResponse.json({ available: false, reason: "no-session" });
+      }),
+    );
+
+    const { setPaneSeen } = await import("./api");
+    const { historyLoader, paneLoader, rootLoader } = await import("./loaders");
+    const paneUrl = "http://localhost/pane/w1%3Ap1";
+
+    // Initial navigation into the pane sends x-collie-seen.
+    await paneLoader({ params: { paneId: "w1:p1" }, request: new Request(paneUrl) });
+    expect(seenHeaders).toEqual(["1"]);
+
+    // Marking unread holds off x-collie-seen on a same-URL revalidation while leaving the pane.
+    await setPaneSeen("w1:p1", false);
+    await paneLoader({ params: { paneId: "w1:p1" }, request: new Request(paneUrl) });
+    expect(seenHeaders).toEqual(["1", null]);
+
+    // Stepping out to Home and navigating back into the pane clears the hold.
+    await rootLoader({ request: new Request("http://localhost/") });
+    await paneLoader({ params: { paneId: "w1:p1" }, request: new Request(paneUrl) });
+    expect(seenHeaders).toEqual(["1", null, "1"]);
+
+    // Opening History also clears a manual unread hold.
+    await setPaneSeen("w1:p1", false);
+    await historyLoader({ params: { paneId: "w1:p1" }, request: new Request(`${paneUrl}/history`) });
+    expect(seenHeaders).toEqual(["1", null, "1", "1"]);
+  });
+
+  it("preserves unreadHold across router.revalidate() under a non-root collie-base mount", async () => {
+    const meta = document.createElement("meta");
+    meta.setAttribute("name", "collie-base");
+    meta.setAttribute("content", "/collie/");
+    document.head.appendChild(meta);
+    const { resetBasePathForTests } = await import("./base-path");
+    resetBasePathForTests();
+
+    try {
+      const seenHeaders: Array<string | null> = [];
+      server.use(
+        http.get("/collie/api/snapshot", () => HttpResponse.json(fixtureSnapshot)),
+        http.get("/collie/api/pane/:pane/walky", () => HttpResponse.json({ messages: [] })),
+        http.get("/collie/api/pane/:pane", ({ request }) => {
+          seenHeaders.push(request.headers.get("x-collie-seen"));
+          return HttpResponse.json({ paneId: "w1:p1", text: "live", truncated: false, revision: 1 });
+        }),
+        http.post("/collie/api/pane/:pane/seen", () => HttpResponse.json({ ok: true })),
+      );
+
+      const { setPaneSeen } = await import("./api");
+      const { PANE_ROUTE_ID, paneLoader, ROOT_ROUTE_ID, rootLoader } = await import("./loaders");
+
+      const router = createMemoryRouter(
+        [
+          {
+            id: ROOT_ROUTE_ID,
+            path: "/",
+            loader: rootLoader,
+            children: [
+              { index: true },
+              { id: PANE_ROUTE_ID, path: "pane/:paneId", loader: paneLoader },
+            ],
+          },
+        ],
+        { basename: "/collie", initialEntries: ["/collie/pane/w1:p1"] },
+      );
+
+      await vi.waitFor(() => expect(router.state.initialized).toBe(true));
+      expect(seenHeaders).toEqual(["1"]);
+
+      await setPaneSeen("w1:p1", false);
+      await router.revalidate();
+      expect(seenHeaders).toEqual(["1", null]);
+    } finally {
+      meta.remove();
+      resetBasePathForTests();
+    }
+  });
+});
+

@@ -1164,6 +1164,11 @@ export const en = {
   "paneActions.focus.labelFallback": "Focus in the terminal",
   "paneActions.focus.done": "Focused in the terminal",
   "paneActions.focus.failed": "Couldn't focus in the terminal",
+  "paneActions.unread.label": "Mark as unread",
+  "paneActions.read.label": "Mark as read",
+  "paneActions.unread.done": "Marked as unread",
+  "paneActions.read.done": "Marked as read",
+  "paneActions.seen.failed": "Couldn't update read state",
   "paneActions.pin.label": "Pin to top",
   "paneActions.branchOff.label": "New agent in a worktree",
   "paneActions.unpin.label": "Unpin",
@@ -4082,6 +4087,11 @@ export const PENDING_TRANSLATION = [
   "pairApprove.error",
   "pairApprove.retry",
   "pairApprove.done",
+  "paneActions.unread.label",
+  "paneActions.read.label",
+  "paneActions.unread.done",
+  "paneActions.read.done",
+  "paneActions.seen.failed",
 ] as const satisfies readonly MessageKey[];
 
 /** A key a bundle may leave out until the translation pass. */

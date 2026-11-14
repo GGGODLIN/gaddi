@@ -1193,6 +1193,7 @@ export function AgentChat({
     // The agent view reads the same window for the agent's text answer (no fetch of its own).
     enabled: chatFetch || warming || (agentView.showing && historyAvailable),
     savedCopy: stale,
+    seen: drawer !== "paneMenu",
   });
   const chatStatus = chatFeed.window.status;
   const journal: JournalReading = journalReadingOf(chatStatus);
@@ -2782,6 +2783,7 @@ export function AgentChat({
                     onRenamed={() => revalidator.revalidate()}
                     // Mirror closePane's success branch: closing the open pane returns Home, else revalidate.
                     onClosed={(id) => (id === paneId ? onBack() : revalidator.revalidate())}
+                    onSeenChange={(id, seen) => (!seen && id === paneId ? onBack() : revalidator.revalidate())}
                     herd={herd}
                   />
                 )}
@@ -3693,6 +3695,8 @@ export function AgentChat({
           savedCopy={savedCopyWrites}
           onRenamed={() => revalidator.revalidate()}
           onClosed={(id) => (id === paneId ? onBack() : revalidator.revalidate())}
+          onSeenChange={(id, seen) => (!seen && id === paneId ? onBack() : revalidator.revalidate())}
+          openHere
           // Find searches the MIRROR, and highlights its hits there. In chat mode the mirror is
           // not on screen, so the row would open a bar over a surface with nothing to show —
           // withheld, the way the sheet withholds every row it was given nothing for.

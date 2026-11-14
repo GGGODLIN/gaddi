@@ -4,11 +4,13 @@ import { http, HttpResponse } from "msw";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ROOT_ROUTE_ID, type HomeData, type PaneData } from "@/lib/loaders";
+import { PANE_ROUTE_ID, paneLoader, ROOT_ROUTE_ID, rootLoader, type HomeData, type PaneData } from "@/lib/loaders";
+import { setPaneSeen } from "@/lib/api";
 import { readAgentLaunch, type AgentLaunch } from "@/lib/agent-startup";
 import { paneScopeKey } from "@/lib/scope";
 import { panePath } from "@/lib/nav";
 import { __resetOperatorCommands, getMuxConfig } from "@/lib/operator-config";
+import { fixtureSnapshot } from "@/test/handlers";
 import { server } from "@/test/setup";
 import type { AgentView } from "@/lib/types";
 import { DetailRoute } from "./detail";
@@ -254,5 +256,82 @@ describe("DetailRoute: a launch's intent", () => {
     await act(() => router.navigate(panePath(fresh.paneId), { state: { freshPane: fresh,
       agentLaunch: { id: "foreign", paneKey: paneScopeKey({ session: "other" }, fresh.paneId), harness: "kiro" } } }));
     expect(await screen.findByText("launch:none")).toBeInTheDocument();
+  });
+});
+
+describe("DetailRoute: unreadHold and back-navigation re-entry", () => {
+  function setupLiveRouter() {
+    let snapshotReads = 0;
+    const seenHeaders: Array<string | null> = [];
+    server.use(
+      http.get("/api/snapshot", () => {
+        snapshotReads += 1;
+        return HttpResponse.json(fixtureSnapshot);
+      }),
+      http.get(/\/api\/pane\/[^/]+$/, ({ request }) => {
+        seenHeaders.push(request.headers.get("x-collie-seen"));
+        return HttpResponse.json({ paneId: "w1:p1", text: "live", truncated: false, revision: 1 });
+      }),
+      http.post(/\/api\/pane\/[^/]+\/seen$/, () => HttpResponse.json({ ok: true })),
+    );
+
+    const router = createMemoryRouter(
+      [
+        {
+          id: ROOT_ROUTE_ID,
+          path: "/",
+          loader: rootLoader,
+          element: <Outlet />,
+          children: [
+            { index: true, element: <div data-testid="home">HOME</div> },
+            { id: PANE_ROUTE_ID, path: "pane/:paneId", loader: paneLoader, element: <DetailRoute /> },
+          ],
+        },
+      ],
+      { initialEntries: ["/"] },
+    );
+
+    return { router, seenHeaders, getSnapshotReads: () => snapshotReads };
+  }
+
+  it("revalidates Home when leaving a pane held unread via navigate(-1), and clears unreadHold on immediate re-entry", async () => {
+    const { router, seenHeaders, getSnapshotReads } = setupLiveRouter();
+    render(<RouterProvider router={router} />);
+    await screen.findByTestId("home");
+    expect(getSnapshotReads()).toBe(1);
+
+    await act(() => router.navigate(panePath("w1:p1")));
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p1:live");
+    expect(seenHeaders).toEqual(["1"]);
+    expect(getSnapshotReads()).toBe(1);
+
+    await setPaneSeen("w1:p1", false);
+    await act(() => router.navigate(-1));
+    await screen.findByTestId("home");
+    await waitFor(() => expect(getSnapshotReads()).toBe(2));
+
+    await act(() => router.navigate(panePath("w1:p1")));
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p1:live");
+    expect(seenHeaders).toEqual(["1", "1"]);
+  });
+
+  it("clears lastPaneUrl on DetailRoute unmount even when navigate(-1) skips rootLoader without revalidating", async () => {
+    const { router, seenHeaders, getSnapshotReads } = setupLiveRouter();
+    render(<RouterProvider router={router} />);
+    await screen.findByTestId("home");
+    expect(getSnapshotReads()).toBe(1);
+
+    await act(() => router.navigate(panePath("w1:p1")));
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p1:live");
+    expect(seenHeaders).toEqual(["1"]);
+
+    await act(() => router.navigate(-1));
+    await screen.findByTestId("home");
+    expect(getSnapshotReads()).toBe(1);
+
+    await setPaneSeen("w1:p1", false);
+    await act(() => router.navigate(panePath("w1:p1")));
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p1:live");
+    expect(seenHeaders).toEqual(["1", "1"]);
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useLoaderData, useLocation, useMatch, useParams } from "react-router";
+import { useLoaderData, useLocation, useMatch, useParams, useRevalidator } from "react-router";
 
 import { AgentChat } from "@/components/agent-chat";
 import { WalkyLogProvider } from "@/components/walky-log";
@@ -11,7 +11,8 @@ import { useLoadingStalled } from "@/hooks/use-loading-stalled";
 import { useNav } from "@/hooks/use-nav";
 import { usePaneFold } from "@/hooks/use-fold-posture";
 import { useWidthClass } from "@/hooks/use-width-class";
-import { type PaneData } from "@/lib/loaders";
+import type { PaneData } from "@/lib/loaders";
+import { isUnreadHeld, notePaneRouteLeft } from "@/lib/seen-state";
 import { GLIDE_PAIRS, glideBack } from "@/lib/glide";
 import { canStepBack, homePath, panePath, readFrom, upTarget, zoomPath } from "@/lib/nav";
 import { readAgentLaunch } from "@/lib/agent-startup";
@@ -39,6 +40,9 @@ export function DetailRoute() {
   const scope = pane.scope;
   const nav = useNav();
   const location = useLocation();
+  const revalidator = useRevalidator();
+  const revalidatorRef = useRef(revalidator);
+  revalidatorRef.current = revalidator;
   const stalled = useLoadingStalled();
   const dashView = useDashPrefs().prefs.dashView;
   // From 600px wide the pane screen is a sidebar beside a strip of panes (ADR 0120). Below, nothing
@@ -46,6 +50,19 @@ export function DetailRoute() {
   const widthClass = useWidthClass();
   // A half-open foldable splits the screen at the fold (ADR 0120, "Folded postures"); flat elsewhere.
   const fold = usePaneFold(widthClass);
+
+  // React Router v7 skips `rootLoader` on a pure step-back to `/` when parent params and query stay
+  // unchanged. Clear `lastPaneUrl` only when `DetailRoute` itself unmounts (leaving `/pane/*`), so a
+  // sideways pane-to-pane switch keeps the incoming pane's `lastPaneUrl` intact.
+  useEffect(() => () => notePaneRouteLeft(), []);
+  // When leaving a pane because it was just marked unread, revalidate once the route transition lands
+  // so the destination snapshot reflects the unread mark immediately without re-polling this pane first.
+  useEffect(
+    () => () => {
+      if (isUnreadHeld(paneId, scope)) revalidatorRef.current.revalidate();
+    },
+    [paneId, scope],
+  );
 
   // SAFETY: `location.state` is whatever the navigation that got here attached — `unknown` by
   // definition. Collie puts `{ freshPane }` there (components/agent-list's optimistic open), beside

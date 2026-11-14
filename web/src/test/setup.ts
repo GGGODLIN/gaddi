@@ -3,6 +3,7 @@ import { afterEach, beforeEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 
 import { server } from "./msw";
+import { __resetSeenState } from "@/lib/seen-state";
 import { __resetConnectionHealth } from "@/lib/connection-health";
 import { __resetPairing } from "@/lib/pairing";
 import { __resetDraftPrune } from "@/lib/drafts";
@@ -101,3 +102,6 @@ if (!("matchMedia" in window)) {
 // The report streaks and the open sheet are module-scoped (lib/report/store.ts, ADR 0123): one case's
 // failed sends would otherwise count toward the next case's card.
 beforeEach(() => __resetReport());
+// Manual unread holds and prefetch epochs are module-scoped (lib/seen-state.ts): one case's Mark as
+// unread must not withhold `x-collie-seen` in the next case, and `lastPaneUrl` resets beside them.
+beforeEach(() => __resetSeenState());

@@ -32,6 +32,14 @@ import { readTapReplyTolerant, readTricksReplyTolerant } from "./tricks/read";
 import { readOfficialAddReply, readOfficialTricksReply, readTrick } from "./tricks/wire";
 import { fileVersionOf } from "./file-image-cache";
 import { isLead, normalizeScope, paneScopeKey, type Scope } from "./scope";
+import {
+  beginPaneSeenChange,
+  clearUnreadHold,
+  isUnreadHeld,
+  rollbackUnreadHold,
+  seenEpoch,
+  __resetSeenState,
+} from "./seen-state";
 import { closePaneNotifications } from "./pane-notifications";
 import { textRouteFor } from "./send-path";
 import { stampSend } from "./poll-intent";
@@ -706,7 +714,7 @@ export async function fetchPane(
   });
   // A seen read is also the bridge's cue that this device closed its own notification for the pane
   // (lib/pane-notifications.ts, bridge/push.ts rule 2), so the close goes first and is not waited on.
-  if (seen) {
+  if (seen && !isUnreadHeld(paneId, scope)) {
     headers.set("x-collie-seen", "1");
     void closePaneNotifications(paneId, scope);
   }
@@ -782,11 +790,12 @@ export function fetchHistory(
   const qs = q.toString();
   const path = `/api/pane/${encodeURIComponent(paneId)}/history${qs ? `?${qs}` : ""}`;
   // Reading the transcript is looking at the pane — and history is a READ, so like fetchPane it
-  // carries the header that lets the bridge count it (bridge/server.ts → marksPaneSeen).
-  return req<PaneHistoryResponse>(withScope(path, scope), {
-    signal,
-    headers: { "x-collie-seen": "1" },
-  });
+  // carries the header that lets the bridge count it (bridge/server.ts → marksPaneSeen), unless a
+  // manual Mark as unread holds the unseen mark against background reads.
+  const init: ReqInit = isUnreadHeld(paneId, scope)
+    ? { signal }
+    : { signal, headers: { "x-collie-seen": "1" } };
+  return req<PaneHistoryResponse>(withScope(path, scope), init);
 }
 
 /** Rows per page of the program's conversation list. The bridge caps a page at 100. */
@@ -917,7 +926,7 @@ export async function fetchChat(
   // marksPaneSeen), so a Chat screen left open keeps the pane's unseen mark clear. `seen: false` is
   // the large screen's read-only column beside the focused one (ADR 0120): on screen, but only the
   // focused pane counts as opened, so it leaves the mark alone, as fetchPane's prefetch does.
-  if (seen) headers.set("x-collie-seen", "1");
+  if (seen && !isUnreadHeld(paneId, scope)) headers.set("x-collie-seen", "1");
   if (cached !== undefined) headers.set("if-none-match", cached);
 
   // The live window is a poll read and gets the poll deadline. A `?before=` page is a tap the operator
@@ -2045,6 +2054,24 @@ export function focusPane(paneId: string, scope?: Scope): Promise<ActionResponse
   return req<ActionResponse>(withScope(`/api/pane/${encodeURIComponent(paneId)}/focus`, scope), {
     method: "POST",
   });
+}
+
+export { clearUnreadHold, isUnreadHeld, seenEpoch, __resetSeenState };
+
+/** Set or clear a pane's shared seen mark (`true` = read, `false` = unread). */
+export async function setPaneSeen(paneId: string, seen: boolean, scope?: Scope): Promise<ActionResponse> {
+  const epoch = beginPaneSeenChange(paneId, seen, scope);
+  try {
+    const res = await req<ActionResponse>(withScope(`/api/pane/${encodeURIComponent(paneId)}/seen`, scope), {
+      method: "POST",
+      body: JSON.stringify({ seen }),
+    });
+    if (!seen && !res.ok) rollbackUnreadHold(paneId, epoch, scope);
+    return res;
+  } catch (error) {
+    if (!seen) rollbackUnreadHold(paneId, epoch, scope);
+    throw error;
+  }
 }
 
 /** Set (or clear) a pane's label. An empty/blank `label` clears it (the bridge sends `null` on). */

@@ -15,6 +15,7 @@ import {
   cancelHeldSend,
   checkRun,
   clearRecentRuns,
+  clearUnreadHold,
   createTab,
   fetchChat,
   fetchConfig,
@@ -27,12 +28,15 @@ import {
   fetchSnapshot,
   filesImagePath,
   getNotifyPrefs,
+  isUnreadHeld,
   POLL_TIMEOUT_MS,
   readFailureKind,
   imageSrc,
   refreshNow,
   removeRecentRun,
+  seenEpoch,
   sendKeys,
+  setPaneSeen,
   startLaunch,
   fetchWalkyWho,
   pinItem,
@@ -1391,3 +1395,152 @@ describe("the pinned messages routes (M90)", () => {
     expect(older).toMatchObject({ status: 404 });
   });
 });
+
+describe("setPaneSeen — unreadHold suppresses poll seen headers", () => {
+  async function sampleSeenHeaders(paneId: string): Promise<[string | null, string | null, string | null]> {
+    let paneHeader: string | null = null;
+    let chatHeader: string | null = null;
+    let historyHeader: string | null = null;
+    server.use(
+      http.get(/\/api\/pane\/[^/]+$/, ({ request }) => {
+        paneHeader = request.headers.get("x-collie-seen");
+        return HttpResponse.json({ paneId, text: "ok", truncated: false, revision: 1 });
+      }),
+      http.get(/\/api\/pane\/[^/]+\/chat$/, ({ request }) => {
+        chatHeader = request.headers.get("x-collie-seen");
+        return HttpResponse.json({ available: false, reason: "no-session" });
+      }),
+      http.get(/\/api\/pane\/[^/]+\/history$/, ({ request }) => {
+        historyHeader = request.headers.get("x-collie-seen");
+        return HttpResponse.json({ available: false, reason: "no-session" });
+      }),
+    );
+    await fetchPane(paneId);
+    await fetchChat(paneId);
+    await fetchHistory(paneId);
+    return [paneHeader, chatHeader, historyHeader];
+  }
+
+  it("omits x-collie-seen on fetchPane, fetchChat, and fetchHistory while setPaneSeen(id, false) is in flight and after it succeeds, then restores after clearUnreadHold or setPaneSeen(id, true)", async () => {
+    let releasePost: (() => void) | undefined;
+    const postGate = new Promise<void>((resolve) => {
+      releasePost = resolve;
+    });
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async () => {
+        await postGate;
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    const pending = setPaneSeen("w1:p1", false);
+    expect(await sampleSeenHeaders("w1:p1")).toEqual([null, null, null]);
+    expect(await sampleSeenHeaders("w1:p2")).toEqual(["1", "1", "1"]);
+
+    releasePost?.();
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(await sampleSeenHeaders("w1:p1")).toEqual([null, null, null]);
+
+    clearUnreadHold("w1:p1");
+    expect(await sampleSeenHeaders("w1:p1")).toEqual(["1", "1", "1"]);
+
+    server.use(http.post(/\/api\/pane\/[^/]+\/seen$/, () => HttpResponse.json({ ok: true })));
+    await expect(setPaneSeen("w1:p1", false)).resolves.toEqual({ ok: true });
+    expect(await sampleSeenHeaders("w1:p1")).toEqual([null, null, null]);
+
+    await expect(setPaneSeen("w1:p1", true)).resolves.toEqual({ ok: true });
+    expect(await sampleSeenHeaders("w1:p1")).toEqual(["1", "1", "1"]);
+  });
+
+  it("releases unreadHold automatically when setPaneSeen(id, false) rejects or returns ok: false", async () => {
+    let failNow: (() => void) | undefined;
+    const failGate = new Promise<void>((resolve) => {
+      failNow = resolve;
+    });
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async () => {
+        await failGate;
+        return new HttpResponse("boom", { status: 502 });
+      }),
+    );
+    const rejecting = setPaneSeen("w1:p1", false);
+    expect(await sampleSeenHeaders("w1:p1")).toEqual([null, null, null]);
+    failNow?.();
+    await expect(rejecting).rejects.toThrow(/502/);
+    expect(await sampleSeenHeaders("w1:p1")).toEqual(["1", "1", "1"]);
+
+    let refuseNow: (() => void) | undefined;
+    const refuseGate = new Promise<void>((resolve) => {
+      refuseNow = resolve;
+    });
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async () => {
+        await refuseGate;
+        return HttpResponse.json({ ok: false, error: "refused" });
+      }),
+    );
+    const refusing = setPaneSeen("w1:p1", false);
+    expect(await sampleSeenHeaders("w1:p1")).toEqual([null, null, null]);
+    refuseNow?.();
+    await expect(refusing).resolves.toEqual({ ok: false, error: "refused" });
+    expect(await sampleSeenHeaders("w1:p1")).toEqual(["1", "1", "1"]);
+  });
+
+  it("keeps a newer setPaneSeen(id, false) hold when an older overlapping request fails with 500 or ok: false", async () => {
+    let finishOlder500: (() => void) | undefined;
+    const older500Gate = new Promise<void>((resolve) => {
+      finishOlder500 = resolve;
+    });
+    let callCount = 0;
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          await older500Gate;
+          return new HttpResponse("boom", { status: 500 });
+        }
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    const first = setPaneSeen("w1:p1", false);
+    const second = setPaneSeen("w1:p1", false);
+    await expect(second).resolves.toEqual({ ok: true });
+
+    finishOlder500?.();
+    await expect(first).rejects.toThrow(/500/);
+    expect(isUnreadHeld("w1:p1")).toBe(true);
+    expect(await sampleSeenHeaders("w1:p1")).toEqual([null, null, null]);
+
+    const epochBeforeRead = seenEpoch("w1:p1");
+    await expect(setPaneSeen("w1:p1", true)).resolves.toEqual({ ok: true });
+    expect(seenEpoch("w1:p1")).toBeGreaterThan(epochBeforeRead);
+    expect(isUnreadHeld("w1:p1")).toBe(false);
+    expect(await sampleSeenHeaders("w1:p1")).toEqual(["1", "1", "1"]);
+
+    let finishOlderRefusal: (() => void) | undefined;
+    const olderRefusalGate = new Promise<void>((resolve) => {
+      finishOlderRefusal = resolve;
+    });
+    callCount = 0;
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          await olderRefusalGate;
+          return HttpResponse.json({ ok: false, error: "refused" });
+        }
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    const olderRefusal = setPaneSeen("w1:p1", false);
+    const newerUnread = setPaneSeen("w1:p1", false);
+    await expect(newerUnread).resolves.toEqual({ ok: true });
+
+    finishOlderRefusal?.();
+    await expect(olderRefusal).resolves.toEqual({ ok: false, error: "refused" });
+    expect(await sampleSeenHeaders("w1:p1")).toEqual([null, null, null]);
+  });
+});
+

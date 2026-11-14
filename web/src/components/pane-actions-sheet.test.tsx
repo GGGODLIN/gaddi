@@ -743,3 +743,90 @@ describe("PaneActionsSheet — report a problem (ADR 0123)", () => {
     expect(screen.queryByRole("button", { name: "Report a problem" })).toBeNull();
   });
 });
+
+describe("PaneActionsSheet — manual mark unread / read", () => {
+  it("marks a settled seen pane unread, closes the sheet, stamps topology, and notifies onSeenChange(id, false)", async () => {
+    const user = userEvent.setup();
+    const onSeenChange = vi.fn();
+    const status = renderHook(() => useStatus());
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    const seenPane: AgentView = { ...agent, status: "idle", lastActiveAt: 100, lastSeenAt: 200 };
+    const props = renderSheet({ pane: seenPane, onSeenChange });
+    expect(screen.queryByRole("button", { name: "Mark as read" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Mark as unread" }));
+    await waitFor(() => expect(onSeenChange).toHaveBeenCalledExactlyOnceWith("w1:p1", false));
+    expect(bodies).toEqual([{ seen: false }]);
+    expect(props.onClose).toHaveBeenCalledOnce();
+    expect(topologyBursting()).toBe(true);
+    expect(status.result.current).toMatchObject({ text: "Marked as unread", tone: "success" });
+  });
+
+  it("marks an unseen pane read and notifies onSeenChange(id, true)", async () => {
+    const user = userEvent.setup();
+    const onSeenChange = vi.fn();
+    const status = renderHook(() => useStatus());
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    const unseenPane: AgentView = { ...agent, status: "done", lastActiveAt: 500, lastSeenAt: 100 };
+    renderSheet({ pane: unseenPane, onSeenChange });
+    expect(screen.queryByRole("button", { name: "Mark as unread" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Mark as read" }));
+    await waitFor(() => expect(onSeenChange).toHaveBeenCalledExactlyOnceWith("w1:p1", true));
+    expect(bodies).toEqual([{ seen: true }]);
+    expect(status.result.current).toMatchObject({ text: "Marked as read", tone: "success" });
+  });
+
+  it("treats the currently open pane (openHere) as already seen even before the next snapshot poll refreshes lastSeenAt", async () => {
+    const user = userEvent.setup();
+    const onSeenChange = vi.fn();
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    const staleSnapshotPane: AgentView = { ...agent, status: "done", lastActiveAt: 500, lastSeenAt: 100 };
+    renderSheet({ pane: staleSnapshotPane, openHere: true, onSeenChange });
+    expect(screen.queryByRole("button", { name: "Mark as read" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Mark as unread" }));
+    await waitFor(() => expect(onSeenChange).toHaveBeenCalledExactlyOnceWith("w1:p1", false));
+    expect(bodies).toEqual([{ seen: false }]);
+  });
+
+  it("hides the row on bare shells, trick sessions, active/blocked turns, conversations, read-only, and saved copies", () => {
+    for (const candidate of [
+      { ...agent, kind: "shell" as const, agent: "shell", status: "unknown" as const },
+      { ...agent, kind: "trick" as const, agent: "trick", status: "idle" as const },
+      { ...agent, status: "working" as const },
+      { ...agent, status: "blocked" as const },
+    ]) {
+      const { unmount } = render(<PaneActionsSheet {...renderProps({ pane: candidate })} />);
+      expect(screen.queryByRole("button", { name: /Mark as (un)?read/ })).toBeNull();
+      unmount();
+    }
+
+    for (const flags of [{ conversation: true }, { readOnly: true }, { savedCopy: true }]) {
+      const { unmount } = render(<PaneActionsSheet {...renderProps(flags)} />);
+      expect(screen.queryByRole("button", { name: /Mark as (un)?read/ })).toBeNull();
+      unmount();
+    }
+  });
+});

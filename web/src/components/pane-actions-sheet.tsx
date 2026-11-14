@@ -19,6 +19,8 @@ import { setStatus } from "@/lib/status";
 import { stampTopology } from "@/lib/poll-intent";
 import { paneName } from "@/lib/pane-name";
 import { dropPin, pinMatcher, setPinned, usePins } from "@/lib/pins";
+import { isTrickPane } from "@/lib/tricks/places";
+import { isUnseen } from "@/lib/triage";
 import type { PaneView } from "@/lib/pane-view";
 import type { AgentView } from "@/lib/types";
 import type { Scope } from "@/lib/scope";
@@ -135,6 +137,13 @@ interface PaneActionsSheetProps {
    */
   onPinChange?: (pane: AgentView, pinned: boolean) => void;
   /**
+   * Fired after a manual Mark as read / Mark as unread succeeds. List callers revalidate; the open
+   * pane view navigates up when its own pane is marked unread so the next poll does not clear it.
+   */
+  onSeenChange?: (paneId: string, seen: boolean) => void;
+  /** True when `pane` is the route currently open on screen, so it reads as seen before the next snapshot poll. */
+  openHere?: boolean;
+  /**
    * Open "New agent in a worktree" for this pane (ADR 0089): the New page with "New worktree" on,
    * on this pane's repo.
    *
@@ -223,6 +232,8 @@ export function PaneActionsSheet({
   paneViewNote,
   herd = NO_HERD,
   onPinChange,
+  onSeenChange,
+  openHere = false,
   onBranchOff,
   conversation = false,
   agentViews,
@@ -232,6 +243,14 @@ export function PaneActionsSheet({
   // on every door (lib/pins.ts).
   const pins = usePins();
   const pinned = pane !== null && pinMatcher(pins)(pane);
+  const canToggleSeen =
+    pane !== null &&
+    !conversation &&
+    pane.kind !== "shell" &&
+    !isTrickPane(pane) &&
+    (pane.status === "done" || pane.status === "idle");
+  const paneUnseen = pane !== null && !openHere && isUnseen(pane);
+  const [markingSeen, setMarkingSeen] = useState(false);
   // A session that turned its walky talky off (M89): the Messages row says so.
   const walkyOff = pane?.walkyOff === true;
   const [mode, setMode] = useState<Mode>("actions");
@@ -394,6 +413,27 @@ export function PaneActionsSheet({
     setPinned(pane, next, herd);
     if (onPinChange) onPinChange(pane, next);
     else setStatus(next ? t("paneActions.pin.done") : t("paneActions.unpin.done"), "success");
+  }
+
+  async function toggleSeen(nextSeen: boolean) {
+    if (!pane || markingSeen || savedCopy) return;
+    const target = pane;
+    setMarkingSeen(true);
+    try {
+      const res = await api.setPaneSeen(target.paneId, nextSeen, scope);
+      if (res.ok) {
+        setStatus(t(nextSeen ? "paneActions.read.done" : "paneActions.unread.done"), "success");
+        onClose();
+        stampTopology();
+        onSeenChange?.(target.paneId, nextSeen);
+      } else {
+        setStatus(describeApiError(res, t("paneActions.seen.failed")), "error");
+      }
+    } catch (e) {
+      setStatus(describeThrownError(e), "error");
+    } finally {
+      setMarkingSeen(false);
+    }
   }
 
   const confirming = !!pane && pending === pane.paneId;
@@ -615,6 +655,14 @@ export function PaneActionsSheet({
               sheet is a list of things you can do, and a permanently dead entry in it is worse than
               a shorter list (the same argument the host block above makes about greying out). Both
               rows are present on every adapter shipped today. */}
+          {canToggleSeen && (
+            <ActionRow
+              icon={<Icon name={paneUnseen ? "mark-read" : "mark-unread"} className={ROW_ICON} />}
+              label={t(paneUnseen ? "paneActions.read.label" : "paneActions.unread.label")}
+              disabled={markingSeen}
+              onClick={() => void toggleSeen(paneUnseen)}
+            />
+          )}
           {canRename.capable && (
             <ActionRow
               icon={<Icon name="edit" className="size-4 shrink-0 text-muted-foreground" />}

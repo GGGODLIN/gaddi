@@ -6,7 +6,7 @@ Every glyph the app draws is named by what it means. A theme's `glyphs` picks th
 them (ADR 0137). A family with no fitting glyph for a key draws the lucide one, shown as `(lucide)`.
 Phosphor's three sets share one map; the fill and duotone files add `-fill` and `-duotone`.
 
-334 keys.
+336 keys.
 
 Phosphor Fill draws these keys in the regular weight, so a cross stays a cross and an empty or
 not-started state stays empty: `action-check`, `action-x`, `answered`, `clear`, `close`, `confirm`, `copied`, `copy-failed`, `decision-dismissed`, `dismiss`, `done`, `mod-icon-check`, `mod-icon-x`, `mod-step-done`, `mod-step-failed`, `mod-step-todo`, `ok`, `plan-done`, `plan-pending`, `remove`, `selected`, `sent-ok`, `update-step-done`, `update-step-failed`, `update-step-skipped`, `voice-setup`, `zoom-out`.
@@ -157,6 +157,8 @@ not-started state stays empty: `action-check`, `action-x`, `answered`, `clear`, 
 | `edit` | edit or rename | `Pencil` | `pencil-simple` | `edit-pencil` |
 | `focus-on-machine` | focus the pane on the machine's own screen | `Monitor` | `monitor` | `computer` |
 | `install-app` | install the app | `MonitorDown` | `tray-arrow-down` | `download-data-window` |
+| `mark-read` | mark a pane as read | `MailOpen` | `envelope-simple-open` | `mail-open` |
+| `mark-unread` | mark a pane as unread | `Mail` | `envelope-simple` | `mail` |
 | `new-space` | new space | `FolderPlus` | `folder-plus` | `folder-plus` |
 | `notifications` | push notifications | `Bell` | `bell` | `bell` |
 | `open-external` | open in another place | `ExternalLink` | `arrow-square-out` | `open-new-window` |
