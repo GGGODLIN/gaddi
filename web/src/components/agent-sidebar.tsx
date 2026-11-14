@@ -12,6 +12,7 @@ import { SectionHeader } from "@/components/section-header";
 import { StatusCounts, StatusSummaryLine } from "@/components/status-counts";
 import { pinnedRows, shownGroups } from "@/lib/dash-view";
 import { paneRowKey } from "@/lib/hosts";
+import { useLastViewedShortcut } from "@/lib/last-viewed";
 import { groupPanesByWorkspace } from "@/lib/pane-groups";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
 import {
@@ -246,6 +247,8 @@ export function ThreadSidebar({
   // THE ORDER, AND WHY IT IS READ ONCE: see `useFrozenRanks` and the long note below. Called here, above
   // the early return, because a hook cannot sit behind one.
   const { ranks, reread } = useFrozenRanks(order, [...agents, ...shellPanes]);
+  const isPinned = useMemo(() => pinMatcher(pins), [pins]);
+  const lastViewed = useLastViewedShortcut(!roomy, [...agents, ...shellPanes], currentPaneKey, isPinned);
   const showLaunch = launchers.length > 0 && onLaunch !== undefined;
   const noPanes = agents.length === 0 && shellPanes.length === 0;
   const showTricks = trickSessions.length > 0 && onSelectTrick !== undefined;
@@ -291,17 +294,32 @@ export function ThreadSidebar({
   // The dashboard's grouping, so the switcher and the dashboard list the same panes in the same place.
   const groupOptions = { order: "fixed" as const, tabs, servers, workspaces, scope, sessions };
   const groups = groupPanesByWorkspace(agents, [], groupOptions);
-  // PINNED LEADS (ADR 0070): the dashboard's place order over agents AND shells (a shell sits after
-  // its tab's agents, as on the dashboard), so the two surfaces agree by construction. Each pinned
-  // pane then leaves its workspace section or Shells: listed once. A workspace section left with no
-  // rows is dropped, as on the dashboard; its heading would count panes listed elsewhere.
-  const isPinned = pinMatcher(pins);
+  // PINNED LEADS, THEN LAST VIEWED (ADR 0070 §1 & §3): Pinned keeps its members in the dashboard's
+  // place order over agents AND shells, and Last viewed follows directly beneath it with at most one
+  // frozen unpinned shortcut on the phone's place view when no query is active. Each pinned or promoted
+  // pane leaves the sections below so every pane is listed once, while workspace headings still count
+  // all `g.panes`.
+  const unfilteredLast = !roomy && order === "place" ? lastViewed : undefined;
+  const unfilteredLastKey = unfilteredLast === undefined ? null : paneRowKey(unfilteredLast);
+  const promotedLast = hits === null ? unfilteredLast : undefined;
+  const lastKey = promotedLast === undefined ? null : paneRowKey(promotedLast);
   const pinned =
     pins.length === 0
       ? NO_PANES
       : pinnedRows(groupPanesByWorkspace(agents, shellPanes, groupOptions), isPinned);
-  const sections = shownGroups(groups, false, isPinned);
-  const shellRows = pins.length === 0 ? shellPanes : shellPanes.filter((p) => !isPinned(p));
+  const sections = shownGroups(
+    groups,
+    false,
+    lastKey === null ? isPinned : (p) => isPinned(p) || paneRowKey(p) === lastKey,
+  );
+  const unfilteredSectionsRows =
+    unfilteredLastKey === null
+      ? sections.flatMap((g) => g.rows)
+      : sections.flatMap((g) => g.rows).filter((p) => paneRowKey(p) !== unfilteredLastKey);
+  const shellRows =
+    pins.length === 0 && lastKey === null
+      ? shellPanes
+      : shellPanes.filter((p) => !isPinned(p) && paneRowKey(p) !== lastKey);
 
   // ── THE ORDER, AND WHY IT IS READ ONCE ───────────────────────────────────────
   // ADR 0063 took status out of every list because a row that moves while its state changes is a row
@@ -332,11 +350,13 @@ export function ThreadSidebar({
 
   const urgent = agents.filter((a) => URGENT.has(bucketOf(a)));
   const isUrgent = (a: AgentView) => URGENT.has(bucketOf(a));
-  // The first urgent row in DISPLAY order, not in the order the list arrived in: in Pinned when a
-  // pinned pane needs you, and in whichever order the rows below it are running in.
+  // The first urgent row in UNFILTERED DISPLAY order (`Pinned`, then `Last viewed` in place order,
+  // then the rows below), so clearing a filter query from the summary line jumps to the exact urgent
+  // row that will lead once the query is cleared (including a restored `Last viewed` row).
   const firstUrgent = [
     ...pinnedAll,
-    ...(ranked ? rankedAll : sections.flatMap((g) => g.rows)),
+    ...(unfilteredLast ? [unfilteredLast] : []),
+    ...(ranked ? rankedAll : unfilteredSectionsRows),
   ].find(isUrgent);
 
   // ── WHAT A QUERY LEAVES ─────────────────────────────────────────────────────
@@ -361,6 +381,7 @@ export function ThreadSidebar({
   const shownRows =
     bestRows ?? [
       ...pinnedShown,
+      ...(promotedLast ? [promotedLast] : []),
       ...(ranked ? rankedRows : [...sectionsShown.flatMap((g) => g.rows), ...shellsShown]),
       ...trickShown,
     ];
@@ -482,6 +503,11 @@ export function ThreadSidebar({
           {pinnedShown.length > 0 && (
             <Section id="switch-pinned" roomy={roomy} headingId="switch-pinned-heading" label={t("home.pinned.title")}>
               {pinnedShown.map(row)}
+            </Section>
+          )}
+          {promotedLast !== undefined && (
+            <Section id="switch-last-viewed" roomy={roomy} headingId="switch-last-viewed-heading" label={t("chat.switcher.lastViewed")}>
+              {row(promotedLast)}
             </Section>
           )}
 

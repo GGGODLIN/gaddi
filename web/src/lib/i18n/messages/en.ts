@@ -745,6 +745,8 @@ export const en = {
   "chat.switcher.aria": "Switch pane",
   "chat.switcher.ariaNeedsYou": "Switch pane, another pane needs you",
   "chat.switcher.title": "Switch pane",
+  // English only until the translation pass: listed in PENDING_TRANSLATION below.
+  "chat.switcher.lastViewed": "Last viewed",
   "chat.switcher.launch.here": "here",
   "wide.sidebar.label": "Panes",
   "wide.space.position": "space {index} of {total}",
@@ -4082,6 +4084,7 @@ export const PENDING_TRANSLATION = [
   "pairApprove.error",
   "pairApprove.retry",
   "pairApprove.done",
+  "chat.switcher.lastViewed",
 ] as const satisfies readonly MessageKey[];
 
 /** A key a bundle may leave out until the translation pass. */
