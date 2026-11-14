@@ -3460,11 +3460,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   : // AT REST: the one slim line between Attach and the primary action.
                     "col-start-2 row-start-1 min-w-0 min-h-9 pl-2 pr-1 py-1.5"
                 : "min-w-0 flex-1 min-h-9 pl-2 py-1.5",
-              // The Steer hint is longer than the reply words, so it is drawn smaller. The FIELD'S HEIGHT
-              // does not change with it: `text-base` gives the field a unitless line-height, so the
-              // placeholder's line box can only shrink (12px x 1.33 against 14-16px x 1.5), and the empty
-              // field is already held at `min-h-9` above (at most 16px x 1.5 + 12px of padding = 36px).
-              (staleWords || steerWords) && "placeholder:text-xs",
+              // The Steer hint is longer than the reply words, so it is drawn smaller. At rest (`min-h-9` +
+              // `py-1.5` = 24px content box), `placeholder:leading-6` keeps the 12px line vertically centered
+              // beside the buttons instead of sitting in Tailwind's 16px `text-xs` line box; an open box has no
+              // `min-h-9`, so leaving `leading-6` off there avoids growing a 14px field under `field-sizing-content`.
+              (staleWords || steerWords) && (boxOpen ? "placeholder:text-xs" : "placeholder:text-xs placeholder:leading-6"),
               // Mirrored, the field's right side stands against the box's border, so it takes the
               // inset the left used to take from Attach.
               !box && hand === "left" && "pr-2",
