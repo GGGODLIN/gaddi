@@ -750,6 +750,8 @@ export const zh: Dictionary = {
   "chat.stream.empty": "发送一条消息即可开始。",
   "chat.empty.sharedFolder":
     "此文件夹中有两个 {harness} 会话，Collie 无法判断哪个属于当前窗格。请用恢复命令加会话 ID 启动该 Agent，Collie 就会读取正确的会话。",
+  "chat.empty.sharedFolderPi":
+    "此文件夹中有两个 Pi 会话，Collie 无法判断哪个属于当前窗格。请用 --session <id> 或 --session-id <id> 启动 pi，或安装 pi session-label 扩展，Collie 就会读取正确的会话。",
   "chat.stream.working": "仍在处理…",
   "chat.stream.questionPending": "终端中有一个提问正在等待。您的下一条消息将用于回答该提问。",
   "chat.stream.queued": "等待发送",

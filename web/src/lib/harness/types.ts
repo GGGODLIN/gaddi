@@ -212,4 +212,10 @@ export interface HarnessAdapter {
    * OPTIONAL; absence means the rows are shown as they are.
    */
   prepareDisplay?(lines: StyledLine[]): StyledLine[];
+  /**
+   * How this harness names a session when two panes share a folder (#780): `"session-flag"` when its
+   * `--resume` flag opens only an interactive picker and `--session` / `--session-id` (or its
+   * session-label extension) must be used instead. Absent keeps the generic resume-command sentence.
+   */
+  sharedFolderRemedy?: "session-flag";
 }

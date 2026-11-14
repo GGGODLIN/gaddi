@@ -1155,11 +1155,13 @@ describe("PiTranscriptSource — a pane that names no session finds it by its fo
       await rm(f.base, { recursive: true, force: true });
     });
 
-    test("pi names its session with --session, and --resume there is only its picker", async () => {
+    test("pi names its session with --session or --session-id, and --resume there is only its picker", async () => {
       const { f, mine, src } = await twoLogs();
       const pi = (...args: string[]) => ({ processes: [{ argv: ["pi", ...args] }], shared: true as const });
       expect(await src.discoverSession(cwd, pi("--session", mine))).toEqual({ kind: "id", value: OLD });
       expect(await src.discoverSession(cwd, pi(`--session=${OLD}`))).toEqual({ kind: "id", value: OLD });
+      expect(await src.discoverSession(cwd, pi("--session-id", OLD))).toEqual({ kind: "id", value: OLD });
+      expect(await src.discoverSession(cwd, pi(`--session-id=${OLD}`))).toEqual({ kind: "id", value: OLD });
       expect(await src.discoverSession(cwd, pi("--resume", mine))).toBeNull();
       await rm(f.base, { recursive: true, force: true });
     });

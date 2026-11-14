@@ -779,6 +779,8 @@ export const de: Dictionary = {
   "chat.stream.empty": "Zum Starten eine Nachricht senden.",
   "chat.empty.sharedFolder":
     "Zwei {harness}-Sitzungen teilen sich diesen Ordner, daher kann Collie nicht erkennen, welche zu diesem Pane gehört. Den Agenten mit seinem Resume-Befehl und der Sitzungs-ID starten, dann liest Collie die richtige.",
+  "chat.empty.sharedFolderPi":
+    "Zwei Pi-Sitzungen teilen sich diesen Ordner, daher kann Collie nicht erkennen, welche zu diesem Pane gehört. pi mit --session <id> oder --session-id <id> starten oder die pi-Session-Label-Erweiterung installieren, dann liest Collie die richtige.",
   "chat.stream.working": "Arbeitet noch…",
   "chat.stream.questionPending": "Im Terminal wartet eine Frage. Deine nächste Nachricht beantwortet sie.",
   "chat.stream.queued": "Wartet auf Senden",

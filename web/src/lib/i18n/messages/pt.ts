@@ -698,6 +698,8 @@ export const pt: Dictionary = {
   "chat.stream.empty": "Envie uma mensagem para começar.",
   "chat.empty.sharedFolder":
     "Duas sessões do {harness} compartilham esta pasta, então o Collie não consegue saber qual é a deste painel. Inicie o agente com o comando de retomar e o ID da sessão, e o Collie lerá a certa.",
+  "chat.empty.sharedFolderPi":
+    "Duas sessões do Pi compartilham esta pasta, então o Collie não consegue saber qual é a deste painel. Inicie o pi com --session <id> ou --session-id <id>, ou instale a extensão session-label do pi, e o Collie lerá a certa.",
   "chat.stream.working": "Ainda trabalhando…",
   "chat.stream.questionPending": "Uma pergunta está aguardando no terminal. Sua próxima mensagem a responde.",
   "chat.stream.queued": "Aguardando para enviar",

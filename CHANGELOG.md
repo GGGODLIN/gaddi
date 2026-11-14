@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Added
 
 - **Typing `@` in the composer suggests files and folders from the pane's folder.** On an agent pane, an `@` token at the start of the draft or after a space opens the single suggestion strip above the box with folders and files from the pane's folder (through the Files route, within its root and git-ignore rules). Tapping a folder fills `@folder/` to browse deeper, and tapping a file fills `@path ` with a trailing space without sending. Thanks @viniciosrab (#757).
+- **A pi pane on herdr-core opens its own Chat when a neighbour shares its folder.** `pi-extension/collie-session-label.ts` writes `pi.session_file` on its herdr-core terminal across startup, `/new`, `/resume`, `/fork` and quit, the pi journal also reads `pi --session-id <id>`, and the shared-folder empty state names `--session <id>`, `--session-id <id>` and the extension instead of a picker-only resume command. Thanks @ibrmora (#780).
 
 ### Fixed
 

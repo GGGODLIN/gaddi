@@ -761,6 +761,8 @@ export const ja: Dictionary = {
   "chat.stream.empty": "メッセージを送信して始めましょう。",
   "chat.empty.sharedFolder":
     "このフォルダーでは {harness} のセッションが 2 つ動いているため、Collie はどちらがこのペインのものか判断できません。再開コマンドとセッション ID を付けてエージェントを起動すると、Collie は正しいセッションを読み込みます。",
+  "chat.empty.sharedFolderPi":
+    "このフォルダーでは Pi のセッションが 2 つ動いているため、Collie はどちらがこのペインのものか判断できません。pi を --session <id> または --session-id <id> 付きで起動するか、pi の session-label 拡張機能を入れると、Collie は正しいセッションを読み込みます。",
   "chat.stream.working": "処理中…",
   "chat.stream.questionPending": "ターミナルで質問への回答を待機しています。次のメッセージが回答になります。",
   "chat.stream.queued": "送信待ち",

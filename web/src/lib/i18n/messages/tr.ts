@@ -698,6 +698,8 @@ export const tr: Dictionary = {
   "chat.stream.empty": "Başlamak için bir mesaj gönderin.",
   "chat.empty.sharedFolder":
     "Bu klasörü iki {harness} oturumu paylaşıyor, bu yüzden Collie hangisinin bu bölmeye ait olduğunu anlayamıyor. Aracıyı devam komutu ve oturum kimliğiyle başlatın, Collie doğru olanı okusun.",
+  "chat.empty.sharedFolderPi":
+    "Bu klasörü iki Pi oturumu paylaşıyor, bu yüzden Collie hangisinin bu bölmeye ait olduğunu anlayamıyor. pi'yi --session <id> veya --session-id <id> ile başlatın ya da pi session-label uzantısını kurun, Collie doğru olanı okusun.",
   "chat.stream.working": "Hâlâ çalışıyor…",
   "chat.stream.questionPending": "Uçbirimde bir soru bekliyor. Bir sonraki iletiniz bu soruyu yanıtlar.",
   "chat.stream.queued": "Göndermek için bekleniyor",

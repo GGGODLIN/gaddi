@@ -263,12 +263,13 @@ What works:
 - History and Chat for a pi or Oh My Pi pane, with no hook. Collie finds the pane's session log from
   the pane's folder: pi keeps one log folder per working directory, and the newest log whose header
   names that folder is the pane's.
-- Two Oh My Pi panes in one folder, each with its own Chat. Without help, Collie cannot tell their
-  logs apart, so both show the empty card. The Oh My Pi extension labels its terminal with the path
-  of its session file (`omp.session_file`), and Collie opens that file for that pane. Copy the
-  extension into `~/.omp/agent/extensions/` (see `omp-extension/README.md`), and copy it again after
-  each Collie upgrade. Check the label with `hc get <terminal> --json`, field `labels`. A wrong label
-  can only point at one of your own sessions in that same folder.
+- Two pi or Oh My Pi panes in one folder, each with its own Chat. Without help, Collie cannot tell
+  their logs apart, so both show the empty card. Each extension labels its terminal with the path of
+  its session file (`pi.session_file` or `omp.session_file`), and Collie opens that file for that pane.
+  Copy `pi-extension/collie-session-label.ts` into `~/.pi/agent/extensions/` (`pi-extension/README.md`)
+  or `omp-extension/collie-session-label.ts` into `~/.omp/agent/extensions/` (`omp-extension/README.md`),
+  and copy it again after each Collie upgrade. Check the label with `hc get <terminal> --json`, field
+  `labels`. A wrong label can only point at one of your own sessions in that same folder.
 
 What looks different on the core:
 
