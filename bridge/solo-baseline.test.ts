@@ -299,6 +299,7 @@ const PANE_WIRE_KEYS = {
   tabLabel: true,
   lastActiveAt: true,
   lastSeenAt: true,
+  manualUnseen: true,
   hasSession: true,
   host: true,
   // NOT a crew dimension — an ordinary optional feature field (0.29.0, panes named by their OSC
@@ -556,6 +557,7 @@ describe("solo zero-tax — wire shapes carry no crew dimension", () => {
       "kind",
       "lastActiveAt",
       "lastSeenAt",
+      "manualUnseen",
       "model",
       "paneId",
       "paneLabel",

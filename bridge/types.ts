@@ -178,6 +178,13 @@ export interface AgentView {
    */
   lastSeenAt?: number;
   /**
+   * Present (`true`) only when this pane was marked unseen by hand rather than by an observed
+   * status transition (`bridge/activity.ts` `unreadAt`). Absent on naturally unseen panes, seen
+   * panes, and older bridges, so a manual mark lights the list row without raising the app icon
+   * count or holding notifications open.
+   */
+  manualUnseen?: true;
+  /**
    * How long this pane's prompt cache stays warm, read from the harness's own transcript
    * (bridge/cache/tracker.ts). Attached at serialise time exactly as {@link lastActiveAt} is, so it
    * rides `toPaneWire`'s rest spread onto the wire.

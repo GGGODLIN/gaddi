@@ -311,4 +311,13 @@ describe("countAlerting — the installed app's icon count", () => {
     expect(countAlerting(herd, { blocked: false, done: true })).toBe(2);
     expect(countAlerting([], { blocked: true, done: true })).toBe(0);
   });
+
+  it("excludes manually marked unseen panes from the app icon count while keeping them in ready", () => {
+    const manualDone = { ...agent("m1", "done", { active: 2, seen: 1 }), manualUnseen: true as const };
+    const manualIdle = { ...agent("m2", "idle", { active: 2, seen: 1 }), manualUnseen: true as const };
+    const natural = agent("u1", "done", { active: 2, seen: 1 });
+    expect(hasReady([manualDone, manualIdle])).toBe(true);
+    expect(countAlerting([manualDone, manualIdle, natural], { blocked: true, done: true })).toBe(1);
+    expect(countAlerting([manualDone, manualIdle], { blocked: true, done: true })).toBe(0);
+  });
 });

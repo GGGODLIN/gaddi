@@ -143,6 +143,12 @@ export interface AgentView {
    */
   lastSeenAt?: number;
   /**
+   * Present (`true`) only when this pane was marked unseen by hand (`PaneWire.manualUnseen` in
+   * bridge/types.ts). Absent otherwise; a manual mark does not raise the app icon count or hold
+   * notifications open.
+   */
+  manualUnseen?: true;
+  /**
    * Which member of the crew this pane lives on — the `?h=` value (CREW_PROTOCOL.md §4). Mirrors
    * `PaneWire.host` in bridge/types.ts.
    *

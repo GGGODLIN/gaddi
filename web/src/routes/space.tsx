@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRevalidator } from "react-router";
 
 import { RouteHeader, SettingsGear } from "@/components/app-header";
 import { HostClipboardButton } from "@/components/host-clipboard";
+import { PaneActionsSheet } from "@/components/pane-actions-sheet";
 import { ReadOnlyBanner } from "@/components/read-only-banner";
 import { SpaceStrip } from "@/components/space-strip";
 import { SpaceView } from "@/components/space-view";
@@ -19,10 +20,10 @@ import { useListApproval } from "@/hooks/use-list-approval";
 import { useScrollMemory } from "@/hooks/use-scroll-memory";
 import { prefetchFolders } from "@/lib/folders";
 import { homePath, newPath, spacePath } from "@/lib/nav";
-import { ambientHost } from "@/lib/hosts";
+import { ambientHost, paneScope } from "@/lib/hosts";
 import { scopeKey } from "@/lib/scope";
 import { setStatus } from "@/lib/status";
-import { isReadOnly } from "@/lib/types";
+import { isReadOnly, type AgentView } from "@/lib/types";
 import { usePairing } from "@/lib/pairing";
 import { useRootData } from "@/lib/route-data";
 
@@ -47,6 +48,9 @@ export function SpaceRoute() {
   }, [folderHost, folderSession]);
   // Either write gate refusing locks the tab strip's rename/close the same way (see ReadOnlyBanner).
   const { refused: notPaired } = usePairing();
+  const readOnly = isReadOnly(data.device) || notPaired;
+  const [held, setHeld] = useState<AgentView | null>(null);
+  const herd = useMemo(() => [...data.agents, ...data.shellPanes], [data.agents, data.shellPanes]);
 
   // Tab selection is ephemeral view state (no deep-link need). Reset it when the space changes:
   // navigating /space/a → /space/b does NOT remount this route (same element, new param), so without
@@ -182,6 +186,7 @@ export function SpaceRoute() {
                 onOpen={approval.open}
                 glideKeyOf={paneOpen.glideKeyOf}
                 onPress={approval.press}
+                onHold={setHeld}
                 host={navHost}
               />
             </main>
@@ -203,6 +208,18 @@ export function SpaceRoute() {
       </ToastViewport>
 
       {approval.sheet}
+      <PaneActionsSheet
+        open={held !== null}
+        onClose={() => setHeld(null)}
+        pane={held}
+        scope={held === null ? data.scope : paneScope(data.scope, held, data.servers, data.sessions)}
+        readOnly={readOnly}
+        savedCopy={data.stale === true}
+        onRenamed={() => revalidator.revalidate()}
+        onClosed={() => revalidator.revalidate()}
+        herd={herd}
+        onSeenChange={() => revalidator.revalidate()}
+      />
     </div>
   );
 }

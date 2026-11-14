@@ -19,7 +19,9 @@ import { needsYou } from "@/lib/triage";
 
 /** What the snapshot says needs you, row by row, and which rows exist. Equal key, same verdicts. */
 export function sweepKey(data: Pick<HomeData, "agents" | "scope" | "viewAll">): string {
-  const rows = data.agents.map((a) => `${paneRowKey(a)}${needsYou(a) ? "!" : ""}`);
+  const rows = data.agents.map(
+    (a) => `${paneRowKey(a)}${a.status === "blocked" || (needsYou(a) && !a.manualUnseen) ? "!" : ""}`,
+  );
   return `${data.scope.host ?? ""}|${data.scope.session ?? ""}|${data.viewAll ? "all" : ""}|${rows.join(",")}`;
 }
 

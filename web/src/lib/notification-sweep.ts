@@ -62,15 +62,19 @@ function covers(view: SweepView, scope: Scope): boolean {
   return view.viewAll || scope.session === addressed.session;
 }
 
+/** Whether this pane still holds an alert open (manual unseen marks do not raise or hold alerts). */
+const needsAlert = (pane: AgentView): boolean =>
+  pane.status === "blocked" || (needsYou(pane) && !pane.manualUnseen);
+
 /** Whether nothing in `view` still waits on the person for this notification. */
 function handled(view: SweepView, tag: string, data: NotifData): boolean {
   if (data.target !== undefined) return false;
   const scope = normalizeScope({ host: data.host, session: data.session });
   const inScope = view.agents.filter((pane) => sameScope(scopeOfPane(view, pane), scope));
-  if (tag === herdSlotTag(scope)) return covers(view, scope) && !inScope.some(needsYou);
+  if (tag === herdSlotTag(scope)) return covers(view, scope) && !inScope.some(needsAlert);
   if (data.paneId === undefined || tag !== paneSlotTag(data.paneId, scope)) return false;
   const pane = inScope.find((p) => p.paneId === data.paneId);
-  return pane === undefined ? covers(view, scope) : !needsYou(pane);
+  return pane === undefined ? covers(view, scope) : !needsAlert(pane);
 }
 
 /** The shown notifications the snapshot says nothing waits on any more. Pure. */

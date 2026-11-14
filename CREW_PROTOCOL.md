@@ -1438,6 +1438,11 @@ prevents (`web/src/lib/api.ts:201-203`).
   which is what every older member sends and what a session with no pins sends. The lead keeps the
   field only in that form and drops anything else. It only shows: the list and the unpin are the
   member's `pane/:id/pins` route.
+- **A pane may carry `manualUnseen: true`** (additive-optional, §7.1, added 2026-11-15): the
+  member's unseen state came from a manual "Mark as unseen" tap rather than an observed status
+  transition. Only `true` means manual; absent (and anything else dropped by `untagPane`) reads as a
+  natural transition when `lastActiveAt > lastSeenAt`. A lead or phone that predates the field
+  ignores it cleanly (`CREW_PROTOCOL_VERSION` stays `2`).
 - **A session may carry `label`** (additive-optional, §7.1, added 2026-10-19): the display label
   the member's own operator wrote in its `spaces.toml`. It is display-only: `name` stays the
   session's identity on the link and in every address. The lead keeps it only as a string and runs

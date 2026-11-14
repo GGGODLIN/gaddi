@@ -3,7 +3,6 @@ import { afterEach, beforeEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 
 import { server } from "./msw";
-import { __resetSeenState } from "@/lib/seen-state";
 import { __resetConnectionHealth } from "@/lib/connection-health";
 import { __resetPairing } from "@/lib/pairing";
 import { __resetDraftPrune } from "@/lib/drafts";
@@ -44,7 +43,6 @@ beforeEach(() => {
     // ignore
   }
   __resetDraftPrune();
-  __resetSeenState();
   __resetLastViewed();
   // The pins store keeps its list in module scope (lib/pins.ts), which the storage clear above
   // cannot reach: one case's pin would otherwise lead the next case's dashboard.

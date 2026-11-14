@@ -2,6 +2,7 @@ import { paneRowKey } from "@/lib/hosts";
 import { nestPanes, toggleFoldedParent, useFoldedParents } from "@/lib/pane-tree";
 import { groupPanesByTab } from "@/lib/spaces";
 import { tabTitle } from "@/lib/pane-name";
+import { bucketOf } from "@/lib/triage";
 import type { AgentView, TabView, WorkspaceView } from "@/lib/types";
 import { AgentCard } from "./agent-card";
 import { t, tn } from "@/lib/i18n";
@@ -20,6 +21,8 @@ interface SpaceViewProps {
   glideKeyOf?: (pane: AgentView) => string;
   /** The finger landed on a row (lib/pane-prefetch.ts). */
   onPress?: (pane: AgentView) => void;
+  /** Hold on a row opens the pane's actions sheet (ADR 0070). */
+  onHold?: (pane: AgentView) => void;
   /** The machine this space is on — the WORKSPACE's host, not the crew's lead. Undefined when solo. */
   host?: string;
 }
@@ -37,6 +40,7 @@ export function SpaceView({
   onOpen,
   glideKeyOf,
   onPress,
+  onHold,
   host,
 }: SpaceViewProps) {
   useLocale();
@@ -99,6 +103,8 @@ export function SpaceView({
                       onClick={(el) => onOpen(entry.pane, el)}
                       glideKey={glideKeyOf?.(entry.pane)}
                       onPress={onPress && (() => onPress(entry.pane))}
+                      onHold={onHold && (() => onHold(entry.pane))}
+                      unseen={bucketOf(entry.pane) === "ready"}
                       scope="tab"
                       tree={entry}
                       onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}

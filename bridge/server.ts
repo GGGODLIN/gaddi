@@ -4,7 +4,7 @@ import { homedir, hostname, networkInterfaces } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, normalize, sep } from "node:path";
 import { createAccessGate, DOOR_PRESETS, FORWARDING_HEADERS } from "./access-jwt.ts";
 import type { JsonObject, JsonValue } from "./json.ts";
-import type { ActivityLedger } from "./activity.ts";
+import type { ActivityLedger, PaneActivity } from "./activity.ts";
 import { type AuditDetail, type AuditEntry, AuditLog } from "./audit.ts";
 import { isLoopbackBindHost, type Config } from "./config.ts";
 import {
@@ -1855,7 +1855,7 @@ export function startServer(opts: {
       // The title is the one string here a program in the pane writes, so it is masked like the
       // mirror (bridge/redact.ts) before it reaches the phone and the phone's cache.
       const titled = cfg.redact ? maskTerminalTitle(p) : p;
-      const withTimes = a ? { ...titled, lastActiveAt: a.activeAt, lastSeenAt: a.seenAt } : titled;
+      const withTimes = a ? { ...titled, ...paneActivityFields(a) } : titled;
       const key = p.agentSession?.value;
       const reading = key === undefined ? undefined : cache?.get(key);
       const read = reading === undefined ? withTimes : { ...withTimes, cache: reading };
@@ -6761,6 +6761,16 @@ export async function renamePane(
   audit.record({ action: "pane.rename", paneId, session, device, detail: { label, tabRenamed } });
   await settleTopology(herdr, engine);
   return json({ ok: true } satisfies ActionResponse, ae);
+}
+
+/** Wire timestamps derived from a pane's activity entry, tagging manual unseen marks without changing natural ones. */
+export function paneActivityFields(
+  a: PaneActivity | undefined,
+): Pick<AgentView, "lastActiveAt" | "lastSeenAt" | "manualUnseen"> {
+  if (!a) return {};
+  return a.unreadAt !== undefined && a.activeAt > a.seenAt
+    ? { lastActiveAt: a.activeAt, lastSeenAt: a.seenAt, manualUnseen: true }
+    : { lastActiveAt: a.activeAt, lastSeenAt: a.seenAt };
 }
 
 export async function seenPane(

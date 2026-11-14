@@ -5,11 +5,12 @@ import { cn } from "@/lib/utils";
 import { useTabLook, type TabLook } from "@/lib/tab-look";
 import { LabelledStrip, STRIP_TAP_TARGET } from "@/components/ui/labelled-strip";
 import { StatusDot } from "@/components/status-badge";
+import { UnseenMark } from "@/components/ui/unseen-mark";
 import { PaneActionsSheet } from "@/components/pane-actions-sheet";
 import { useLongPress } from "@/hooks/use-long-press";
 import { paneName } from "@/lib/pane-name";
 import { paneOrdinals } from "@/lib/pane-ordinal";
-import { shownStatus } from "@/lib/triage";
+import { isUnseen, shownStatus } from "@/lib/triage";
 import type { AgentView } from "@/lib/types";
 import type { Scope } from "@/lib/scope";
 import { t } from "@/lib/i18n";
@@ -162,8 +163,7 @@ export function PaneStrip({
           savedCopy={savedCopy}
           onRenamed={onRenamed}
           onClosed={onClosed}
-          onSeenChange={onSeenChange}
-          openHere={sheetPane?.paneId === currentPaneId}
+          onSeenChange={sheetPane?.paneId === currentPaneId ? undefined : onSeenChange}
           herd={herd}
         />
       )}
@@ -260,6 +260,7 @@ function PanePill({
         <StatusDot status={shownStatus(pane)} live className="size-2.5" />
       )}
       <span>{name}</span>
+      {!active && isUnseen(pane) && <UnseenMark on className="size-2.5" />}
       {/* The number is part of the pill's own text, not a decoration beside it: a screen reader
           hearing two pills called "claude" is in exactly the trouble the eye is. */}
       {ordinal !== undefined && (

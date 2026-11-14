@@ -105,6 +105,7 @@ const AGENT_VIEW_KEYS = {
   tabLabel: true,
   lastActiveAt: true,
   lastSeenAt: true,
+  manualUnseen: true,
   host: true,
   // NOT a crew dimension — an ordinary optional feature field (0.29.0, panes named by their OSC
   // title). Recorded here because the tripwire is exhaustive over `keyof AgentView`, not because it
@@ -309,6 +310,7 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "kind",
       "lastActiveAt",
       "lastSeenAt",
+      "manualUnseen",
       "model",
       "paneId",
       "paneLabel",

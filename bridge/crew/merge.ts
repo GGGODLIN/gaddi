@@ -441,9 +441,10 @@ function untagSession(s: SessionSummary): SessionSummary {
  * (`PaneWire.pins`, M90) is a number the phone draws, so it is kept only as a whole number above zero.
  */
 function untagPane(p: PaneWire): PaneWire {
-  const { host: _ignored, instance, pins, ...rest } = p;
+  const { host: _ignored, instance, pins, manualUnseen, ...rest } = p;
   const tokened = typeof instance === "string" && INSTANCE_TOKEN.test(instance) ? { ...rest, instance } : rest;
-  return Number.isSafeInteger(pins) && pins !== undefined && pins > 0 ? { ...tokened, pins } : tokened;
+  const pinned = Number.isSafeInteger(pins) && pins !== undefined && pins > 0 ? { ...tokened, pins } : tokened;
+  return manualUnseen === true ? { ...pinned, manualUnseen: true } : pinned;
 }
 
 function untagWorkspace(w: WorkspaceView): WorkspaceView {

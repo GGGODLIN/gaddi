@@ -6664,4 +6664,16 @@ describe("seenPane — manual read / unread mark", () => {
       expect(res.status).toBe(404);
     }
   });
+
+  test("paneActivityFields emits manualUnseen: true only when unreadAt is present and activeAt > seenAt", async () => {
+    const { paneActivityFields } = await import("./server.ts");
+    expect(paneActivityFields(undefined)).toEqual({});
+    expect(paneActivityFields({ activeAt: 200, seenAt: 100 })).toEqual({ lastActiveAt: 200, lastSeenAt: 100 });
+    expect(paneActivityFields({ activeAt: 200, seenAt: 200 })).toEqual({ lastActiveAt: 200, lastSeenAt: 200 });
+    expect(paneActivityFields({ activeAt: 200, seenAt: 199, unreadAt: 500 })).toEqual({
+      lastActiveAt: 200,
+      lastSeenAt: 199,
+      manualUnseen: true,
+    });
+  });
 });

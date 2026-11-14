@@ -53,9 +53,10 @@ describe("staleNotifications — a pane's own notification", () => {
       pane("w1:p2", "done", { lastActiveAt: 100, lastSeenAt: 200 }),
       pane("w1:p3", "blocked"),
       pane("w1:p4", "done", { lastActiveAt: 200, lastSeenAt: 100 }),
+      pane("w1:p5", "done", { lastActiveAt: 200, lastSeenAt: 199, manualUnseen: true }),
     ]);
-    const notes = ["w1:p1", "w1:p2", "w1:p3", "w1:p4"].map((id) => paneNote(id));
-    expect(tags(staleNotifications(notes, v))).toEqual(["collie:herd:w1:p1", "collie:herd:w1:p2"]);
+    const notes = ["w1:p1", "w1:p2", "w1:p3", "w1:p4", "w1:p5"].map((id) => paneNote(id));
+    expect(tags(staleNotifications(notes, v))).toEqual(["collie:herd:w1:p1", "collie:herd:w1:p2", "collie:herd:w1:p5"]);
   });
 
   it("closes when the pane is gone from the session the snapshot lists whole", () => {
@@ -117,6 +118,14 @@ describe("staleNotifications — a session's summary", () => {
       "collie:herd",
     ]);
     expect(staleNotifications([summary], view([pane("w1:p1", "working"), pane("w1:p2", "blocked")]))).toEqual([]);
+    expect(
+      tags(
+        staleNotifications(
+          [summary],
+          view([pane("w1:p1", "done", { lastActiveAt: 200, lastSeenAt: 199, manualUnseen: true })]),
+        ),
+      ),
+    ).toEqual(["collie:herd"]);
   });
 
   it("keeps a member's summary, whose session the snapshot cannot list whole", () => {
