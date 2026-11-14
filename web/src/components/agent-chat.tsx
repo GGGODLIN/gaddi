@@ -3404,6 +3404,7 @@ export function AgentChat({
                   returnedDraft={chatFeed.window.queuedSends.some((row) => row.state === "returned")}
                   isShell={isShell}
                   cwd={agent?.cwd || undefined}
+                  filesDir={filesDir}
                   held={agent?.held}
                   // Stop on the belt (M68 spec 02): the bridge says the profile has an interrupt key (live
                   // while the turn runs, dimmed otherwise). The rule is lib/harness-bar.ts `stopFor`; a gone pane or a read-only device has none.

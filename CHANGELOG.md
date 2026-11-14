@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **Typing `@` in the composer suggests files and folders from the pane's folder.** On an agent pane, an `@` token at the start of the draft or after a space opens the single suggestion strip above the box with folders and files from the pane's folder (through the Files route, within its root and git-ignore rules). Tapping a folder fills `@folder/` to browse deeper, and tapping a file fills `@path ` with a trailing space without sending. Thanks @viniciosrab (#757).
+
 ### Fixed
 
 - **Manual unread marks hold steady across polls and restarts.** Marking an open pane unread suppresses in-flight seen headers until the pane is opened again and preserves manual unread marks on long-quiet panes across restarts.

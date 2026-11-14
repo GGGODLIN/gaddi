@@ -6,6 +6,7 @@ import { STRIP_SCROLLER, STRIP_TAP_TARGET } from "@/components/ui/labelled-strip
 import { OverflowEdges } from "@/components/ui/overflow-edges";
 import { useLocale } from "@/hooks/use-locale";
 import type { AgentCommand } from "@/lib/agent-commands";
+import type { FileSuggestion } from "@/lib/file-suggest";
 import { t } from "@/lib/i18n";
 import { segmentsOf, suggest, SUGGEST_LIMIT, type Suggestion, type SuggestionLine } from "@/lib/sent-suggest";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,18 @@ export interface CommandSource {
   onPick: (command: AgentCommand) => void;
 }
 
-export type SuggestionSource = SentSource | CommandSource;
+/** Files and folders from the pane's folder, ranked for the active `@` token on an agent pane (#757). */
+export interface FileSource {
+  kind: "files";
+  /** The file or folder chips to offer, in order. */
+  files: readonly FileSuggestion[];
+  /** Keeps the 44px row steady while drilling into a subfolder whose listing is in flight. */
+  holdOpen?: boolean;
+  /** A chip was tapped: replace the active `@` token in the box. */
+  onPick: (file: FileSuggestion) => void;
+}
+
+export type SuggestionSource = SentSource | CommandSource | FileSource;
 
 export interface SuggestionStripProps {
   open: boolean;
@@ -79,6 +91,7 @@ const CHIP =
 
 interface Chip {
   key: string;
+  ariaLabel: string;
   suggestion: Suggestion;
   pick: () => void;
 }
@@ -89,17 +102,39 @@ function chipsOf(source: SuggestionSource, sentOffered: readonly Suggestion[]): 
   if (source.kind === "sent") {
     return sentOffered.map((suggestion) => ({
       key: suggestion.line,
+      ariaLabel: suggestion.line,
       suggestion,
       pick: () => source.onPick(suggestion.line),
+    }));
+  }
+  if (source.kind === "files") {
+    return source.files.slice(0, SUGGEST_LIMIT).map((file) => ({
+      key: file.key,
+      ariaLabel: file.ariaLabel,
+      suggestion: file.display,
+      pick: () => source.onPick(file),
     }));
   }
   // The same cap as Sent's: the best matches first, in the order `suggestCommands` ranked them. A bare
   // `/` therefore shows the first twelve, and the Agent palette stays the place for the full list.
   return source.commands.slice(0, SUGGEST_LIMIT).map((command) => ({
     key: command.command,
+    ariaLabel: command.command,
     suggestion: { line: command.command, marks: [] },
     pick: () => source.onPick(command),
   }));
+}
+
+function slotOf(source: SuggestionSource): string {
+  if (source.kind === "sent") return "sent-suggestions";
+  if (source.kind === "files") return "file-suggestions";
+  return "command-suggestions";
+}
+
+function ariaLabelOf(source: SuggestionSource): string {
+  if (source.kind === "sent") return t("sent.suggest.aria");
+  if (source.kind === "files") return t("files.suggest.aria");
+  return t("commands.title");
 }
 
 export function SuggestionStrip({ open, typed, source }: SuggestionStripProps) {
@@ -110,24 +145,29 @@ export function SuggestionStrip({ open, typed, source }: SuggestionStripProps) {
   const sentOffered = useMemo(() => (sentLines === null ? [] : suggest(sentLines, typed)), [sentLines, typed]);
   const chips = chipsOf(source, sentOffered);
   const sent = source.kind === "sent";
-  const hasRows = sent ? source.lines.length > 0 : source.commands.length > 0;
+  const hasRows =
+    source.kind === "sent"
+      ? source.lines.length > 0
+      : source.kind === "files"
+        ? source.files.length > 0 || source.holdOpen === true
+        : source.commands.length > 0;
   return (
     <Collapse open={open && hasRows}>
       <div
-        data-slot={sent ? "sent-suggestions" : "command-suggestions"}
+        data-slot={slotOf(source)}
         role="group"
-        aria-label={sent ? t("sent.suggest.aria") : t("commands.title")}
+        aria-label={ariaLabelOf(source)}
         className="h-11"
       >
         <OverflowEdges cue="none">
           {(ref) => (
             <div ref={ref} className={cn(STRIP_SCROLLER, "h-11 px-1")}>
-              {chips.map(({ key, suggestion, pick }) => (
+              {chips.map(({ key, ariaLabel, suggestion, pick }) => (
                 <button
                   key={key}
                   type="button"
                   // The line whole: its runs are separate spans, and a reader must not hear the space between two of them go missing.
-                  aria-label={suggestion.line}
+                  aria-label={ariaLabel}
                   onMouseDown={keepFocus}
                   onClick={pick}
                   className={cn(STRIP_TAP_TARGET, CHIP, "max-w-[16rem] justify-start font-mono")}
