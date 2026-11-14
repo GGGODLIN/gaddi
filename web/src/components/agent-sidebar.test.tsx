@@ -1065,5 +1065,67 @@ describe("ThreadSidebar — last viewed shortcut", () => {
     render(<ThreadSidebar agents={[first, second, third]} currentPaneKey="" onSelect={onSelect} order="place" />);
     expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
   });
+
+  it("locks onto a single target on open: closing it on a poll hides Last viewed rather than pulling up the runner-up (ADR 0063)", async () => {
+    const { notePaneViewed } = await import("@/lib/last-viewed");
+    const first = { ...fixtureAgents[0]!, paneLabel: "tidepool-main", status: "idle" as const };
+    const second = { ...fixtureAgents[1]!, paneLabel: "lumen-approve", status: "blocked" as const };
+    const third = { ...idleAgent, paneLabel: "sandbox-old" };
+    notePaneViewed(first);
+    notePaneViewed(second);
+
+    const { rerender, unmount } = render(
+      <ThreadSidebar agents={[first, second, third]} currentPaneKey="" onSelect={vi.fn()} order="attention" />,
+    );
+    const region = () => screen.getByRole("region", { name: "Last viewed" });
+    expect(within(region()).getByRole("button")).toHaveAttribute("data-pane-key", paneRowKey(second));
+
+    // Another visit recorded or a poll updating status while the sheet stays open must not swap the row.
+    notePaneViewed(third);
+    rerender(
+      <ThreadSidebar
+        agents={[first, { ...second, status: "working" }, third]}
+        currentPaneKey=""
+        onSelect={vi.fn()}
+        order="attention"
+      />,
+    );
+    const frozenRow = within(region()).getByRole("button");
+    expect(frozenRow).toHaveAttribute("data-pane-key", paneRowKey(second));
+    expect(within(frozenRow).getByRole("img", { name: "working" })).toBeInTheDocument();
+
+    // If a poll closes `second` while the sheet stays open, Last viewed hides instead of pulling `first` up.
+    rerender(<ThreadSidebar agents={[first, third]} currentPaneKey="" onSelect={vi.fn()} order="attention" />);
+    expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
+
+    // Reopening the sheet reads the updated trail (`third`).
+    unmount();
+    render(<ThreadSidebar agents={[first, third]} currentPaneKey="" onSelect={vi.fn()} order="attention" />);
+    expect(within(region()).getByRole("button")).toHaveAttribute("data-pane-key", paneRowKey(third));
+  });
+
+  it("resolves once when a cold boot's empty herd first fills, and never promotes a pane arriving on a later poll", async () => {
+    const { notePaneViewed } = await import("@/lib/last-viewed");
+    const first = { ...fixtureAgents[0]!, paneLabel: "tidepool-main", status: "idle" as const };
+    const second = { ...fixtureAgents[1]!, paneLabel: "lumen-approve", status: "blocked" as const };
+    const third = { ...idleAgent, paneLabel: "sandbox-old" };
+    notePaneViewed(third);
+
+    // Cold boot: `agents` starts empty, then the first snapshot lands with `third`.
+    const cold = render(<ThreadSidebar agents={[]} currentPaneKey="" onSelect={vi.fn()} order="attention" />);
+    expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
+    cold.rerender(<ThreadSidebar agents={[first, second, third]} currentPaneKey="" onSelect={vi.fn()} order="attention" />);
+    expect(within(screen.getByRole("region", { name: "Last viewed" })).getByRole("button")).toHaveAttribute(
+      "data-pane-key",
+      paneRowKey(third),
+    );
+    cold.unmount();
+
+    // Non-empty herd at open where `third` is absent locks `null`; a later poll adding `third` must not insert Last viewed.
+    const miss = render(<ThreadSidebar agents={[first, second]} currentPaneKey="" onSelect={vi.fn()} order="attention" />);
+    expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
+    miss.rerender(<ThreadSidebar agents={[first, second, third]} currentPaneKey="" onSelect={vi.fn()} order="attention" />);
+    expect(screen.queryByRole("region", { name: "Last viewed" })).toBeNull();
+  });
 });
 

@@ -1170,6 +1170,7 @@ export function AgentChat({
     instance: agent?.instance,
     enabled: chatFetch || warming,
     savedCopy: stale,
+    seen: drawer !== "paneMenu",
   });
   const chatStatus = chatFeed.window.status;
   const journal: JournalReading = journalReadingOf(chatStatus);

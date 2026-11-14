@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useLoaderData, useLocation, useMatch, useParams } from "react-router";
+import { useLoaderData, useLocation, useMatch, useParams, useRevalidator } from "react-router";
 
 import { AgentChat } from "@/components/agent-chat";
 import { DeliverableLinks } from "@/components/deliverable-links";
@@ -12,7 +12,8 @@ import { useLoadingStalled } from "@/hooks/use-loading-stalled";
 import { useNav } from "@/hooks/use-nav";
 import { usePaneFold } from "@/hooks/use-fold-posture";
 import { useWidthClass } from "@/hooks/use-width-class";
-import { type PaneData } from "@/lib/loaders";
+import { isUnreadHeld } from "@/lib/api";
+import { notePaneRouteLeft, type PaneData } from "@/lib/loaders";
 import { GLIDE_PAIRS, glideBack } from "@/lib/glide";
 import { canStepBack, homePath, panePath, readFrom, upTarget, zoomPath } from "@/lib/nav";
 import { readAgentLaunch } from "@/lib/agent-startup";
@@ -40,6 +41,20 @@ export function DetailRoute() {
   const scope = pane.scope;
   const nav = useNav();
   const location = useLocation();
+  const revalidator = useRevalidator();
+  const revalidatorRef = useRef(revalidator);
+  revalidatorRef.current = revalidator;
+  // Empty deps so sideways pane->pane switches (which keep DetailRoute mounted) do not wipe the
+  // incoming pane's lastPaneUrl after its paneLoader has already run.
+  useEffect(() => () => notePaneRouteLeft(), []);
+  // React Router v7 skips rootLoader on child POP navigation; when leaving a pane after marking it
+  // unread, refresh the herd snapshot once the destination route has settled.
+  useEffect(
+    () => () => {
+      if (isUnreadHeld(paneId, scope)) revalidatorRef.current.revalidate();
+    },
+    [paneId, scope],
+  );
   const stalled = useLoadingStalled();
   const dashView = useDashPrefs().prefs.dashView;
   // From 600px wide the pane screen is a sidebar beside a strip of panes (ADR 0120). Below, nothing

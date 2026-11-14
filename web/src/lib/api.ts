@@ -697,7 +697,8 @@ export async function fetchPane(
   });
   // A seen read is also the bridge's cue that this device closed its own notification for the pane
   // (lib/pane-notifications.ts, bridge/push.ts rule 2), so the close goes first and is not waited on.
-  if (seen) {
+  // Suppressed while a manual Mark as unread hold is active for this pane (`setPaneSeen(id, false)`).
+  if (seen && !unreadHold.has(cacheKey)) {
     headers.set("x-collie-seen", "1");
     void closePaneNotifications(paneId, scope);
   }
@@ -773,11 +774,11 @@ export function fetchHistory(
   const qs = q.toString();
   const path = `/api/pane/${encodeURIComponent(paneId)}/history${qs ? `?${qs}` : ""}`;
   // Reading the transcript is looking at the pane — and history is a READ, so like fetchPane it
-  // carries the header that lets the bridge count it (bridge/server.ts → marksPaneSeen).
-  return req<PaneHistoryResponse>(withScope(path, scope), {
-    signal,
-    headers: { "x-collie-seen": "1" },
-  });
+  // carries the header that lets the bridge count it (bridge/server.ts → marksPaneSeen), unless a
+  // manual Mark as unread hold is active (`historyLoader` clears the hold on navigation).
+  const init: ReqInit = { signal };
+  if (!unreadHold.has(paneScopeKey(scope, paneId))) init.headers = { "x-collie-seen": "1" };
+  return req<PaneHistoryResponse>(withScope(path, scope), init);
 }
 
 /** Rows per page of the program's conversation list. The bridge caps a page at 100. */
@@ -897,7 +898,8 @@ export async function fetchChat(
     `/api/pane/${encodeURIComponent(paneId)}/chat${qs ? `?${qs}` : ""}`,
     scope,
   );
-  const cacheKey = opts.before ? null : paneScopeKey(scope, paneId);
+  const paneKey = paneScopeKey(scope, paneId);
+  const cacheKey = opts.before ? null : paneKey;
   const cached = cacheKey === null || !opts.after ? undefined : chatEtags.get(cacheKey);
 
   const headers = new Headers({
@@ -907,8 +909,9 @@ export async function fetchChat(
   // Watching a session IS looking at the pane, the same reading history takes (bridge/server.ts →
   // marksPaneSeen), so a Chat screen left open keeps the pane's unseen mark clear. `seen: false` is
   // the large screen's read-only column beside the focused one (ADR 0120): on screen, but only the
-  // focused pane counts as opened, so it leaves the mark alone, as fetchPane's prefetch does.
-  if (seen) headers.set("x-collie-seen", "1");
+  // focused pane counts as opened, so it leaves the mark alone, as fetchPane's prefetch does. A manual
+  // Mark as unread hold (`unreadHold`) suppresses it too until the pane is navigated into again.
+  if (seen && !unreadHold.has(paneKey)) headers.set("x-collie-seen", "1");
   if (cached !== undefined) headers.set("if-none-match", cached);
 
   // The live window is a poll read and gets the poll deadline. A `?before=` page is a tap the operator
@@ -2095,22 +2098,57 @@ export function focusPane(paneId: string, scope?: Scope): Promise<ActionResponse
 }
 
 const unreadEpochs = new Map<string, number>();
+// Holds `(scope, paneId)` from the instant `setPaneSeen(id, false)` starts until the operator opens the
+// pane again (`clearUnreadHold`) or marks it read, so an overlapping or trailing poll on the view being
+// left cannot carry `x-collie-seen: 1` and wipe the manual unread mark. Keyed to the epoch that armed it
+// so an earlier failed request never releases a newer hold.
+const unreadHold = new Map<string, number>();
 
-/** Monotonic counter per `(scope, paneId)` bumped when manually marked unread, cancelling late prefetch `markSeen` calls. */
+/** Monotonic counter per `(scope, paneId)` bumped when manually marked read or unread, cancelling late prefetch `markSeen` calls. */
 export function seenEpoch(paneId: string, scope?: Scope): number {
   return unreadEpochs.get(paneScopeKey(scope, paneId)) ?? 0;
 }
 
+/** Whether a manual Mark as unread hold is active for `(scope, paneId)`. */
+export function isUnreadHeld(paneId: string, scope?: Scope): boolean {
+  return unreadHold.has(paneScopeKey(scope, paneId));
+}
+
+/** Release the client-side unread hold when the operator navigates into a pane or its history. */
+export function clearUnreadHold(paneId: string, scope?: Scope): void {
+  unreadHold.delete(paneScopeKey(scope, paneId));
+}
+
+/** Test seam: reset per-pane seen epochs and unread holds between cases (`test/setup.ts`). */
+export function __resetSeenState(): void {
+  unreadEpochs.clear();
+  unreadHold.clear();
+}
+
 /** Set or clear a pane's shared seen mark (`true` = read, `false` = unread). */
-export function setPaneSeen(paneId: string, seen: boolean, scope?: Scope): Promise<ActionResponse> {
-  if (!seen) {
-    const key = paneScopeKey(scope, paneId);
-    unreadEpochs.set(key, (unreadEpochs.get(key) ?? 0) + 1);
+export async function setPaneSeen(paneId: string, seen: boolean, scope?: Scope): Promise<ActionResponse> {
+  const key = paneScopeKey(scope, paneId);
+  const nextEpoch = (unreadEpochs.get(key) ?? 0) + 1;
+  unreadEpochs.set(key, nextEpoch);
+  if (seen) {
+    unreadHold.delete(key);
+    return req<ActionResponse>(withScope(`/api/pane/${encodeURIComponent(paneId)}/seen`, scope), {
+      method: "POST",
+      body: JSON.stringify({ seen }),
+    });
   }
-  return req<ActionResponse>(withScope(`/api/pane/${encodeURIComponent(paneId)}/seen`, scope), {
-    method: "POST",
-    body: JSON.stringify({ seen }),
-  });
+  unreadHold.set(key, nextEpoch);
+  try {
+    const res = await req<ActionResponse>(withScope(`/api/pane/${encodeURIComponent(paneId)}/seen`, scope), {
+      method: "POST",
+      body: JSON.stringify({ seen }),
+    });
+    if (!res.ok && unreadHold.get(key) === nextEpoch) unreadHold.delete(key);
+    return res;
+  } catch (error) {
+    if (unreadHold.get(key) === nextEpoch) unreadHold.delete(key);
+    throw error;
+  }
 }
 
 /** The bridge waits up to 20s for the old Claude to exit before it types the new one. */

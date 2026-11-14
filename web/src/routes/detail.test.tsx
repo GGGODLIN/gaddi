@@ -4,7 +4,8 @@ import { http, HttpResponse } from "msw";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ROOT_ROUTE_ID, type HomeData, type PaneData } from "@/lib/loaders";
+import { PANE_ROUTE_ID, ROOT_ROUTE_ID, paneLoader, rootLoader, type HomeData, type PaneData } from "@/lib/loaders";
+import { setPaneSeen } from "@/lib/api";
 import { readAgentLaunch, type AgentLaunch } from "@/lib/agent-startup";
 import { paneScopeKey } from "@/lib/scope";
 import { panePath } from "@/lib/nav";
@@ -254,5 +255,121 @@ describe("DetailRoute: a launch's intent", () => {
     await act(() => router.navigate(panePath(fresh.paneId), { state: { freshPane: fresh,
       agentLaunch: { id: "foreign", paneKey: paneScopeKey({ session: "other" }, fresh.paneId), harness: "kiro" } } }));
     expect(await screen.findByText("launch:none")).toBeInTheDocument();
+  });
+});
+
+describe("DetailRoute — manual unread hold across back navigation and re-entry", () => {
+  function setupDetailRouter() {
+    let snapshotCalls = 0;
+    const seenPaneReads: string[] = [];
+    const paneA = agentView("w1:p1", "agent");
+    const paneB = agentView("w1:p2", "agent");
+    server.use(
+      http.get("/api/snapshot", () => {
+        snapshotCalls += 1;
+        return HttpResponse.json({
+          bridge: "connected",
+          agents: [paneA, paneB],
+          shellPanes: [],
+          workspaces: [],
+          tabs: [],
+        });
+      }),
+      http.get("/api/pane/:id", ({ request, params }) => {
+        if (request.headers.get("x-collie-seen") === "1") seenPaneReads.push(String(params.id));
+        return HttpResponse.json({ paneId: String(params.id), text: "live", truncated: false, revision: 1 });
+      }),
+      http.get("/api/pane/:id/walky", () => HttpResponse.json({ messages: [] })),
+      http.post("/api/pane/:id/seen", () => HttpResponse.json({ ok: true })),
+    );
+
+    const router = createMemoryRouter(
+      [
+        {
+          id: ROOT_ROUTE_ID,
+          path: "/",
+          loader: rootLoader,
+          element: <Outlet />,
+          children: [
+            { index: true, element: <div data-testid="home">HOME</div> },
+            { id: PANE_ROUTE_ID, path: "pane/:paneId", loader: paneLoader, element: <DetailRoute /> },
+          ],
+        },
+      ],
+      { initialEntries: ["/"] },
+    );
+
+    return { router, seenPaneReads, getSnapshotCalls: () => snapshotCalls };
+  }
+
+  it("revalidates the home snapshot on leaving a held pane via navigate(-1) and clears unreadHold on re-entering the same pane", async () => {
+    const { router, seenPaneReads, getSnapshotCalls } = setupDetailRouter();
+    render(<RouterProvider router={router} />);
+    await screen.findByTestId("home");
+    expect(getSnapshotCalls()).toBe(1);
+
+    await act(async () => {
+      await router.navigate(panePath("w1:p1"));
+    });
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p1:live");
+    expect(seenPaneReads).toEqual(["w1:p1"]);
+    seenPaneReads.length = 0;
+
+    const snapshotsBeforeBack = getSnapshotCalls();
+    await setPaneSeen("w1:p1", false);
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    await screen.findByTestId("home");
+    await waitFor(() => expect(getSnapshotCalls()).toBeGreaterThan(snapshotsBeforeBack));
+
+    await act(async () => {
+      await router.navigate(panePath("w1:p1"));
+    });
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p1:live");
+    expect(seenPaneReads).toEqual(["w1:p1"]);
+  });
+
+  it("clears lastPaneUrl on DetailRoute unmount even when rootLoader does not re-run, without clobbering sideways pane switches", async () => {
+    const { router, seenPaneReads, getSnapshotCalls } = setupDetailRouter();
+    render(<RouterProvider router={router} />);
+    await screen.findByTestId("home");
+
+    await act(async () => {
+      await router.navigate(panePath("w1:p1"));
+    });
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p1:live");
+    seenPaneReads.length = 0;
+
+    // Leave /pane/w1:p1 via navigate(-1) WITHOUT an active unreadHold -> React Router v7 skips rootLoader.
+    const snapshotsBeforeBack = getSnapshotCalls();
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    await screen.findByTestId("home");
+    expect(getSnapshotCalls()).toBe(snapshotsBeforeBack);
+
+    // Mark w1:p1 unread from Home, then re-enter /pane/w1:p1 -> must read as isNavigation === true and clear hold.
+    await setPaneSeen("w1:p1", false);
+    await act(async () => {
+      await router.navigate(panePath("w1:p1"));
+    });
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p1:live");
+    expect(seenPaneReads).toEqual(["w1:p1"]);
+    seenPaneReads.length = 0;
+
+    // Sideways pane -> pane switch does NOT unmount DetailRoute, so w1:p2's lastPaneUrl survives revalidate().
+    await act(async () => {
+      await router.navigate(panePath("w1:p2"), { replace: true });
+    });
+    expect(await screen.findByTestId("chat")).toHaveTextContent("pane:w1:p2:live");
+    expect(seenPaneReads).toEqual(["w1:p2"]);
+    seenPaneReads.length = 0;
+
+    await setPaneSeen("w1:p2", false);
+    await act(async () => {
+      await router.revalidate();
+    });
+    expect(seenPaneReads).toEqual([]);
   });
 });

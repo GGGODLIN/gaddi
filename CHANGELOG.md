@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Manual unread marks and Last viewed shortcuts hold steady across polls and restarts.** Marking an open pane unread suppresses in-flight seen headers until the pane is opened again and preserves manual unread marks on long-quiet panes across restarts, while Switch pane locks its Last viewed shortcut to a single pane while open and drops closed panes.
+
 ## [2.15.0] - 2026-11-14
 
 ### Changed

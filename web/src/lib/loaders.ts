@@ -14,6 +14,7 @@
 // even while a poll's doomed fetch is still hanging.
 
 import {
+  clearUnreadHold,
   fetchDevices,
   fetchHistory,
   fetchCrew,
@@ -28,6 +29,7 @@ import {
   seenEpoch,
 } from "@/lib/api";
 import { parseAnsi } from "@/lib/ansi";
+import { mounted } from "./base-path";
 import { noteUpdateRun } from "./self-update";
 import { splitLines } from "@/lib/blocks";
 import { type CacheHold, holdCacheReadings } from "@/lib/cache-hold";
@@ -341,11 +343,21 @@ let lastPaneUrl: string | undefined;
 
 function isPaneUrl(url: string | undefined): boolean {
   if (!url) return false;
+  const prefix = mounted("/pane/");
   try {
-    return new URL(url).pathname.startsWith("/pane/");
+    return new URL(url).pathname.startsWith(prefix);
   } catch {
-    return url.includes("/pane/");
+    return url.includes(prefix);
   }
+}
+
+/**
+ * Forget `lastPaneUrl` when `DetailRoute` unmounts: React Router v7 skips `rootLoader` on a child
+ * POP/back navigation whose search params did not change, so without this a return to the same pane
+ * would read as a poll instead of a navigation and leave `unreadHold` locked.
+ */
+export function notePaneRouteLeft(): void {
+  lastPaneUrl = undefined;
 }
 
 // The last reading seen for each pane address, carried from one snapshot to the next by
@@ -808,6 +820,7 @@ export async function paneLoader({
   const url = request?.url;
   const isNavigation = lastPaneUrl !== url;
   lastPaneUrl = url;
+  if (isNavigation) clearUnreadHold(paneId, scope);
 
   // Fast path: navigating to a pane during a known, escalated outage shows its last-known mirror (or an
   // empty degraded pane if never visited) INSTANTLY — never a 10s hang on a fetch that can't land.
@@ -1111,6 +1124,7 @@ export async function historyLoader({
   const { paneId } = params;
   if (!paneId) throw new Error("historyLoader: missing :paneId route param");
   const scope = scopeFromRequest(request);
+  clearUnreadHold(paneId, scope);
   const base = { paneId, scope, entries: [], hasMore: false, total: 0, fileTruncated: false };
 
   try {

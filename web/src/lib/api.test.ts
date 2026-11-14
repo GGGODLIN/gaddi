@@ -15,6 +15,7 @@ import {
   cancelHeldSend,
   checkRun,
   clearRecentRuns,
+  clearUnreadHold,
   createTab,
   fetchChat,
   fetchConfig,
@@ -33,6 +34,8 @@ import {
   refreshNow,
   removeRecentRun,
   sendKeys,
+  seenEpoch,
+  setPaneSeen,
   startLaunch,
   fetchWalkyWho,
   pinItem,
@@ -1391,3 +1394,217 @@ describe("the pinned messages routes (M90)", () => {
     expect(older).toMatchObject({ status: 404 });
   });
 });
+
+describe("manual unread hold across pane reads", () => {
+  it("locks unreadHold before setPaneSeen(false) sends, suppresses x-collie-seen and notification close, and clears on navigation or setPaneSeen(true)", async () => {
+    const { historyLoader, paneLoader, rootLoader } = await import("./loaders");
+    const seenReads: string[] = [];
+    const notifClosed = vi.fn();
+    const prevSw = Object.getOwnPropertyDescriptor(navigator, "serviceWorker");
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        getRegistration: async () => ({
+          getNotifications: async () => [{ data: { paneId: "w1:p1" }, close: notifClosed }],
+        }),
+      },
+    });
+
+    let resolveSeenPost!: () => void;
+    const seenPostGate = new Promise<void>((r) => {
+      resolveSeenPost = r;
+    });
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async () => {
+        await seenPostGate;
+        return HttpResponse.json({ ok: true });
+      }),
+      http.get("/api/pane/:id", ({ request, params }) => {
+        if (request.headers.get("x-collie-seen") === "1") {
+          seenReads.push(`pane:${String(params.id)}${new URL(request.url).search}`);
+        }
+        return HttpResponse.json({ text: "hello", truncated: false, revision: 1 });
+      }),
+      http.get("/api/pane/:id/chat", ({ request, params }) => {
+        if (request.headers.get("x-collie-seen") === "1") {
+          seenReads.push(`chat:${String(params.id)}${new URL(request.url).search}`);
+        }
+        return HttpResponse.json({ available: false, reason: "no-session" });
+      }),
+      http.get("/api/pane/:id/history", ({ request, params }) => {
+        if (request.headers.get("x-collie-seen") === "1") {
+          seenReads.push(`history:${String(params.id)}${new URL(request.url).search}`);
+        }
+        return HttpResponse.json({ available: false, reason: "no-session" });
+      }),
+    );
+
+    try {
+      // Initial navigation into w1:p1 marks seen.
+      await paneLoader({ params: { paneId: "w1:p1" }, request: new Request("http://localhost:3000/pane/w1%3Ap1") });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(seenReads).toEqual(["pane:w1:p1?lines=600"]);
+      expect(notifClosed).toHaveBeenCalledTimes(1);
+      seenReads.length = 0;
+      notifClosed.mockClear();
+
+      // Start setPaneSeen(false): hold engages synchronously BEFORE the POST resolves.
+      const pendingUnread = setPaneSeen("w1:p1", false);
+      await fetchPane("w1:p1");
+      await fetchChat("w1:p1");
+      await fetchHistory("w1:p1");
+      // Unrelated panes and scopes still stamp x-collie-seen.
+      await fetchPane("w2:p2");
+      await fetchPane("w1:p1", undefined, { host: "badger" });
+      expect(seenReads).toEqual(["pane:w2:p2", "pane:w1:p1?host=badger"]);
+      expect(notifClosed).not.toHaveBeenCalled();
+      seenReads.length = 0;
+
+      // Resolve POST /seen -> same-URL revalidation poll on paneLoader still suppresses x-collie-seen.
+      resolveSeenPost();
+      await expect(pendingUnread).resolves.toEqual({ ok: true });
+      await paneLoader({ params: { paneId: "w1:p1" }, request: new Request("http://localhost:3000/pane/w1%3Ap1") });
+      await fetchChat("w1:p1");
+      expect(seenReads).toEqual([]);
+      expect(notifClosed).not.toHaveBeenCalled();
+
+      // Leaving to Home and navigating back into w1:p1 clears the hold and sends x-collie-seen again.
+      await rootLoader({ request: new Request("http://localhost:3000/") });
+      await paneLoader({ params: { paneId: "w1:p1" }, request: new Request("http://localhost:3000/pane/w1%3Ap1") });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(seenReads).toEqual(["pane:w1:p1?lines=600"]);
+      expect(notifClosed).toHaveBeenCalledTimes(1);
+      seenReads.length = 0;
+
+      // Locking again, then opening historyLoader also clears the hold.
+      server.use(http.post(/\/api\/pane\/[^/]+\/seen$/, () => HttpResponse.json({ ok: true })));
+      await setPaneSeen("w1:p1", false);
+      await historyLoader({
+        params: { paneId: "w1:p1" },
+        request: new Request("http://localhost:3000/pane/w1%3Ap1/history"),
+      });
+      expect(seenReads).toEqual(["history:w1:p1?limit=5000"]);
+      seenReads.length = 0;
+
+      // Explicit clearUnreadHold and setPaneSeen(true) both release the hold.
+      await setPaneSeen("w1:p1", false);
+      clearUnreadHold("w1:p1");
+      await fetchChat("w1:p1");
+      expect(seenReads).toEqual(["chat:w1:p1"]);
+      seenReads.length = 0;
+
+      await setPaneSeen("w1:p1", false);
+      await setPaneSeen("w1:p1", true);
+      await fetchPane("w1:p1");
+      expect(seenReads).toEqual(["pane:w1:p1"]);
+    } finally {
+      if (prevSw) Object.defineProperty(navigator, "serviceWorker", prevSw);
+      else Reflect.deleteProperty(navigator, "serviceWorker");
+    }
+  });
+
+  it("releases unreadHold when setPaneSeen(false) throws or answers ok: false", async () => {
+    const seenReads: string[] = [];
+    server.use(
+      http.get("/api/pane/:id", ({ request, params }) => {
+        if (request.headers.get("x-collie-seen") === "1") seenReads.push(String(params.id));
+        return HttpResponse.json({ text: "hello", truncated: false, revision: 1 });
+      }),
+      http.post(/\/api\/pane\/[^/]+\/seen$/, () => new HttpResponse("boom", { status: 500 })),
+    );
+
+    await expect(setPaneSeen("w1:p1", false)).rejects.toThrow(/500/);
+    await fetchPane("w1:p1");
+    expect(seenReads).toEqual(["w1:p1"]);
+    seenReads.length = 0;
+
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, () => HttpResponse.json({ ok: false, error: "refused" })),
+    );
+    await expect(setPaneSeen("w1:p1", false)).resolves.toMatchObject({ ok: false });
+    await fetchPane("w1:p1");
+    expect(seenReads).toEqual(["w1:p1"]);
+  });
+
+  it("keeps a newer setPaneSeen(false) hold when an earlier overlapping setPaneSeen(false) fails later (500 or ok: false), and advances seenEpoch on setPaneSeen(true)", async () => {
+    const seenReads: string[] = [];
+    server.use(
+      http.get("/api/pane/:id", ({ request, params }) => {
+        if (request.headers.get("x-collie-seen") === "1") seenReads.push(String(params.id));
+        return HttpResponse.json({ text: "hello", truncated: false, revision: 1 });
+      }),
+    );
+
+    // Overlap #1 (500 failure arriving late) with #2 (200 ok arriving first).
+    let settleFirst500!: (res: Response) => void;
+    let settleSecondOk!: (res: Response) => void;
+    let callIndex = 0;
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, () => {
+        callIndex += 1;
+        const idx = callIndex;
+        return new Promise<Response>((resolve) => {
+          if (idx === 1) settleFirst500 = resolve;
+          else if (idx === 2) settleSecondOk = resolve;
+          else resolve(HttpResponse.json({ ok: true }));
+        });
+      }),
+    );
+
+    const first = setPaneSeen("w1:p1", false);
+    const second = setPaneSeen("w1:p1", false);
+    await vi.waitFor(() => expect(callIndex).toBe(2));
+
+    settleSecondOk(HttpResponse.json({ ok: true }));
+    await expect(second).resolves.toEqual({ ok: true });
+
+    settleFirst500(new HttpResponse("boom", { status: 500 }));
+    await expect(first).rejects.toThrow(/500/);
+
+    // Second request's hold must still be active!
+    const { isUnreadHeld } = await import("./api");
+    expect(isUnreadHeld("w1:p1")).toBe(true);
+    expect(isUnreadHeld("w1:p1", { host: "badger" })).toBe(false);
+    await fetchPane("w1:p1");
+    expect(seenReads).toEqual([]);
+
+    // Overlap #3 (ok: false arriving late) with #4 (ok: true arriving first).
+    let settleThirdRefused!: (res: Response) => void;
+    let settleFourthOk!: (res: Response) => void;
+    callIndex = 0;
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, () => {
+        callIndex += 1;
+        const idx = callIndex;
+        return new Promise<Response>((resolve) => {
+          if (idx === 1) settleThirdRefused = resolve;
+          else if (idx === 2) settleFourthOk = resolve;
+          else resolve(HttpResponse.json({ ok: true }));
+        });
+      }),
+    );
+
+    const third = setPaneSeen("w1:p1", false);
+    const fourth = setPaneSeen("w1:p1", false);
+    await vi.waitFor(() => expect(callIndex).toBe(2));
+
+    settleFourthOk(HttpResponse.json({ ok: true }));
+    await expect(fourth).resolves.toEqual({ ok: true });
+
+    settleThirdRefused(HttpResponse.json({ ok: false, error: "refused" }));
+    await expect(third).resolves.toMatchObject({ ok: false });
+
+    expect(isUnreadHeld("w1:p1")).toBe(true);
+    await fetchPane("w1:p1");
+    expect(seenReads).toEqual([]);
+
+    // Marking read advances seenEpoch and releases unreadHold.
+    const epochBeforeRead = seenEpoch("w1:p1");
+    await setPaneSeen("w1:p1", true);
+    expect(seenEpoch("w1:p1")).toBe(epochBeforeRead + 1);
+    expect(isUnreadHeld("w1:p1")).toBe(false);
+    await fetchPane("w1:p1");
+    expect(seenReads).toEqual(["w1:p1"]);
+  });
+});
+
