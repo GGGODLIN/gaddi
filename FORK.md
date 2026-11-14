@@ -45,6 +45,12 @@ Each entry says what it is, where it lives, and what it assumes.
   `web/index.html`, the manifest names in `web/vite-icons.ts`, the idle lock, the default push
   title, the iPhone app's display names and strings. Images: the icons under `web/public/`, the
   iPhone app icon and Island mark, `assets/social-card.png` and `assets/gaddi-banner.png`.
+- **A one-colour mark reads as a dog's head (2026-10-08).** The Island mark
+  (`ios/IslandWidget/Assets.xcassets/CollieMark.imageset/mark.png`) and the notification badge
+  (`web/public/badge-96x96.png`) are the Gaddi head in profile with cut-outs. Two earlier
+  drawings were turned down: a filled round head, which showed on the Island as a dot, and a
+  drawn dog face, which the operator found too abstract to recognise. A replacement keeps the
+  head recognisable at that size; it is never a filled round shape or an abstract face.
 - **Assumes.** Nothing outside the repo. Internal names stay upstream's: the `collie` command, the
   plugin id `herdr.collie`, file names and identifiers, so an existing install updates in place.
 - **Not renamed, on purpose (2026-10-11).** The CLI's own output and the pages under `docs/` still

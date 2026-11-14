@@ -2094,6 +2094,25 @@ export function focusPane(paneId: string, scope?: Scope): Promise<ActionResponse
   });
 }
 
+const unreadEpochs = new Map<string, number>();
+
+/** Monotonic counter per `(scope, paneId)` bumped when manually marked unread, cancelling late prefetch `markSeen` calls. */
+export function seenEpoch(paneId: string, scope?: Scope): number {
+  return unreadEpochs.get(paneScopeKey(scope, paneId)) ?? 0;
+}
+
+/** Set or clear a pane's shared seen mark (`true` = read, `false` = unread). */
+export function setPaneSeen(paneId: string, seen: boolean, scope?: Scope): Promise<ActionResponse> {
+  if (!seen) {
+    const key = paneScopeKey(scope, paneId);
+    unreadEpochs.set(key, (unreadEpochs.get(key) ?? 0) + 1);
+  }
+  return req<ActionResponse>(withScope(`/api/pane/${encodeURIComponent(paneId)}/seen`, scope), {
+    method: "POST",
+    body: JSON.stringify({ seen }),
+  });
+}
+
 /** The bridge waits up to 20s for the old Claude to exit before it types the new one. */
 const SWITCH_ACCOUNT_TIMEOUT_MS = 45_000;
 

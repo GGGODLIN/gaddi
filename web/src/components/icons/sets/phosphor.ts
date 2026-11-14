@@ -124,6 +124,8 @@ export const PHOSPHOR = {
   "machine": "hard-drives", // a machine (host) · lucide Server
   "machine-activity": "pulse", // machine activity · lucide Activity
   "machine-offline": "plugs", // a machine that is offline · lucide ServerOff
+  "mark-read": "envelope-simple-open", // mark a pane as read · lucide MailOpen
+  "mark-unread": "envelope-simple", // mark a pane as unread · lucide Mail
   "masked": "eye-slash", // content is masked · lucide EyeOff
   "math": "sigma", // math setting · lucide Sigma
   "message-agent": "robot", // a message from the agent · lucide Bot

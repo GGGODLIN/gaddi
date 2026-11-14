@@ -121,7 +121,7 @@ describe("the herdr-core snapshot mapping", () => {
       ["t1", "claude", "blocked", "claude"],
       ["t2", "claude", "unknown", "claude"],
       ["t3", "shell", "unknown", "bash"],
-      ["t4", "codex", "unknown", "bash"],
+      ["t4", "codex", "blocked", "bash"],
       ["t5", "omp", "unknown", "omp"],
       ["t6", "shell", "unknown", "zsh"],
       ["t7", "codex", "idle", "omp"],
@@ -170,6 +170,34 @@ describe("the herdr-core snapshot mapping", () => {
     expect(t3).toMatchObject({ spaceId: "spA", tabId: "tbA2", parentPaneId: "t2", unpaned: true });
   });
 
+  test("a child terminal reporting OSC 7501 error maps to blocked while keeping its live parent", () => {
+    const snapshot = toSnapshot(
+      [
+        terminal({ address: "t1", labels: inSpace("spA", "tbA1"), status: { state: "working", app: "claude-code", kind: "" } }),
+        terminal({ address: "t2", name: "worker", parent: "t1", status: { state: "error", app: "claude-code", kind: "" } }),
+      ],
+      LAYOUT,
+      "/home/dev",
+    );
+    const child = snapshot.panes.find((p) => p.paneId === "t2");
+    expect(child).toMatchObject({ agent: "claude", status: "blocked", parentPaneId: "t1", unpaned: true });
+  });
+
+  test("an unlabelled child under an unlabelled parent in the implicit space is still unpaned", () => {
+    const snapshot = toSnapshot(
+      [
+        terminal({ address: "t1", name: "root" }),
+        terminal({ address: "t2", name: "worker", parent: "t1" }),
+      ],
+      null,
+      "/home/dev",
+    );
+    const t1 = snapshot.panes.find((p) => p.paneId === "t1");
+    const t2 = snapshot.panes.find((p) => p.paneId === "t2");
+    expect(t1?.unpaned).toBeUndefined();
+    expect(t2).toMatchObject({ spaceId: "herdr-core", tabId: "herdr-core.1", parentPaneId: "t1", unpaned: true });
+  });
+
   test("a kept child with its own space and tab labels keeps its place and is not marked unpaned", () => {
     const snapshot = toSnapshot(
       [
@@ -214,7 +242,7 @@ describe("status and app words", () => {
     ["working", "working"],
     ["blocked", "blocked"],
     ["done", "done"],
-    ["error", "unknown"],
+    ["error", "blocked"],
     ["", "unknown"],
   ])("%s reads as %s", (word, collie) => {
     expect(agentStatus(word)).toBe(collie);
