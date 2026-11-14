@@ -25,7 +25,8 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ### Fixed
 
-- **Manual unread marks and Last viewed shortcuts hold steady across polls and restarts.** Marking an open pane unread suppresses in-flight seen headers until the pane is opened again and preserves manual unread marks on long-quiet panes across restarts, while Switch pane locks its Last viewed shortcut to a single pane while open and drops closed panes.
+- **Manual unread marks hold steady across polls and restarts.** Marking an open pane unread suppresses in-flight seen headers until the pane is opened again and preserves manual unread marks on long-quiet panes across restarts.
+- **Last viewed shortcuts stay locked while Switch pane is open.** Switch pane freezes its promoted Last viewed row while the sheet stays open so closing that pane never pulls a runner-up row under your thumb, and closing a pane from its actions menu drops its Last viewed entry.
 
 ## [2.15.0] - 2026-11-14
 

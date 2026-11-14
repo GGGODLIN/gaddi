@@ -14,7 +14,6 @@
 // even while a poll's doomed fetch is still hanging.
 
 import {
-  clearUnreadHold,
   fetchDevices,
   fetchHistory,
   fetchCrew,
@@ -26,8 +25,14 @@ import {
   isApiErrorStatus,
   isPairingRefusal,
   readFailureKind,
-  seenEpoch,
 } from "@/lib/api";
+import {
+  clearUnreadHold,
+  getLastPaneUrl,
+  notePaneRouteLeft,
+  seenEpoch,
+  setLastPaneUrl,
+} from "@/lib/seen-state";
 import { parseAnsi } from "@/lib/ansi";
 import { mounted } from "./base-path";
 import { noteUpdateRun } from "./self-update";
@@ -339,7 +344,6 @@ function isAuthError<TThrown>(error: TThrown): boolean {
 // a pane is mounted, so `lastRootUrl` also CLEARS `lastPaneUrl` whenever we're on a non-pane URL — that
 // way re-entering the same pane (pane → home → same pane) reads as a fresh navigation, not a poll.
 let lastRootUrl: string | undefined;
-let lastPaneUrl: string | undefined;
 
 function isPaneUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -351,14 +355,7 @@ function isPaneUrl(url: string | undefined): boolean {
   }
 }
 
-/**
- * Forget `lastPaneUrl` when `DetailRoute` unmounts: React Router v7 skips `rootLoader` on a child
- * POP/back navigation whose search params did not change, so without this a return to the same pane
- * would read as a poll instead of a navigation and leave `unreadHold` locked.
- */
-export function notePaneRouteLeft(): void {
-  lastPaneUrl = undefined;
-}
+export { notePaneRouteLeft };
 
 // The last reading seen for each pane address, carried from one snapshot to the next by
 // {@link holdCacheReadings}. Module state, like the keep-previous-data caches above and for the same
@@ -484,7 +481,7 @@ export async function rootLoader({ request }: { request?: Request } = {}): Promi
   const isNavigation = lastRootUrl !== url;
   lastRootUrl = url;
   // Leaving a pane clears the pane loader's discriminator so a later return to it reads as a fresh nav.
-  if (!isPaneUrl(url)) lastPaneUrl = undefined;
+  if (!isPaneUrl(url)) setLastPaneUrl(undefined);
 
   // Fast path: a navigation during a known, escalated outage returns last-known data INSTANTLY rather
   // than hanging on a doomed fetch. Revalidations fall through and really fetch (so recovery lands and
@@ -818,8 +815,8 @@ export async function paneLoader({
   // a non-pane URL, so opening a pane (even one just left) reads as a navigation, and polling within it
   // (same URL) reads as a revalidation.
   const url = request?.url;
-  const isNavigation = lastPaneUrl !== url;
-  lastPaneUrl = url;
+  const isNavigation = getLastPaneUrl() !== url;
+  setLastPaneUrl(url);
   if (isNavigation) clearUnreadHold(paneId, scope);
 
   // Fast path: navigating to a pane during a known, escalated outage shows its last-known mirror (or an
