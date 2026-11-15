@@ -1,7 +1,13 @@
 // Thin REST client for the bridge. Everything is same-origin, so credentials/headers are
 // minimal. Each call throws on a non-2xx so callers (route loaders / action handlers) surface errors.
 
-import { apiErrorFieldsOf, parseApiErrorFields, type ApiErrorDetail, type ApiErrorFields } from "./api-error-codes";
+import {
+  apiErrorFieldsOf,
+  isApiErrorCode,
+  parseApiErrorFields,
+  type ApiErrorDetail,
+  type ApiErrorFields,
+} from "./api-error-codes";
 import { trackBusy } from "./busy";
 import {
   beginLongUpload,
@@ -2094,13 +2100,28 @@ export function focusPane(paneId: string, scope?: Scope): Promise<ActionResponse
   });
 }
 
+const recoverSeenConflict: Recover<ActionResponse> = (status, detail) => {
+  if (status !== 409) return null;
+  const fields = parseApiErrorFields(detail);
+  if (fields === undefined) return { ok: false, error: detail.trim() };
+  const response: ActionResponse = { ok: false, error: fields.error ?? "" };
+  if (isApiErrorCode(fields.code)) response.code = fields.code;
+  if (fields.detail !== undefined) response.detail = fields.detail;
+  return response;
+};
+
 /** Set or clear a pane's shared seen mark (`true` = seen, `false` = unseen). */
-export function setPaneSeen(paneId: string, seen: boolean, scope?: Scope): Promise<ActionResponse> {
-  if (seen) void closePaneNotifications(paneId, scope);
-  return req<ActionResponse>(withScope(`/api/pane/${encodeURIComponent(paneId)}/seen`, scope), {
-    method: "POST",
-    body: JSON.stringify({ seen }),
-  });
+export async function setPaneSeen(paneId: string, seen: boolean, scope?: Scope): Promise<ActionResponse> {
+  const res = await req<ActionResponse>(
+    withScope(`/api/pane/${encodeURIComponent(paneId)}/seen`, scope),
+    {
+      method: "POST",
+      body: JSON.stringify({ seen }),
+    },
+    recoverSeenConflict,
+  );
+  if (seen && res.ok) void closePaneNotifications(paneId, scope);
+  return res;
 }
 
 /** The bridge waits up to 20s for the old Claude to exit before it types the new one. */

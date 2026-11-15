@@ -41,6 +41,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A formula makes no link and loads nothing.** With Math set to MathJax, `\mmlToken` could put a link of any scheme, an image, a style, a class or an id into an agent reply or a Markdown file, and `\color`, `\colorbox` and `mathcolor` could name a `url()` paint. A formula now draws its glyphs and its colours only, with either engine. Thanks @bardrop (#775). Reported by @peter50216 (#773).
 - **Small composer hint placeholders sit centered in the field.** The Steer and stale-screen hints shrink the placeholder to `text-xs`, whose 16px line height left the words above the vertical center of the 36px composer row. Resting fields now pair `placeholder:leading-6` with `placeholder:text-xs` so the hint aligns with the buttons beside it without changing an open box's height. Thanks @viniciosrab (#758).
 - **Manual seen rejections and ranked dashboard lists follow pane rules.** Marking an unsettled, child, or unpaned pane seen or unseen now returns 409 on the bridge, ranked Activity and Cache lists on the dashboard stay flat without nesting sub-agents, and in-pane tab strips resolve shell ancestors.
+- **Failed manual seen toggles keep notifications and refresh stale lists.** A 409 refusal on `POST /api/pane/:id/seen` now leaves pane notifications open, revalidates the caller's list, and hides manual seen actions until a pane records activity.
 
 ## [2.15.0] - 2026-11-14
 

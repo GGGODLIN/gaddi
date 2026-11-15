@@ -1394,7 +1394,7 @@ describe("the pinned messages routes (M90)", () => {
 });
 
 describe("setPaneSeen", () => {
-  it("posts { seen } to /api/pane/:id/seen and closes pane notifications only when seen is true", async () => {
+  it("posts { seen } to /api/pane/:id/seen with scope and closes pane notifications only on seen === true success", async () => {
     const requests: Array<{ url: string; body: unknown }> = [];
     const notifClosed = vi.fn();
     const prevSw = Object.getOwnPropertyDescriptor(navigator, "serviceWorker");
@@ -1402,7 +1402,7 @@ describe("setPaneSeen", () => {
       configurable: true,
       value: {
         getRegistration: async () => ({
-          getNotifications: async () => [{ data: { paneId: "w1:p1" }, close: notifClosed }],
+          getNotifications: async () => [{ data: { paneId: "w1:p1", host: "badger" }, close: notifClosed }],
         }),
       },
     });
@@ -1415,16 +1415,56 @@ describe("setPaneSeen", () => {
     );
 
     try {
-      await expect(setPaneSeen("w1:p1", false)).resolves.toEqual({ ok: true });
-      await new Promise((r) => setTimeout(r, 0));
+      await expect(setPaneSeen("w1:p1", false, { host: "badger" })).resolves.toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 10));
       expect(notifClosed).not.toHaveBeenCalled();
 
-      await expect(setPaneSeen("w1:p1", true)).resolves.toEqual({ ok: true });
+      await expect(setPaneSeen("w1:p1", true, { host: "badger" })).resolves.toEqual({ ok: true });
       await vi.waitFor(() => expect(notifClosed).toHaveBeenCalledTimes(1));
       expect(requests).toHaveLength(2);
-      expect(requests[0]!.url).toContain("/api/pane/w1%3Ap1/seen");
+      expect(requests[0]!.url).toContain("/api/pane/w1%3Ap1/seen?host=badger");
       expect(requests[0]!.body).toEqual({ seen: false });
       expect(requests[1]!.body).toEqual({ seen: true });
+    } finally {
+      if (prevSw) Object.defineProperty(navigator, "serviceWorker", prevSw);
+      else Reflect.deleteProperty(navigator, "serviceWorker");
+    }
+  });
+
+  it("recovers a 409 plain-text or JSON refusal into { ok: false, error } without closing notifications", async () => {
+    const notifClosed = vi.fn();
+    const prevSw = Object.getOwnPropertyDescriptor(navigator, "serviceWorker");
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        getRegistration: async () => ({
+          getNotifications: async () => [{ data: { paneId: "w1:p1" }, close: notifClosed }],
+        }),
+      },
+    });
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, () => new HttpResponse("pane is not settled", { status: 409 })),
+    );
+
+    try {
+      await expect(setPaneSeen("w1:p1", true)).resolves.toEqual({ ok: false, error: "pane is not settled" });
+      await new Promise((r) => setTimeout(r, 10));
+      expect(notifClosed).not.toHaveBeenCalled();
+
+      server.use(
+        http.post(/\/api\/pane\/[^/]+\/seen$/, () =>
+          HttpResponse.json(
+            { ok: false, error: "unknown session: work", code: "session.unknown", detail: { session: "work" } },
+            { status: 409 },
+          ),
+        ),
+      );
+      await expect(setPaneSeen("w1:p1", false)).resolves.toEqual({
+        ok: false,
+        error: "unknown session: work",
+        code: "session.unknown",
+        detail: { session: "work" },
+      });
     } finally {
       if (prevSw) Object.defineProperty(navigator, "serviceWorker", prevSw);
       else Reflect.deleteProperty(navigator, "serviceWorker");

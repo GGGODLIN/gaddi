@@ -224,7 +224,8 @@ export function PaneActionsSheet({
     pane.kind !== "shell" &&
     !pane.unpaned &&
     pane.parentPaneId === undefined &&
-    (pane.status === "done" || pane.status === "idle");
+    (pane.status === "done" || pane.status === "idle") &&
+    (pane.lastActiveAt ?? 0) > 0;
   const paneUnseen = pane !== null && isUnseen(pane);
   const [markingSeen, setMarkingSeen] = useState(false);
   // A session that turned its walky talky off (M89): the Messages row says so.
@@ -455,6 +456,8 @@ export function PaneActionsSheet({
           describeApiError(res, t(nextSeen ? "paneActions.markSeen.failed" : "paneActions.markUnseen.failed")),
           "error",
         );
+        stampTopology();
+        onSeenChange?.(target.paneId, !nextSeen);
       }
     } catch (e) {
       setStatus(describeThrownError(e), "error");
@@ -749,7 +752,9 @@ export function PaneActionsSheet({
                 paneUnseen ? (
                   <Icon name="done" className="size-4 shrink-0 text-muted-foreground" />
                 ) : (
-                  <UnseenMark on decorative className="size-3" />
+                  <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+                    <UnseenMark on decorative className="size-3" />
+                  </span>
                 )
               }
               label={t(paneUnseen ? "paneActions.markSeen.label" : "paneActions.markUnseen.label")}

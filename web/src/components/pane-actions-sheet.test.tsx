@@ -825,17 +825,39 @@ describe("PaneActionsSheet — manual mark unseen / seen", () => {
     };
     server.use(http.get("/api/config", () => HttpResponse.json({ push: false, vapidPublicKey: "", mux })));
 
-    renderSheet({ pane: { ...agent, status: "idle" }, onSeenChange: vi.fn() });
+    renderSheet({ pane: { ...agent, status: "idle", lastActiveAt: 100, lastSeenAt: 200 }, onSeenChange: vi.fn() });
     expect(screen.getByRole("button", { name: "Mark as unseen" })).toBeInTheDocument();
     expect(screen.queryByText("No rename here.")).toBeNull();
   });
 
-  it("hides the row on bare shells, child sub-agents, active/blocked turns, conversations, read-only, and saved copies", () => {
+  it("surfaces a 409 refusal, stamps topology, and revalidates via onSeenChange without closing the sheet", async () => {
+    const user = userEvent.setup();
+    const onSeenChange = vi.fn();
+    const status = renderHook(() => useStatus());
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, () => new HttpResponse("pane is not settled", { status: 409 })),
+    );
+
+    const props = renderSheet({
+      pane: { ...agent, status: "done", lastActiveAt: 200, lastSeenAt: 100 },
+      onSeenChange,
+    });
+    await user.click(screen.getByRole("button", { name: "Mark as seen" }));
+    await waitFor(() => expect(status.result.current).toMatchObject({ text: "pane is not settled", tone: "error" }));
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(topologyBursting()).toBe(true);
+    expect(onSeenChange).toHaveBeenCalledOnce();
+  });
+
+  it("hides the row on missing/zero lastActiveAt, bare shells, child sub-agents, active/blocked turns, conversations, read-only, and saved copies", () => {
+    const settledSeen: AgentView = { ...agent, status: "idle", lastActiveAt: 100, lastSeenAt: 200 };
     for (const candidate of [
-      { ...agent, kind: "shell" as const, agent: "shell", status: "unknown" as const },
-      { ...agent, parentPaneId: "w1:parent", status: "done" as const, lastActiveAt: 500, lastSeenAt: 100 },
-      { ...agent, status: "working" as const },
-      { ...agent, status: "blocked" as const },
+      { ...settledSeen, lastActiveAt: undefined },
+      { ...settledSeen, lastActiveAt: 0 },
+      { ...settledSeen, kind: "shell" as const, agent: "shell", status: "unknown" as const },
+      { ...settledSeen, parentPaneId: "w1:parent", status: "done" as const, lastActiveAt: 500, lastSeenAt: 100 },
+      { ...settledSeen, status: "working" as const },
+      { ...settledSeen, status: "blocked" as const },
     ]) {
       const { unmount } = render(<PaneActionsSheet {...renderProps({ pane: candidate, onSeenChange: vi.fn() })} />);
       expect(screen.queryByRole("button", { name: /Mark as (un)?seen/ })).toBeNull();
@@ -843,7 +865,9 @@ describe("PaneActionsSheet — manual mark unseen / seen", () => {
     }
 
     for (const flags of [{ conversation: true }, { readOnly: true }, { savedCopy: true }]) {
-      const { unmount } = render(<PaneActionsSheet {...renderProps({ ...flags, onSeenChange: vi.fn() })} />);
+      const { unmount } = render(
+        <PaneActionsSheet {...renderProps({ pane: settledSeen, onSeenChange: vi.fn(), ...flags })} />,
+      );
       expect(screen.queryByRole("button", { name: /Mark as (un)?seen/ })).toBeNull();
       unmount();
     }
