@@ -53,6 +53,7 @@ function renderStream(
   working = false,
   starting = false,
   onSendQueuedNow?: (keys: readonly string[]) => Promise<boolean>,
+  agent = "muse",
 ) {
   const listRef = createRef<ChatMessageListHandle>();
   return render(
@@ -66,7 +67,7 @@ function renderStream(
       fontSize={14}
       listRef={listRef}
       onSendQueuedNow={onSendQueuedNow}
-      agent="muse"
+      agent={agent}
     />,
   );
 }
@@ -155,6 +156,22 @@ describe("SessionStream", () => {
     }
     renderStream(feedOf({ status: { kind: "unavailable", reason: "no-session" } }));
     expect(screen.queryByText(/share this folder/)).toBeNull();
+  });
+
+  // #780: `pi --resume` opens an interactive picker and takes no id, so a shared-folder pi pane names
+  // `--session <id>`, `--session-id <id>` and the pi session-label extension instead of a resume command.
+  it("names pi's --session / --session-id flags and session-label extension on a shared-folder pi pane", () => {
+    const piLine =
+      "Two Pi sessions share this folder, so Gaddi cannot tell which one is this pane's. Start pi with --session <id> or --session-id <id>, or install the pi session-label extension, then Gaddi reads the right one.";
+    renderStream(
+      feedOf({ status: { kind: "unavailable", reason: "no-session", detail: "shared-folder" } }),
+      true,
+      false,
+      false,
+      undefined,
+      "pi",
+    );
+    expect(screen.getByText(piLine)).toBeInTheDocument();
   });
 
   // ADR 0073 point 7: a 404 means "update this member", never "this pane has nothing to show".

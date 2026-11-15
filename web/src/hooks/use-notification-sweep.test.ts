@@ -111,4 +111,15 @@ describe("useNotificationSweep", () => {
     await waitFor(() => expect(stale.close).toHaveBeenCalledOnce());
     expect(getNotifications).toHaveBeenCalledTimes(2);
   });
+
+  it("sweeps when a pane settles as manualUnseen: true (manual unseen does not hold alerts)", async () => {
+    const manual: AgentView = {
+      ...pane("w1:p1", "done"),
+      lastActiveAt: 200,
+      lastSeenAt: 199,
+      manualUnseen: true,
+    };
+    renderHook(() => useNotificationSweep(home([manual])));
+    await waitFor(() => expect(stale.close).toHaveBeenCalledOnce());
+  });
 });

@@ -14,6 +14,7 @@ import { ASKS_SHOWN, asksAt, shownAsks } from "@/lib/ask";
 import { finished, itemsOf, type ChatItem } from "@/lib/chat-items";
 import type { ChatStatus } from "@/lib/chat-window";
 import { dropPending, unmatched, usePending } from "@/lib/durable-pending";
+import { adapterFor } from "@/lib/harness/registry";
 import { t, type MessageKey } from "@/lib/i18n";
 import { blockOfPin, isPinnable, writingItemId } from "@/lib/message-pins";
 import type { Ask, PinRow, QueuedSendRow } from "@/lib/types";
@@ -421,6 +422,9 @@ export function chatStatusKey(status: ChatStatus): MessageKey | null {
  */
 export function sharedFolderLine(status: ChatStatus, agent: string | undefined): string | null {
   if (status.kind !== "unavailable" || status.detail !== "shared-folder") return null;
+  if (adapterFor(agent?.toLowerCase())?.sharedFolderRemedy === "session-flag") {
+    return t("chat.empty.sharedFolderPi");
+  }
   return t("chat.empty.sharedFolder", { harness: harnessName(agent) });
 }
 

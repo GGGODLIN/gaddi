@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router";
@@ -174,5 +174,56 @@ describe("SpaceRoute, the tab row's '+'", () => {
     expect(launches).toHaveLength(1);
     expect(launches[0]!.host).toBe(PEER);
     expect(launches[0]!.body).toMatchObject({ harness: "codex", paneId: "wA:p2" });
+  });
+});
+
+describe("SpaceRoute — row hold actions and unseen mark", () => {
+  it("shows UnseenMark on unseen rows and opens PaneActionsSheet with Mark as seen on row hold", async () => {
+    const user = userEvent.setup();
+    const unseenPeer: AgentView = {
+      ...peerAgent,
+      status: "done",
+      lastActiveAt: 500,
+      lastSeenAt: 100,
+    };
+    const seenPosts: unknown[] = [];
+    server.use(
+      http.post(/\/api\/pane\/[^/]+\/seen$/, async ({ request }) => {
+        seenPosts.push(await request.json());
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    const data: HomeData = { ...dataFor(PEER), agents: [unseenPeer] };
+    const router = createMemoryRouter(
+      [
+        {
+          id: ROOT_ROUTE_ID,
+          path: "/",
+          loader: () => data,
+          children: [
+            {
+              path: "space/:spaceId",
+              element: withHeaderHost(
+                <CrewProvider servers={data.servers} sessions={data.sessions} ts={data.ts} pollMs={1500}>
+                  <SpaceRoute />
+                </CrewProvider>,
+              ),
+            },
+          ],
+        },
+      ],
+      { initialEntries: [`/space/wA?h=${PEER}`] },
+    );
+    render(<RouterProvider router={router} />);
+
+    const main = await screen.findByRole("main");
+    const row = await within(main).findByRole("button", { name: /peer pane/ });
+    expect(row.querySelector('[role="img"][aria-label]')).not.toBeNull();
+
+    fireEvent.contextMenu(row);
+    const markSeenBtn = await screen.findByRole("button", { name: "Mark as seen" });
+    await user.click(markSeenBtn);
+    await waitFor(() => expect(seenPosts).toEqual([{ seen: true }]));
   });
 });

@@ -113,4 +113,5 @@ export const piAdapter: HarnessAdapter = {
   // The trust prompt ends at its bottom rule with no status rows under it, so it is not a pi frame.
   modalOnScreen: (lines) => piModalOnScreen(piView(lines).lines) || detectPiTrust(lines) !== null,
   dialogDetectors: PI_DIALOG_DETECTORS,
+  sharedFolderRemedy: "session-flag",
 };

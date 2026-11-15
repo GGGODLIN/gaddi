@@ -36,4 +36,13 @@ describe("UnseenMark", () => {
 
     expect(render(<UnseenMark on={false} />).container.firstChild).toBeNull();
   });
+
+  it("hides itself from screen readers when decorative is set", () => {
+    const { container } = render(<UnseenMark on decorative className="size-3" />);
+    const svg = container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.getAttribute("role")).toBeNull();
+    expect(svg?.getAttribute("aria-label")).toBeNull();
+  });
 });

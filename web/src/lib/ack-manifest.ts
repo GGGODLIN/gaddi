@@ -134,7 +134,7 @@ export const ACK_MANIFEST = {
   },
   setPaneSeen: {
     channel: "status",
-    why: "The sheet closes on success (and an open pane marked unread steps back to its list), so the status toast confirms the shared seen mark flipped before the next snapshot poll redraws the row.",
+    why: "The sheet closes on success, so the status toast confirms the shared seen mark flipped before the next snapshot poll redraws the row.",
   },
   switchAccount: {
     channel: "status",

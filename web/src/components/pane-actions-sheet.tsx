@@ -3,6 +3,7 @@ import { ArrowLeft, BookOpenText, Clipboard, Compass, UserRoundCog } from "lucid
 import { Icon } from "@/components/icons/icon";
 
 import { BottomSheet } from "@/components/ui/sheet";
+import { UnseenMark } from "@/components/ui/unseen-mark";
 import { WalkyIcon, WalkyOffIcon } from "@/components/walky-icon";
 import { ActionRow, DestructiveActionRow, RenameView } from "@/components/action-sheet-rows";
 import { HostChip } from "@/components/host-chip";
@@ -21,6 +22,7 @@ import { paneName } from "@/lib/pane-name";
 import { useOperatorAccounts } from "@/lib/operator-config";
 import { useHostClipboard } from "@/lib/host-clipboard";
 import type { RetellMode } from "@/components/retell-sheet";
+import { dropLastViewed } from "@/lib/last-viewed";
 import { dropPin, pinMatcher, setPinned, usePins } from "@/lib/pins";
 import { isUnseen } from "@/lib/triage";
 import type { PaneView } from "@/lib/pane-view";
@@ -144,12 +146,9 @@ interface PaneActionsSheetProps {
    */
   onPinChange?: (pane: AgentView, pinned: boolean) => void;
   /**
-   * Fired after a manual Mark as read / Mark as unread succeeds. List callers revalidate; the open
-   * pane view navigates up when its own pane is marked unread so the next poll does not clear it.
+   * Fired after a manual Mark as seen / Mark as unseen succeeds. List callers revalidate.
    */
   onSeenChange?: (paneId: string, seen: boolean) => void;
-  /** True when `pane` is the route currently open on screen, so it reads as seen before the next snapshot poll. */
-  openHere?: boolean;
   /**
    * Open "New agent in a worktree" for this pane (ADR 0089): the New page with "New worktree" on,
    * on this pane's repo.
@@ -210,7 +209,6 @@ export function PaneActionsSheet({
   herd = NO_HERD,
   onPinChange,
   onSeenChange,
-  openHere = false,
   onBranchOff,
   conversation = false,
 }: PaneActionsSheetProps) {
@@ -220,12 +218,15 @@ export function PaneActionsSheet({
   const pins = usePins();
   const pinned = pane !== null && pinMatcher(pins)(pane);
   const canToggleSeen =
+    onSeenChange !== undefined &&
     pane !== null &&
     !conversation &&
     pane.kind !== "shell" &&
+    !pane.unpaned &&
     pane.parentPaneId === undefined &&
-    (pane.status === "done" || pane.status === "idle");
-  const paneUnseen = pane !== null && !openHere && isUnseen(pane);
+    (pane.status === "done" || pane.status === "idle") &&
+    (pane.lastActiveAt ?? 0) > 0;
+  const paneUnseen = pane !== null && isUnseen(pane);
   const [markingSeen, setMarkingSeen] = useState(false);
   // A session that turned its walky talky off (M89): the Messages row says so.
   const walkyOff = pane?.walkyOff === true;
@@ -349,9 +350,11 @@ export function PaneActionsSheet({
           return false;
         }
         onClose();
-        // A pane closed from Collie takes its pin with it (ADR 0070), on every door this sheet has.
-        // A pane closed in the terminal only leaves its pin dormant: absence never prunes.
+        // A pane closed from Collie takes its pin and recent-viewed trail entry with it (ADR 0070),
+        // on every door this sheet has. A pane closed in the terminal only leaves them dormant:
+        // absence never prunes.
         dropPin(target);
+        dropLastViewed(target);
         // Same catch-up as a create: the list the operator just closed a pane out of should not
         // wait out an idle-timed gap to show it gone.
         stampTopology();
@@ -444,12 +447,17 @@ export function PaneActionsSheet({
     try {
       const res = await api.setPaneSeen(target.paneId, nextSeen, scope);
       if (res.ok) {
-        setStatus(t(nextSeen ? "paneActions.read.done" : "paneActions.unread.done"), "success");
+        setStatus(t(nextSeen ? "paneActions.markSeen.done" : "paneActions.markUnseen.done"), "success");
         onClose();
         stampTopology();
         onSeenChange?.(target.paneId, nextSeen);
       } else {
-        setStatus(describeApiError(res, t("paneActions.seen.failed")), "error");
+        setStatus(
+          describeApiError(res, t(nextSeen ? "paneActions.markSeen.failed" : "paneActions.markUnseen.failed")),
+          "error",
+        );
+        stampTopology();
+        onSeenChange?.(target.paneId, !nextSeen);
       }
     } catch (e) {
       setStatus(describeThrownError(e), "error");
@@ -685,14 +693,6 @@ export function PaneActionsSheet({
               sheet is a list of things you can do, and a permanently dead entry in it is worse than
               a shorter list (the same argument the host block above makes about greying out). Both
               rows are present on every adapter shipped today. */}
-          {canToggleSeen && (
-            <ActionRow
-              icon={<Icon name={paneUnseen ? "mark-read" : "mark-unread"} className={ROW_ICON} />}
-              label={t(paneUnseen ? "paneActions.read.label" : "paneActions.unread.label")}
-              disabled={markingSeen}
-              onClick={() => void toggleSeen(paneUnseen)}
-            />
-          )}
           {canRename.capable && (
             <ActionRow
               icon={<Icon name="edit" className="size-4 shrink-0 text-muted-foreground" />}
@@ -746,10 +746,26 @@ export function PaneActionsSheet({
               onClick={() => void requestClose()}
             />
           )}
+          {canToggleSeen && (
+            <ActionRow
+              icon={
+                paneUnseen ? (
+                  <Icon name="done" className="size-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+                    <UnseenMark on decorative className="size-3" />
+                  </span>
+                )
+              }
+              label={t(paneUnseen ? "paneActions.markSeen.label" : "paneActions.markUnseen.label")}
+              disabled={markingSeen}
+              onClick={() => void toggleSeen(paneUnseen)}
+            />
+          )}
           {/* An EMPTY sheet is the one case that must speak. Long-pressing a pane and being handed
               a blank box says nothing at all, so when every row is gone the adapter's own reason
               takes their place — hide the meaningless, explain the expected. */}
-          {!canRename.capable && !canClose.capable && !canFocus.capable && !showBranchOff && (
+          {!canRename.capable && !canClose.capable && !canFocus.capable && !showBranchOff && !canToggleSeen && (
             <p className="py-2 text-sm leading-snug text-muted-foreground">
               {canRename.note || canClose.note || canFocus.note || t("paneActions.empty.fallback")}
             </p>

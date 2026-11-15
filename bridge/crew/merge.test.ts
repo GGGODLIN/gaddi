@@ -997,3 +997,34 @@ describe("mergeSnapshot — a member's walky off flag (M89, §21)", () => {
     expect("walkyOff" in of("w2:p2")!).toBe(false);
   });
 });
+
+describe("parsePeerSnapshot & mergeSnapshot — manualUnseen sanitisation (§9.2)", () => {
+  test("parsePeerSnapshot keeps manualUnseen: true and drops any non-true value, and mergeSnapshot passes it through", () => {
+    // SAFETY: untrusted peer JSON body shaped as a member's snapshot; `manualUnseen` is arbitrary JSON.
+    const parsed = parsePeerSnapshot({
+      sessions: [],
+      agents: [
+        { ...pane({ paneId: "w2:p1" }), manualUnseen: true },
+        { ...pane({ paneId: "w2:p2" }), manualUnseen: false },
+        { ...pane({ paneId: "w2:p3" }), manualUnseen: "yes" },
+        pane({ paneId: "w2:p4" }),
+      ],
+      shellPanes: [],
+      workspaces: [],
+      tabs: [],
+    } as never);
+    expect(parsed?.agents[0]?.manualUnseen).toBe(true);
+    expect("manualUnseen" in parsed!.agents[1]!).toBe(false);
+    expect("manualUnseen" in parsed!.agents[2]!).toBe(false);
+    expect("manualUnseen" in parsed!.agents[3]!).toBe(false);
+
+    const merged = mergeSnapshot(localBody(), {
+      self: SELF,
+      peers: [contribution({ state: state({ memberId: "laptop" }), body: parsed! })],
+      now: NOW,
+    });
+    const of = (paneId: string) => merged.agents.find((row) => row.paneId === paneId && row.host === "laptop");
+    expect(of("w2:p1")?.manualUnseen).toBe(true);
+    expect("manualUnseen" in of("w2:p2")!).toBe(false);
+  });
+});

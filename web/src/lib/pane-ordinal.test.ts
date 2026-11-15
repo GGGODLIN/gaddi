@@ -62,5 +62,25 @@ describe("panesOfTab with unpaned child terminals", () => {
     expect(panesOfTab(workerA, all, []).map((p) => p.paneId)).toEqual(["t1", "t2"]);
     expect(panesOfTab(grandchild, all, []).map((p) => p.paneId)).toEqual(["t1", "t2", "t4"]);
   });
+
+  it("resolves live shell ancestors when building the tab's ancestor chain", () => {
+    const root = pane("t0", { tabPosition: 0 });
+    const unpanedParent = pane("t1", { parentPaneId: "t0", unpaned: true, tabPosition: 1 });
+    const shellParent = pane("sh1", {
+      kind: "shell",
+      agent: "shell",
+      status: "unknown",
+      parentPaneId: "t1",
+      unpaned: true,
+      tabPosition: 2,
+    });
+    const grandchild = pane("t2", { parentPaneId: "sh1", unpaned: true, tabPosition: 3 });
+    expect(panesOfTab(grandchild, [root, unpanedParent, grandchild], [shellParent]).map((p) => p.paneId)).toEqual([
+      "t0",
+      "t1",
+      "t2",
+      "sh1",
+    ]);
+  });
 });
 

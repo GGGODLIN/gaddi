@@ -4,7 +4,7 @@ import { homedir, hostname, networkInterfaces } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, normalize, sep } from "node:path";
 import { createAccessGate, DOOR_PRESETS, FORWARDING_HEADERS } from "./access-jwt.ts";
 import type { JsonObject, JsonValue } from "./json.ts";
-import type { ActivityLedger } from "./activity.ts";
+import type { ActivityLedger, PaneActivity } from "./activity.ts";
 import { type AuditDetail, type AuditEntry, AuditLog } from "./audit.ts";
 import { isLoopbackBindHost, type Config } from "./config.ts";
 import {
@@ -1855,7 +1855,7 @@ export function startServer(opts: {
       // The title is the one string here a program in the pane writes, so it is masked like the
       // mirror (bridge/redact.ts) before it reaches the phone and the phone's cache.
       const titled = cfg.redact ? maskTerminalTitle(p) : p;
-      const withTimes = a ? { ...titled, lastActiveAt: a.activeAt, lastSeenAt: a.seenAt } : titled;
+      const withTimes = a ? { ...titled, ...paneActivityFields(a) } : titled;
       const key = p.agentSession?.value;
       const reading = key === undefined ? undefined : cache?.get(key);
       const read = reading === undefined ? withTimes : { ...withTimes, cache: reading };
@@ -6763,6 +6763,16 @@ export async function renamePane(
   return json({ ok: true } satisfies ActionResponse, ae);
 }
 
+/** Wire timestamps derived from a pane's activity entry, tagging manual unseen marks without changing natural ones. */
+export function paneActivityFields(
+  a: PaneActivity | undefined,
+): Pick<AgentView, "lastActiveAt" | "lastSeenAt" | "manualUnseen"> {
+  if (!a) return {};
+  return a.unreadAt !== undefined && a.activeAt > a.seenAt
+    ? { lastActiveAt: a.activeAt, lastSeenAt: a.seenAt, manualUnseen: true }
+    : { lastActiveAt: a.activeAt, lastSeenAt: a.seenAt };
+}
+
 export async function seenPane(
   activity: Pick<ActivityLedger, "setSeen">,
   engine: Pick<StateEngine, "current" | "pokeNow">,
@@ -6783,7 +6793,14 @@ export async function seenPane(
   const fields = asJsonRecord(body) ?? {};
   if (typeof fields.seen !== "boolean") return text("bad seen", 400);
   const pane = engine.current().agents.find((p) => p.paneId === paneId);
-  if (!pane || pane.kind === "shell" || pane.parentPaneId !== undefined) return text("pane not found", 404);
+  if (!pane || pane.kind === "shell") return text("pane not found", 404);
+  if (
+    pane.parentPaneId !== undefined ||
+    pane.unpaned === true ||
+    (pane.status !== "done" && pane.status !== "idle")
+  ) {
+    return text("pane is not settled", 409);
+  }
   activity.setSeen(session, paneId, fields.seen);
   audit.record({ action: "pane.seen", paneId, session, device, detail: { seen: fields.seen } });
   engine.pokeNow();

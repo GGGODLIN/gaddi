@@ -15,8 +15,8 @@ import type { AgentView } from "./types";
 // the operator was just looking at.
 //
 // Read directly from `localStorage` on each access (like `lib/slots.ts` and `lib/pairing.ts`) so a
-// wipe in another tab cannot be resurrected from a stale module cache; `fallback` is consulted only
-// when `localStorage` itself is blocked or throws.
+// wipe in another tab cannot be resurrected from a stale module cache, and a quota error on write
+// never leaves an in-memory copy diverging from storage.
 
 const STORAGE_KEY = "collie:last-viewed:v1";
 
@@ -30,8 +30,13 @@ export interface LastViewed {
 
 const NONE: readonly LastViewed[] = [];
 
-/** Used only when `localStorage` is unavailable or throws (locked-down / private storage). */
-let fallback: readonly LastViewed[] = NONE;
+function deviceStorage(): Storage | undefined {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined; // locked-down storage
+  }
+}
 
 function decode(raw: string | null): readonly LastViewed[] {
   if (raw === null) return NONE;
@@ -53,25 +58,17 @@ function decode(raw: string | null): readonly LastViewed[] {
 /** The device's recent-viewed trail, newest first. */
 export function currentLastViewed(): readonly LastViewed[] {
   try {
-    const store = globalThis.localStorage;
-    if (!store) return fallback;
-    return decode(store.getItem(STORAGE_KEY));
+    return decode(deviceStorage()?.getItem(STORAGE_KEY) ?? null);
   } catch {
-    return fallback;
+    return NONE;
   }
 }
 
 function save(next: readonly LastViewed[]): void {
   try {
-    const store = globalThis.localStorage;
-    if (!store) {
-      fallback = next;
-      return;
-    }
-    store.setItem(STORAGE_KEY, JSON.stringify(next));
-    fallback = NONE;
+    deviceStorage()?.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
-    fallback = next;
+    // Quota or private mode: keep the previous persisted trail untouched.
   }
 }
 
@@ -92,6 +89,18 @@ export function recordLastViewed(row: string, space: string): void {
 /** Convenience wrapper around {@link recordLastViewed} for a live {@link AgentView}. */
 export function notePaneViewed(pane: AgentView): void {
   recordLastViewed(paneRowKey(pane), panePlaceParts(pane).space);
+}
+
+/**
+ * The pane was closed from Collie, so its recent-viewed record goes with it (ADR 0070 §6): an id
+ * later reused inside the same workspace must not read as the pane the operator just closed.
+ */
+export function dropLastViewed(pane: AgentView): void {
+  const row = paneRowKey(pane);
+  const entries = currentLastViewed();
+  const next = entries.filter((entry) => entry.row !== row);
+  if (next.length === entries.length) return;
+  save(next);
 }
 
 /**
@@ -123,36 +132,61 @@ export function useLastViewedMemory(pane: AgentView | undefined): void {
   }, [row, space]);
 }
 
+interface FrozenShortcut {
+  readonly enabled: boolean;
+  readonly settled: boolean;
+  readonly target: LastViewed | null;
+}
+
+function freezeShortcut(
+  enabled: boolean,
+  panes: readonly AgentView[],
+  currentPaneKey: string,
+): FrozenShortcut {
+  if (!enabled) return { enabled: false, settled: false, target: null };
+  if (panes.length === 0) return { enabled: true, settled: false, target: null };
+  const hit = resolveLastViewed(currentLastViewed(), panes, currentPaneKey);
+  return {
+    enabled: true,
+    settled: true,
+    target: hit === undefined ? null : { row: paneRowKey(hit), space: panePlaceParts(hit).space },
+  };
+}
+
 /**
- * Freeze the recent-viewed trail when the attention switcher opens (ADR 0063 / ADR 9004) and return
- * the single non-current live pane to show at the top.
+ * Lock onto at most ONE target `{ row, space }` when the attention switcher opens (or when a cold
+ * boot's empty herd first fills, like `hooks/use-frozen-ranks.ts`, ADR 0063 & ADR 9004).
+ *
+ * Locking the single resolved target rather than the trail array guarantees that if that pane closes
+ * on a background poll while the sheet is open, `Last viewed` simply disappears instead of pulling a
+ * runner-up row out of its bucket under a moving thumb, and a pane arriving on a later poll never
+ * claims the top slot.
  */
 export function useLastViewedShortcut(
   enabled: boolean,
   panes: readonly AgentView[],
   currentPaneKey: string,
 ): AgentView | undefined {
-  const [frozen] = useState<readonly LastViewed[]>(() => (enabled ? currentLastViewed() : NONE));
-  if (!enabled) return undefined;
-  return resolveLastViewed(frozen, panes, currentPaneKey);
+  const [frozen, setFrozen] = useState<FrozenShortcut>(() =>
+    freezeShortcut(enabled, panes, currentPaneKey),
+  );
+  if (frozen.enabled !== enabled || (enabled && !frozen.settled && panes.length > 0)) {
+    setFrozen(freezeShortcut(enabled, panes, currentPaneKey));
+  }
+  if (!enabled || frozen.target === null) return undefined;
+  return resolveLastViewed([frozen.target], panes, currentPaneKey);
 }
 
 /** Forget every remembered pane on unpair/revoke/expiry (`lib/wipe.ts`). */
 export function forgetLastViewed(): void {
-  fallback = NONE;
   try {
-    globalThis.localStorage?.removeItem(STORAGE_KEY);
+    deviceStorage()?.removeItem(STORAGE_KEY);
   } catch {
     // Locked-down storage: nothing persisted to remove.
   }
 }
 
-/** Test seam: clear both fallback memory and storage between cases (`test/setup.ts`). */
+/** Test seam: clear persisted trail between cases (`test/setup.ts`). */
 export function __resetLastViewed(): void {
   forgetLastViewed();
-}
-
-/** Test seam: retained for explicit reload symmetry in tests. */
-export function __reloadLastViewed(): void {
-  fallback = NONE;
 }

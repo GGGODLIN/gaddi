@@ -517,26 +517,36 @@ describe("PaneActionsSheet — pin", () => {
     expect(pinMatcher(currentPins())(quiet)).toBe(true);
   });
 
-  it("drops the pin when Close succeeds", async () => {
+  it("drops the pin and the last-viewed trail record when Close succeeds", async () => {
+    const { currentLastViewed, notePaneViewed } = await import("@/lib/last-viewed");
+    const { paneRowKey } = await import("@/lib/hosts");
     const user = userEvent.setup();
-    setPinned(agent, true, [agent]);
+    const survivor: AgentView = { ...agent, paneId: "w2:p2", workspaceId: "w2", workspaceLabel: "collie" };
+    setPinned(agent, true, [agent, survivor]);
+    notePaneViewed(survivor);
+    notePaneViewed(agent);
     const props = renderSheet();
     await user.click(screen.getByRole("button", { name: "Close pane" }));
     await user.click(screen.getByRole("button", { name: "Tap again to close" }));
     await waitFor(() => expect(props.onClosed).toHaveBeenCalledOnce());
     expect(pinned()).toBe(false);
+    expect(currentLastViewed()).toEqual([{ row: paneRowKey(survivor), space: "collie" }]);
   });
 
-  it("keeps the pin when Close fails: the pane is still there", async () => {
+  it("keeps the pin and last-viewed trail record when Close fails: the pane is still there", async () => {
+    const { currentLastViewed, notePaneViewed } = await import("@/lib/last-viewed");
+    const { paneRowKey } = await import("@/lib/hosts");
     const user = userEvent.setup();
     server.use(http.post(/\/api\/pane\/[^/]+\/close$/, () => HttpResponse.json({ ok: false, error: "nope" }, { status: 500 })));
     setPinned(agent, true, [agent]);
+    notePaneViewed(agent);
     const props = renderSheet();
     await user.click(screen.getByRole("button", { name: "Close pane" }));
     await user.click(screen.getByRole("button", { name: "Tap again to close" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Close pane" })).toBeEnabled());
     expect(props.onClosed).not.toHaveBeenCalled();
     expect(pinned()).toBe(true);
+    expect(currentLastViewed()).toEqual([{ row: paneRowKey(agent), space: "webapp" }]);
   });
 });
 
@@ -744,8 +754,8 @@ describe("PaneActionsSheet — report a problem (ADR 0123)", () => {
   });
 });
 
-describe("PaneActionsSheet — manual mark unread / read", () => {
-  it("marks a settled seen pane unread, closes the sheet, stamps topology, and notifies onSeenChange(id, false)", async () => {
+describe("PaneActionsSheet — manual mark unseen / seen", () => {
+  it("marks a settled seen pane unseen at the foot of the sheet, closes the sheet, stamps topology, and notifies onSeenChange(id, false)", async () => {
     const user = userEvent.setup();
     const onSeenChange = vi.fn();
     const status = renderHook(() => useStatus());
@@ -759,17 +769,21 @@ describe("PaneActionsSheet — manual mark unread / read", () => {
 
     const seenPane: AgentView = { ...agent, status: "idle", lastActiveAt: 100, lastSeenAt: 200 };
     const props = renderSheet({ pane: seenPane, onSeenChange });
-    expect(screen.queryByRole("button", { name: "Mark as read" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark as seen" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Mark as unread" }));
+    const closeBtn = screen.getByRole("button", { name: "Close pane" });
+    const markUnseenBtn = screen.getByRole("button", { name: "Mark as unseen" });
+    expect(closeBtn.compareDocumentPosition(markUnseenBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await user.click(markUnseenBtn);
     await waitFor(() => expect(onSeenChange).toHaveBeenCalledExactlyOnceWith("w1:p1", false));
     expect(bodies).toEqual([{ seen: false }]);
     expect(props.onClose).toHaveBeenCalledOnce();
     expect(topologyBursting()).toBe(true);
-    expect(status.result.current).toMatchObject({ text: "Marked as unread", tone: "success" });
+    expect(status.result.current).toMatchObject({ text: "Marked as unseen", tone: "success" });
   });
 
-  it("marks an unseen pane read and notifies onSeenChange(id, true)", async () => {
+  it("marks an unseen pane seen and notifies onSeenChange(id, true)", async () => {
     const user = userEvent.setup();
     const onSeenChange = vi.fn();
     const status = renderHook(() => useStatus());
@@ -783,49 +797,78 @@ describe("PaneActionsSheet — manual mark unread / read", () => {
 
     const unseenPane: AgentView = { ...agent, status: "done", lastActiveAt: 500, lastSeenAt: 100 };
     renderSheet({ pane: unseenPane, onSeenChange });
-    expect(screen.queryByRole("button", { name: "Mark as unread" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark as unseen" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Mark as read" }));
+    await user.click(screen.getByRole("button", { name: "Mark as seen" }));
     await waitFor(() => expect(onSeenChange).toHaveBeenCalledExactlyOnceWith("w1:p1", true));
     expect(bodies).toEqual([{ seen: true }]);
-    expect(status.result.current).toMatchObject({ text: "Marked as read", tone: "success" });
+    expect(status.result.current).toMatchObject({ text: "Marked as seen", tone: "success" });
   });
 
-  it("treats the currently open pane (openHere) as already seen even before the next snapshot poll refreshes lastSeenAt", async () => {
+  it("hides the row when onSeenChange is omitted (open pane menu) or on unpaned child panes", () => {
+    const settled: AgentView = { ...agent, status: "done", lastActiveAt: 500, lastSeenAt: 100 };
+    const { unmount } = render(<PaneActionsSheet {...renderProps({ pane: settled })} />);
+    expect(screen.queryByRole("button", { name: /Mark as (un)?seen/ })).toBeNull();
+    unmount();
+
+    const unpaned: AgentView = { ...settled, unpaned: true };
+    render(<PaneActionsSheet {...renderProps({ pane: unpaned, onSeenChange: vi.fn() })} />);
+    expect(screen.queryByRole("button", { name: /Mark as (un)?seen/ })).toBeNull();
+  });
+
+  it("suppresses the empty-sheet fallback when canToggleSeen is the only available write row", () => {
+    const mux: MuxConfig = {
+      name: "limited",
+      capabilities: { renamePane: false, closePane: false, setFocus: false, createWorktree: false },
+      unsupportedKeys: [],
+      notes: { renamePane: "No rename here." },
+    };
+    server.use(http.get("/api/config", () => HttpResponse.json({ push: false, vapidPublicKey: "", mux })));
+
+    renderSheet({ pane: { ...agent, status: "idle", lastActiveAt: 100, lastSeenAt: 200 }, onSeenChange: vi.fn() });
+    expect(screen.getByRole("button", { name: "Mark as unseen" })).toBeInTheDocument();
+    expect(screen.queryByText("No rename here.")).toBeNull();
+  });
+
+  it("surfaces a 409 refusal, stamps topology, and revalidates via onSeenChange without closing the sheet", async () => {
     const user = userEvent.setup();
     const onSeenChange = vi.fn();
-    const bodies: unknown[] = [];
+    const status = renderHook(() => useStatus());
     server.use(
-      http.post(/\/api\/pane\/[^/]+\/seen$/, async ({ request }) => {
-        bodies.push(await request.json());
-        return HttpResponse.json({ ok: true });
-      }),
+      http.post(/\/api\/pane\/[^/]+\/seen$/, () => new HttpResponse("pane is not settled", { status: 409 })),
     );
 
-    const staleSnapshotPane: AgentView = { ...agent, status: "done", lastActiveAt: 500, lastSeenAt: 100 };
-    renderSheet({ pane: staleSnapshotPane, openHere: true, onSeenChange });
-    expect(screen.queryByRole("button", { name: "Mark as read" })).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Mark as unread" }));
-    await waitFor(() => expect(onSeenChange).toHaveBeenCalledExactlyOnceWith("w1:p1", false));
-    expect(bodies).toEqual([{ seen: false }]);
+    const props = renderSheet({
+      pane: { ...agent, status: "done", lastActiveAt: 200, lastSeenAt: 100 },
+      onSeenChange,
+    });
+    await user.click(screen.getByRole("button", { name: "Mark as seen" }));
+    await waitFor(() => expect(status.result.current).toMatchObject({ text: "pane is not settled", tone: "error" }));
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(topologyBursting()).toBe(true);
+    expect(onSeenChange).toHaveBeenCalledOnce();
   });
 
-  it("hides the row on bare shells, child sub-agents, active/blocked turns, conversations, read-only, and saved copies", () => {
+  it("hides the row on missing/zero lastActiveAt, bare shells, child sub-agents, active/blocked turns, conversations, read-only, and saved copies", () => {
+    const settledSeen: AgentView = { ...agent, status: "idle", lastActiveAt: 100, lastSeenAt: 200 };
     for (const candidate of [
-      { ...agent, kind: "shell" as const, agent: "shell", status: "unknown" as const },
-      { ...agent, parentPaneId: "w1:parent", status: "done" as const, lastActiveAt: 500, lastSeenAt: 100 },
-      { ...agent, status: "working" as const },
-      { ...agent, status: "blocked" as const },
+      { ...settledSeen, lastActiveAt: undefined },
+      { ...settledSeen, lastActiveAt: 0 },
+      { ...settledSeen, kind: "shell" as const, agent: "shell", status: "unknown" as const },
+      { ...settledSeen, parentPaneId: "w1:parent", status: "done" as const, lastActiveAt: 500, lastSeenAt: 100 },
+      { ...settledSeen, status: "working" as const },
+      { ...settledSeen, status: "blocked" as const },
     ]) {
-      const { unmount } = render(<PaneActionsSheet {...renderProps({ pane: candidate })} />);
-      expect(screen.queryByRole("button", { name: /Mark as (un)?read/ })).toBeNull();
+      const { unmount } = render(<PaneActionsSheet {...renderProps({ pane: candidate, onSeenChange: vi.fn() })} />);
+      expect(screen.queryByRole("button", { name: /Mark as (un)?seen/ })).toBeNull();
       unmount();
     }
 
     for (const flags of [{ conversation: true }, { readOnly: true }, { savedCopy: true }]) {
-      const { unmount } = render(<PaneActionsSheet {...renderProps(flags)} />);
-      expect(screen.queryByRole("button", { name: /Mark as (un)?read/ })).toBeNull();
+      const { unmount } = render(
+        <PaneActionsSheet {...renderProps({ pane: settledSeen, onSeenChange: vi.fn(), ...flags })} />,
+      );
+      expect(screen.queryByRole("button", { name: /Mark as (un)?seen/ })).toBeNull();
       unmount();
     }
   });

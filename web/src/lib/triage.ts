@@ -100,7 +100,7 @@ export function countAlerting(agents: readonly AgentView[], kinds: { blocked: bo
   let n = 0;
   for (const a of agents) {
     const bucket = bucketOf(a);
-    if ((bucket === "needs" && kinds.blocked) || (bucket === "ready" && kinds.done)) n++;
+    if ((bucket === "needs" && kinds.blocked) || (bucket === "ready" && kinds.done && !a.manualUnseen)) n++;
   }
   return n;
 }

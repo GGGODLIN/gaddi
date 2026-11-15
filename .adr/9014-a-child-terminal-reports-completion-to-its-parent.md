@@ -57,7 +57,9 @@ its completion reports to its parent rather than to the phone; a blocked child s
 4. **Expanded by default, foldable per device (`web/src/lib/pane-tree.ts`).** Matching Herdr App,
    parent rows start expanded with `├` / `└` / `│` guides and offer a sibling disclosure button that
    remembers folded parents in `collie:folded-parents:v1` and shows the most urgent descendant state
-   while collapsed.
+   while collapsed. On the dashboard (`web/src/components/agent-list.tsx`), `Place` order nests
+   children under their parent, whereas ranked `Activity` and `Cache` lists stay flat per ADR 0071
+   so chronological and cache-expiry rank order is preserved.
 
 ## Consequences
 

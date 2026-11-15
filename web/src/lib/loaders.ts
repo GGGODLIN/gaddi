@@ -25,9 +25,9 @@ import {
   isApiErrorStatus,
   isPairingRefusal,
   readFailureKind,
-  seenEpoch,
 } from "@/lib/api";
 import { parseAnsi } from "@/lib/ansi";
+import { mounted } from "./base-path";
 import { noteUpdateRun } from "./self-update";
 import { splitLines } from "@/lib/blocks";
 import { type CacheHold, holdCacheReadings } from "@/lib/cache-hold";
@@ -341,10 +341,11 @@ let lastPaneUrl: string | undefined;
 
 function isPaneUrl(url: string | undefined): boolean {
   if (!url) return false;
+  const prefix = mounted("/pane/");
   try {
-    return new URL(url).pathname.startsWith("/pane/");
+    return new URL(url).pathname.startsWith(prefix);
   } catch {
-    return url.includes("/pane/");
+    return url.includes(prefix);
   }
 }
 
@@ -853,11 +854,7 @@ export async function paneLoader({
     const older = olderAsked.has(key);
     const prefetched = isNavigation && !older ? takePanePrefetch(paneId, scope, lines) : undefined;
     if (prefetched) {
-      const epoch = seenEpoch(paneId, scope);
-      const markSeen = () => {
-        if (seenEpoch(paneId, scope) !== epoch || request?.signal.aborted) return;
-        void fetchPane(paneId, lines, scope, request?.signal).catch(() => {});
-      };
+      const markSeen = () => fetchPane(paneId, lines, scope).catch(() => {});
       void prefetched.then(markSeen, markSeen);
     }
     const reading = prefetched ?? fetchPane(paneId, lines, scope, request?.signal, { older });

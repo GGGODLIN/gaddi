@@ -1,4 +1,4 @@
-import { forwardRef, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import { forwardRef, useContext, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { ChangeEvent, ClipboardEvent, CSSProperties, MouseEvent, ReactNode } from "react";
 import { useRevalidator } from "react-router";
@@ -25,7 +25,9 @@ import { KeyBoardEditor } from "@/components/key-board-editor";
 import { CommandPalette, useClaudeCommands } from "@/components/command-palette";
 import { SentSheet } from "@/components/sent-sheet";
 import { SuggestionStrip } from "@/components/suggestion-strip";
+import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { useSentSuggestions } from "@/hooks/use-sent-suggestions";
+import { applyFileSuggestion, findAtToken, type FileSuggestion } from "@/lib/file-suggest";
 import { QuickActionsContent } from "@/components/quick-actions";
 import { ActionsRow, type GeneralAction } from "@/components/actions-row";
 import { SectionLabel } from "@/components/ui/section-label";
@@ -191,6 +193,8 @@ interface ComposerProps {
   isShell: boolean;
   /** The pane's folder, absolute. Sent (M61) lists "This folder" with it; absent, it offers the machine only. */
   cwd?: string | undefined;
+  /** The pane's folder relative to the Files root (ADR 0083), when known on the pane view. */
+  filesDir?: string | null | undefined;
   /* NO `status` AND NO `stale` HERE ANY MORE. The composer took the pane's state as a prop for one
      reason: the status band above the controls row drew it as a word. That band is gone (see the
      long note at the row below), the word went with it rather than moving, and the state is the
@@ -528,7 +532,7 @@ function moveCaret(from: HTMLTextAreaElement | null, to: HTMLTextAreaElement | n
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
-  { paneId, instance, surface, starting = false, unreachableNote, scope, stopOffered = false, agent, canSteer, returnedDraft = false, isShell, cwd, gone, readOnly, composing, onAnswerDialog, dialogCard = false, text, terminalDraft, rawTerminalDraft, prefs, display, onSent, onOpenMessages, held: heldRows, chatEntries, pullHandle, draftNoticeSlot, expandArea, changesPill, zoomPill, stale, hand = "right", layout = "field", aboveBelt, floatingHint, screen, todos, subagents, jobs, pins },
+  { paneId, instance, surface, starting = false, unreachableNote, scope, stopOffered = false, agent, canSteer, returnedDraft = false, isShell, cwd, filesDir, gone, readOnly, composing, onAnswerDialog, dialogCard = false, text, terminalDraft, rawTerminalDraft, prefs, display, onSent, onOpenMessages, held: heldRows, chatEntries, pullHandle, draftNoticeSlot, expandArea, changesPill, zoomPill, stale, hand = "right", layout = "field", aboveBelt, floatingHint, screen, todos, subagents, jobs, pins },
   ref,
 ) {
   const revalidator = useRevalidator();
@@ -634,6 +638,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // native picker took it) still puts its marker where the operator was. Null means "no caret
   // yet", which puts the marker at the end.
   const caretRef = useRef<number | null>(null);
+  const [atCaretState, setAtCaretState] = useState<{ paneKey: string; caret: number | null }>({
+    paneKey: "",
+    caret: null,
+  });
+  const [drillingState, setDrillingState] = useState<{ paneKey: string; text: string } | null>(null);
   // Mirror of `input` for the write-through path: updateInput needs the previous value to apply a
   // functional update AND to persist the result, without either reading stale state or doing the
   // save inside a (double-invoked) state updater.
@@ -697,6 +706,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
    */
   /** The draft field's change, for the box's field and the fullscreen editor's alike: one draft. */
   function onDraftChange(e: ChangeEvent<HTMLTextAreaElement>) {
+    setDrillingState(null);
     rememberCaret(e);
     updateInput(e.target.value);
     noteOfflineKeystroke(e.target.value);
@@ -2251,6 +2261,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     attachmentsRef.current = [];
     setAttachments([]);
     caretRef.current = null;
+    setAtCaretState({ paneKey: reportKey, caret: null });
+    setDrillingState(null);
     updateInput("");
   }
 
@@ -2356,7 +2368,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   /** Remember the caret whenever the field reports one, so a marker can land there later. */
   function rememberCaret(e: { currentTarget: HTMLTextAreaElement }) {
-    caretRef.current = e.currentTarget.selectionStart;
+    const start = e.currentTarget.selectionStart;
+    caretRef.current = start;
+    setAtCaretState({
+      paneKey: reportKey,
+      caret: start === e.currentTarget.selectionEnd ? start : null,
+    });
   }
 
   // Images wait for the sheet: a preview with Attach (the original bytes) and Edit. Anything else keeps the old path: refuse locally, then upload.
@@ -2552,6 +2569,25 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     };
   }, [expandWanted, expandShown]);
   const expandedOpen = expanded && !direct.active && !locked && expandArea !== undefined && expandArea !== null;
+  const atCaret = atCaretState.paneKey === reportKey ? atCaretState.caret : null;
+  const canSuggestFiles = boxFocused && !isShell && !locked && !direct.active && !dialogCard && !expandedOpen;
+  const activeAt = useMemo(
+    () => (canSuggestFiles ? findAtToken(input, atCaret) : null),
+    [canSuggestFiles, input, atCaret],
+  );
+  const fileSuggest = useFileSuggestions({ activeAt, paneId, scope, cwd, filesDir });
+  const holdFileStripOpen =
+    drillingState?.paneKey === reportKey && drillingState.text === input && activeAt !== null && fileSuggest.loading;
+  function selectFileSuggestion(file: FileSuggestion) {
+    if (activeAt === null) return;
+    direct.deactivateSilently();
+    const placed = applyFileSuggestion(inputValueRef.current, activeAt, file);
+    caretRef.current = placed.caret;
+    setAtCaretState({ paneKey: reportKey, caret: placed.caret });
+    setDrillingState(file.isDir ? { paneKey: reportKey, text: placed.text } : null);
+    updateInput(placed.text);
+    focusInputAt(placed.caret);
+  }
   useEffect(() => {
     setExpanded(false);
   }, [paneId]);
@@ -3256,6 +3292,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               source={{ kind: "sent", lines: suggestions.lines, onPick: pickSent, onAll: () => setSentOpen(true) }}
             />
           )
+        ) : activeAt !== null ? (
+          <SuggestionStrip
+            open={fileSuggest.suggestions.length > 0 || holdFileStripOpen}
+            typed={input}
+            source={{
+              kind: "files",
+              files: fileSuggest.suggestions,
+              holdOpen: holdFileStripOpen,
+              onPick: selectFileSuggestion,
+            }}
+          />
         ) : (
           <SuggestionStrip
             open={commandSuggestions.length > 0}
@@ -3349,7 +3396,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             value={direct.active ? direct.value : input}
             onChange={direct.active ? direct.onChange : onDraftChange}
             onSelect={direct.active ? undefined : rememberCaret}
-            onFocus={() => setBoxFocused(true)}
+            onFocus={(e) => {
+              setBoxFocused(true);
+              if (!direct.active) rememberCaret(e);
+            }}
             onBlur={(e) => {
               setBoxFocused(false);
               if (!direct.active) rememberCaret(e);
@@ -3410,11 +3460,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   : // AT REST: the one slim line between Attach and the primary action.
                     "col-start-2 row-start-1 min-w-0 min-h-9 pl-2 pr-1 py-1.5"
                 : "min-w-0 flex-1 min-h-9 pl-2 py-1.5",
-              // The Steer hint is longer than the reply words, so it is drawn smaller. The FIELD'S HEIGHT
-              // does not change with it: `text-base` gives the field a unitless line-height, so the
-              // placeholder's line box can only shrink (12px x 1.33 against 14-16px x 1.5), and the empty
-              // field is already held at `min-h-9` above (at most 16px x 1.5 + 12px of padding = 36px).
-              (staleWords || steerWords) && "placeholder:text-xs",
+              // The Steer hint is longer than the reply words, so it is drawn smaller. At rest (`min-h-9` +
+              // `py-1.5` = 24px content box), `placeholder:leading-6` keeps the 12px line vertically centered
+              // beside the buttons instead of sitting in Tailwind's 16px `text-xs` line box; an open box has no
+              // `min-h-9`, so leaving `leading-6` off there avoids growing a 14px field under `field-sizing-content`.
+              (staleWords || steerWords) && (boxOpen ? "placeholder:text-xs" : "placeholder:text-xs placeholder:leading-6"),
               // Mirrored, the field's right side stands against the box's border, so it takes the
               // inset the left used to take from Attach.
               !box && hand === "left" && "pr-2",

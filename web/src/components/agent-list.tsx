@@ -705,7 +705,7 @@ export function AgentList({
             tone="strong"
             className="min-h-7"
           />
-          <ListGroup>{nestPanes(rankedRows, folded).map((entry) => row(entry.pane, "herd", entry))}</ListGroup>
+          <ListGroup>{rankedRows.map((a) => row(a, "herd"))}</ListGroup>
         </section>
       )}
 

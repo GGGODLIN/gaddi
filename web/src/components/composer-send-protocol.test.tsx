@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadDraft } from "@/lib/drafts";
+import { clearDraft, loadDraft, saveDraft } from "@/lib/drafts";
 import { markLive, resetLiveness } from "@/lib/liveness";
 import { clearStatus, useStatus } from "@/lib/status";
 import { server } from "@/test/setup";
@@ -245,11 +245,12 @@ describe("a stale screen in the placeholder", () => {
   const staleDraft = { revision: 1, turn: "idle", modal: "none", composer: "draft", staleFrame: true } as const;
   const HINT = "The screen may be stale. Send probes it first.";
 
-  it("the empty field's placeholder is the stale hint, smaller than the reply words", () => {
+  it("the empty field's placeholder is the stale hint, smaller than the reply words and centered in the row", () => {
     renderComposer({ surface: staleDraft });
     const field = screen.getByRole("textbox");
     expect(field).toHaveAttribute("placeholder", HINT);
     expect(field.className).toMatch(/placeholder:text-xs/);
+    expect(field.className).toMatch(/placeholder:leading-6/);
     expect(screen.queryByText(HINT)).toBeNull();
   });
 
@@ -257,6 +258,7 @@ describe("a stale screen in the placeholder", () => {
     renderComposer({ surface: { revision: 1, turn: "idle", modal: "none", composer: "draft" } });
     expect(screen.getByRole("textbox")).not.toHaveAttribute("placeholder", HINT);
     expect(screen.getByRole("textbox").className).not.toMatch(/placeholder:text-xs/);
+    expect(screen.getByRole("textbox").className).not.toMatch(/placeholder:leading-6/);
   });
 });
 
@@ -307,12 +309,24 @@ describe("Steer or queue on the Send button (M69)", () => {
     expect(sends).toEqual([]);
   });
 
-  it("the empty field's placeholder is the hint, smaller than the reply words, while the turn runs on a pane that can steer", () => {
+  it("the empty field's placeholder is the hint, smaller than the reply words and centered at rest, while the turn runs on a pane that can steer", () => {
     renderSteer({ surface: running, canSteer: true });
     expect(field()).toHaveAttribute("placeholder", HINT);
     expect(field().className).toMatch(/placeholder:text-xs/);
+    expect(field().className).toMatch(/placeholder:leading-6/);
     // The hint is not text in the page: it is the placeholder or nothing.
     expect(screen.queryByText(HINT)).toBeNull();
+    cleanup();
+    // An open box (an attachment chip with no text yet) has no min-h-9, so a 24px placeholder line box
+    // would grow a 14px field by 3px under field-sizing-content. There the small size stays without leading-6.
+    saveDraft(undefined, "w1:p1", "", [{ n: 1, path: "/tmp/a.png", name: "a.png", kind: "image" }], 2);
+    try {
+      renderSteer({ layout: "box", surface: running, canSteer: true });
+      expect(field().className).toMatch(/placeholder:text-xs/);
+      expect(field().className).not.toMatch(/placeholder:leading-6/);
+    } finally {
+      clearDraft(undefined, "w1:p1");
+    }
   });
 
   it("draws no row for the hint: nothing in the composer carries the old slot, with or without the steer row", () => {

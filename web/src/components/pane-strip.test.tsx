@@ -375,3 +375,54 @@ describe("PaneStrip under the folder look", () => {
     }
   });
 });
+
+describe("PaneStrip — unseen marks and list-only seen toggle", () => {
+  it("renders UnseenMark on unseen sibling pills, not on the active pill or child panes", () => {
+    const active = pane("w1:p1", "claude", "agent", { status: "done", lastActiveAt: 500, lastSeenAt: 100 });
+    const siblingUnseen = pane("w1:p2", "codex", "agent", { status: "done", lastActiveAt: 500, lastSeenAt: 100 });
+    const childUnseen = pane("w1:p3", "gemini", "agent", {
+      status: "done",
+      lastActiveAt: 500,
+      lastSeenAt: 100,
+      parentPaneId: "w1:p1",
+    });
+
+    render(<PaneStrip panes={[active, siblingUnseen, childUnseen]} currentPaneId="w1:p1" onSelect={vi.fn()} />);
+
+    const activeBtn = screen.getByRole("button", { name: /claude/ });
+    const siblingBtn = screen.getByRole("button", { name: /codex/ });
+    const childBtn = screen.getByRole("button", { name: /gemini/ });
+
+    expect(activeBtn.querySelector('[role="img"]')).toBeNull();
+    expect(siblingBtn.querySelector('[role="img"]')).not.toBeNull();
+    expect(childBtn.querySelector('[role="img"]')).toBeNull();
+  });
+
+  it("offers Mark as seen/unseen on sibling pill long-press, never on the active open pill", async () => {
+    const user = userEvent.setup();
+    const active = pane("w1:p1", "claude", "agent", { status: "idle", lastActiveAt: 100, lastSeenAt: 200 });
+    const sibling = pane("w1:p2", "codex", "agent", { status: "done", lastActiveAt: 500, lastSeenAt: 100 });
+
+    render(
+      <PaneStrip
+        panes={[active, sibling]}
+        currentPaneId="w1:p1"
+        onSelect={vi.fn()}
+        onRenamed={vi.fn()}
+        onClosed={vi.fn()}
+        onSeenChange={vi.fn()}
+      />,
+    );
+
+    // Active pill opens sheet without Mark as seen / Mark as unseen.
+    await user.click(screen.getByRole("button", { name: /claude/ }));
+    expect(screen.getByRole("button", { name: "Rename" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Mark as (un)?seen/ })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    // Sibling pill long-press opens sheet WITH Mark as seen.
+    fireEvent.contextMenu(screen.getByRole("button", { name: /codex/ }));
+    expect(screen.getByRole("button", { name: "Mark as seen" })).toBeInTheDocument();
+  });
+});
