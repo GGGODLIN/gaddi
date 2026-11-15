@@ -1582,4 +1582,24 @@ describe("AgentList — the order select", () => {
     expect(screen.getByText("fix-qnx")).toBeInTheDocument();
     __resetFoldedParents();
   });
+
+  it("order: keeps ranked Activity and Cache lists flat without nesting or folding sub-agents", () => {
+    __resetFoldedParents();
+    const parent = agent("t1", "idle", { ...ws(1), paneLabel: "parent-pane", lastActiveAt: 100 });
+    const child = agent("t2", "done", { ...ws(1), paneLabel: "child-worker", parentPaneId: "t1", lastActiveAt: 500 });
+    const mid = agent("t3", "working", { ...ws(1), paneLabel: "mid-pane", lastActiveAt: 300 });
+
+    render(<AgentList agents={[parent, child, mid]} {...props} order="activity" />);
+    const rendered = rowButtons().map((r) =>
+      within(r).queryByText("child-worker")
+        ? "child"
+        : within(r).queryByText("mid-pane")
+          ? "mid"
+          : within(r).queryByText("parent-pane")
+            ? "parent"
+            : "other",
+    );
+    expect(rendered).toEqual(["child", "mid", "parent"]);
+    expect(screen.queryByRole("button", { name: /sub-agents/i })).toBeNull();
+  });
 });

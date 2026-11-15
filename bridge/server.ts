@@ -6793,7 +6793,14 @@ export async function seenPane(
   const fields = asJsonRecord(body) ?? {};
   if (typeof fields.seen !== "boolean") return text("bad seen", 400);
   const pane = engine.current().agents.find((p) => p.paneId === paneId);
-  if (!pane || pane.kind === "shell" || pane.parentPaneId !== undefined) return text("pane not found", 404);
+  if (!pane || pane.kind === "shell") return text("pane not found", 404);
+  if (
+    pane.parentPaneId !== undefined ||
+    pane.unpaned === true ||
+    (pane.status !== "done" && pane.status !== "idle")
+  ) {
+    return text("pane is not settled", 409);
+  }
   activity.setSeen(session, paneId, fields.seen);
   audit.record({ action: "pane.seen", paneId, session, device, detail: { seen: fields.seen } });
   engine.pokeNow();

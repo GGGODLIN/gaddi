@@ -54,8 +54,9 @@ describe("staleNotifications — a pane's own notification", () => {
       pane("w1:p3", "blocked"),
       pane("w1:p4", "done", { lastActiveAt: 200, lastSeenAt: 100 }),
       pane("w1:p5", "done", { lastActiveAt: 200, lastSeenAt: 199, manualUnseen: true }),
+      pane("w1:p6", "blocked", { lastActiveAt: 200, lastSeenAt: 199, manualUnseen: true }),
     ]);
-    const notes = ["w1:p1", "w1:p2", "w1:p3", "w1:p4", "w1:p5"].map((id) => paneNote(id));
+    const notes = ["w1:p1", "w1:p2", "w1:p3", "w1:p4", "w1:p5", "w1:p6"].map((id) => paneNote(id));
     expect(tags(staleNotifications(notes, v))).toEqual(["collie:herd:w1:p1", "collie:herd:w1:p2", "collie:herd:w1:p5"]);
   });
 
@@ -118,6 +119,7 @@ describe("staleNotifications — a session's summary", () => {
       "collie:herd",
     ]);
     expect(staleNotifications([summary], view([pane("w1:p1", "working"), pane("w1:p2", "blocked")]))).toEqual([]);
+    expect(staleNotifications([summary], view([pane("w1:p1", "blocked", { manualUnseen: true })]))).toEqual([]);
     expect(
       tags(
         staleNotifications(

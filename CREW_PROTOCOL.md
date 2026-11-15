@@ -1443,6 +1443,12 @@ prevents (`web/src/lib/api.ts:201-203`).
   transition. Only `true` means manual; absent (and anything else dropped by `untagPane`) reads as a
   natural transition when `lastActiveAt > lastSeenAt`. A lead or phone that predates the field
   ignores it cleanly (`CREW_PROTOCOL_VERSION` stays `2`).
+- **A pane may carry `parentPaneId?: string` and `unpaned?: true`** (additive-optional, §7.1, added
+  2026-11-12, [ADR 9014](./.adr/9014-a-child-terminal-reports-completion-to-its-parent.md)):
+  `parentPaneId` names the pane's live local parent on the same machine and session (absent when
+  none is live), and `unpaned: true` marks an unlabelled child terminal sharing its ancestor's tab
+  without a split pane of its own. Both pass through the merge unchanged (`CREW_PROTOCOL_VERSION`
+  stays `2`), and a lead or phone that predates them ignores them cleanly.
 - **A session may carry `label`** (additive-optional, §7.1, added 2026-10-19): the display label
   the member's own operator wrote in its `spaces.toml`. It is display-only: `name` stays the
   session's identity on the link and in every address. The lead keeps it only as a string and runs

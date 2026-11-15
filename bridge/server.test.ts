@@ -6583,6 +6583,40 @@ describe("seenPane — manual read / unread mark", () => {
             focused: false,
             parentPaneId: "w1:p1",
           },
+          {
+            paneId: "w1:unpaned",
+            workspaceId: "w1",
+            workspaceLabel: "webapp",
+            workspaceNumber: 1,
+            tabId: "w1:t1",
+            agent: "claude",
+            status: "done",
+            cwd: "/work/webapp",
+            focused: false,
+            unpaned: true,
+          },
+          {
+            paneId: "w1:working",
+            workspaceId: "w1",
+            workspaceLabel: "webapp",
+            workspaceNumber: 1,
+            tabId: "w1:t1",
+            agent: "claude",
+            status: "working",
+            cwd: "/work/webapp",
+            focused: false,
+          },
+          {
+            paneId: "w1:blocked",
+            workspaceId: "w1",
+            workspaceLabel: "webapp",
+            workspaceNumber: 1,
+            tabId: "w1:t1",
+            agent: "claude",
+            status: "blocked",
+            cwd: "/work/webapp",
+            focused: false,
+          },
         ],
         shellPanes: [
           {
@@ -6628,7 +6662,7 @@ describe("seenPane — manual read / unread mark", () => {
       { action: "pane.seen", paneId: "w1:p1", session: "default", device: "iphone", detail: { seen: false } },
     ]);
 
-    // Rejects malformed JSON, non-boolean `seen`, missing pane, shell pane, and child worker pane.
+    // Rejects malformed JSON, non-boolean `seen`, missing pane, shell pane, and unsettled/child/unpaned panes.
     const badJson = await seenPane(
       activity,
       engine,
@@ -6651,17 +6685,31 @@ describe("seenPane — manual read / unread mark", () => {
     );
     expect(badSeen.status).toBe(400);
 
-    for (const invalidId of ["w1:missing", "w1:sh", "w1:child"]) {
+    for (const missingId of ["w1:missing", "w1:sh"]) {
       const res = await seenPane(
         activity,
         engine,
-        invalidId,
+        missingId,
         new Request("http://x/api/pane/x/seen", { method: "POST", body: JSON.stringify({ seen: true }) }),
         audit,
         "iphone",
         "default",
       );
       expect(res.status).toBe(404);
+    }
+
+    for (const unsettledId of ["w1:child", "w1:unpaned", "w1:working", "w1:blocked"]) {
+      const res = await seenPane(
+        activity,
+        engine,
+        unsettledId,
+        new Request("http://x/api/pane/x/seen", { method: "POST", body: JSON.stringify({ seen: false }) }),
+        audit,
+        "iphone",
+        "default",
+      );
+      expect(res.status).toBe(409);
+      expect(await res.text()).toBe("pane is not settled");
     }
   });
 

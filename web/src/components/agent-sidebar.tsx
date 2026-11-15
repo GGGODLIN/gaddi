@@ -136,6 +136,7 @@ interface ThreadSidebarProps {
 const NO_PANES: AgentView[] = [];
 const NO_LAUNCHERS: readonly Launcher[] = [];
 const NO_PINS: readonly Pin[] = [];
+const NO_FOLDED: ReadonlySet<string> = new Set();
 
 /** The buckets that mean "a human is required here" — the same two the dashboard's line counts. */
 const URGENT: ReadonlySet<TriageKey> = new Set<TriageKey>(["needs", "ready"]);
@@ -246,7 +247,7 @@ export function ThreadSidebar({
   // pinned pane needs you, and in whichever order the rows below it are running in.
   const firstUrgent = [
     ...pinnedShown,
-    ...(ranked ? rankedRows : sections.flatMap((g) => g.rows)),
+    ...(ranked ? rankedRows : sections.flatMap((g) => nestPanes(g.rows, NO_FOLDED).map((e) => e.pane))),
   ].find((a) => URGENT.has(bucketOf(a)));
   const byRowKey = new Map([...agents, ...shellPanes].map((p) => [paneRowKey(p), p]));
   const jumpTo = (pane: AgentView) => {
@@ -425,18 +426,16 @@ export function ThreadSidebar({
                 count={rankedRows.length}
                 tone={roomy ? "quiet" : "strong"}
               >
-                {nestPanes(rankedRows, folded).map((entry) => {
-                  const key = paneRowKey(entry.pane);
+                {rankedRows.map((pane) => {
+                  const key = paneRowKey(pane);
                   return (
                     <PaneRow
                       key={key}
-                      id={rowDomId(entry.pane)}
-                      pane={entry.pane}
+                      id={rowDomId(pane)}
+                      pane={pane}
                       active={key === currentPaneKey}
                       onSelect={onSelect}
                       roomy={roomy}
-                      tree={entry}
-                      onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
                     />
                   );
                 })}

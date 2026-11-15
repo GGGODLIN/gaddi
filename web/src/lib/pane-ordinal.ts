@@ -23,7 +23,7 @@ export function panesOfTab(
   // same across sessions. `workspaceGroupKey` is (host, session, workspace), the dashboard's identity.
   const tab = workspaceGroupKey(agent);
   const inTab = (p: AgentView) => p.tabId === agent.tabId && workspaceGroupKey(p) === tab;
-  const byId = new Map(agents.filter(inTab).map((p) => [p.paneId, p]));
+  const byId = new Map([...agents, ...shellPanes].filter(inTab).map((p) => [p.paneId, p]));
   const ancestors = new Set<string>();
   for (let cur = agent.parentPaneId; cur !== undefined && !ancestors.has(cur); cur = byId.get(cur)?.parentPaneId) {
     ancestors.add(cur);

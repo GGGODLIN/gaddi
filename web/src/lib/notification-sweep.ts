@@ -24,7 +24,7 @@ import { paneScope } from "./hosts";
 import { herdSlotTag, paneSlotTag } from "./pane-notifications";
 import type { NotifData } from "./push-decision";
 import { normalizeScope, type Scope } from "./scope";
-import { needsYou } from "./triage";
+import { bucketOf } from "./triage";
 import type { AgentView, ServerSummary, SessionSummary } from "./types";
 
 /** What a sweep judges against: the snapshot's panes and the address and breadth they cover. */
@@ -63,8 +63,12 @@ function covers(view: SweepView, scope: Scope): boolean {
 }
 
 /** Whether this pane still holds an alert open (manual unseen marks do not raise or hold alerts). */
-const needsAlert = (pane: AgentView): boolean =>
-  pane.status === "blocked" || (needsYou(pane) && !pane.manualUnseen);
+const needsAlert = (pane: AgentView): boolean => {
+  const b = bucketOf(pane);
+  if (b === "needs") return true;
+  if (b === "ready") return pane.manualUnseen !== true;
+  return false;
+};
 
 /** Whether nothing in `view` still waits on the person for this notification. */
 function handled(view: SweepView, tag: string, data: NotifData): boolean {
