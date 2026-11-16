@@ -1,4 +1,5 @@
 import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { lineText, type StyledLine } from "../blocks";
@@ -397,6 +398,24 @@ describe("the typed command's own list at the box (idle.volatile.below.commandLi
     const read = readScreen(rows, "claude", IDLE);
     expect(read.cues?.strength).toBe("none");
     expect(read.surface).toMatchObject({ turn: "idle", modal: "none", composer: "draft" });
+  });
+
+  it("the captured 2.1.325 screen draws the list over a plugin's band over the box: still the typed command's own list", () => {
+    const bridgeFixtures = join(import.meta.dirname, "..", "..", "..", "..", "bridge", "surface", "fixtures");
+    const rows = fixtureRows("claude--v2325-slash-list-over-band-typed--w120.txt", bridgeFixtures);
+    const frame = findInputFrame(rows, IDLE)!;
+    // Right over the edge stand the band's rows, so the list is not read there.
+    expect(commandListAt(texts(rows), frame, LIST)).toBeNull();
+    expect(ownCommandList(texts(rows), frame, IDLE)).toEqual({
+      pointed: "/effort",
+      side: "above",
+      first: frame.top - 7,
+      last: frame.top - 4,
+      entries: ["/effort", "/effort-notes", "/sample-skill", "/code-review"],
+    });
+    // The same list pointed at another command stays unread: a band never lets a foreign list through.
+    const elsewhere = texts(rows).map((row) => row.replace(/^ {2}❯ \/effort /u, "    /effort ").replace(/^ {4}\/effort-notes/u, "  ❯ /effort-notes"));
+    expect(ownCommandList(elsewhere, frame, IDLE)).toBeNull();
   });
 
   it("the harness lab's 120 x 40 tmux captures: the list under a box scrolled up the short pane is the typeahead of /model and /effort", () => {

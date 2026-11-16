@@ -41,7 +41,7 @@
 // Pure: the same rows always give the same answer.
 
 import { displayWidth } from "../text-width";
-import { commandListNear, edgeRunListRow, openedByText, pointsAt, type CommandListRead } from "./command-list";
+import { commandListNear, commandListOverBand, edgeRunListRow, openedByText, pointsAt, type CommandListRead } from "./command-list";
 import { popupUnder, type PopupRead } from "./popup";
 import { promptDraft, rowText, type Frame, type FrameRow, type IdleProfile } from "./frame";
 import { isSingleKeyRow } from "./key-row";
@@ -451,7 +451,11 @@ export function ownCommandList(texts: readonly string[], frame: Frame | null, id
   if (frame === null || idle === null || frame.placeholder) return null;
   const rows = idle.volatile.below.commandList;
   const list = commandListAt(texts, frame, rows, styled);
-  return list !== null && (pointsAt(list, frame.interior.text, rows) || openedByText(list, frame.interior.text, rows)) ? list : null;
+  if (list !== null && (pointsAt(list, frame.interior.text, rows) || openedByText(list, frame.interior.text, rows))) return list;
+  // Only a list whose pointer rests on the typed command may stand past a band: any other list there
+  // stays unread, as before, so no transcript row over the box is read as one.
+  const overBand = commandListOverBand(texts, frame.top, idle.volatile.above.maxRows, rows, styled);
+  return overBand !== null && pointsAt(overBand, frame.interior.text, rows) ? overBand : null;
 }
 
 /**

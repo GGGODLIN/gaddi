@@ -214,6 +214,25 @@ function listAbove(texts: readonly string[], top: number, patterns: CompiledComm
 }
 
 /**
+ * The list over the top edge `top` with up to `gap` rows between it and the edge that are no list row:
+ * a plugin's band drawn right over the box pushes the list up past it (Claude Code 2.1.325, a mod's
+ * two-row band and a blank row, live 2026-11-17). The gap is the profile's volatile rows over the box,
+ * so no transcript row is skipped. Null when the rows right over the edge already open a list, or no
+ * list row stands within the gap. The caller keeps it only when its pointer rests on the typed command.
+ */
+export function commandListOverBand(texts: readonly string[], top: number, gap: number, list: CommandListRows | undefined, rows?: readonly FrameRow[]): CommandListRead | null {
+  if (list === undefined || gap <= 0) return null;
+  const patterns = listPatterns(list);
+  if (!patterns.above) return null;
+  for (let edge = top - 1; edge >= Math.max(0, top - gap); edge--) {
+    const row = listRow(texts[edge]!.trimEnd(), patterns, rows?.[edge]);
+    if (row === null || row.kind === "wrapped") continue;
+    return edge === top - 1 ? null : listAbove(texts, edge + 1, patterns, rows);
+  }
+  return null;
+}
+
+/**
  * The list inside the box, under its prompt row: every row from the prompt row's next row to the
  * bottom edge is an entry or a row that is no entry (a count row), the first of them is an entry,
  * and at most one carries the pointer. Anything else there — a blank row, a wrapped draft row, a
