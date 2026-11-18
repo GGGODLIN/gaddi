@@ -23,7 +23,7 @@ describe("parseProbePort", () => {
 });
 
 describe("tailnetIPv4", () => {
-  test("the first non-internal IPv4 in 100.64.0.0/10 is the tailnet address, whatever the interface is called", () => {
+  test("the first non-internal IPv4 in 100.64/10 is the tailnet address, whatever the interface is called", () => {
     expect(
       tailnetIPv4({
         lo0: [nic("127.0.0.1", "IPv4", true)],
@@ -31,7 +31,7 @@ describe("tailnetIPv4", () => {
         utun7: [nic("fd7a:115c:a1e0::1", "IPv6"), nic("100.101.86.18")],
       }),
     ).toBe("100.101.86.18");
-    expect(tailnetIPv4({ tailscale0: [nic("100.64.0.3")] })).toBe("100.64.0.3");
+    expect(tailnetIPv4({ tailscale0: [nic("100.64.10.3")] })).toBe("100.64.10.3");
   });
 
   test("an address just outside the range, or none at all, is no tailnet", () => {
