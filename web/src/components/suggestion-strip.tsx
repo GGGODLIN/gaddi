@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { MouseEvent } from "react";
+import type { FocusEvent, MouseEvent, Ref } from "react";
 
 import { Collapse } from "@/components/ui/collapse";
 import { STRIP_SCROLLER, STRIP_TAP_TARGET } from "@/components/ui/labelled-strip";
@@ -12,13 +12,17 @@ import { segmentsOf, suggest, SUGGEST_LIMIT, type Suggestion, type SuggestionLin
 import { cn } from "@/lib/utils";
 
 // THE SUGGESTION STRIP: one row of chips directly above the composer's text box, the way a phone
-// keyboard offers words. A tap puts the chip's text in the box and sends nothing. It has two sources,
-// and a pane only ever has one of them:
+// keyboard offers words. A tap puts the chip's text in the box and sends nothing. It has three sources,
+// and only one is active at a time:
 //
 // - SENT, on a shell pane (M61 spec 02). Lines from Sent that fit what is in the box: the folder's
 //   newest lines while it is empty, prefix matches and then lines holding every typed word while the
 //   person types (lib/sent-suggest.ts ranks them). The last chip, "All", opens the Sent sheet. The
 //   Settings switch `sentSuggestions` governs this source and only this one.
+// - FILES, on an agent pane (#757). Folders and files from the pane's folder (`GET /api/pane/:id/files`,
+//   ADR 0083), filtered and ranked for the active `@` token (`lib/file-suggest.ts`), at most
+//   SUGGEST_LIMIT chips. Tapping a folder stages `@folder/` so the row lists its children; tapping a
+//   file appends a trailing space, closing the row.
 // - COMMANDS, on an agent pane (#475). The agent's own command list (the shipped catalog, or the
 //   operator's `commands.toml` rows where they address the pane), filtered by the typed `/` or `$`
 //   token (lib/agent-commands.ts `suggestCommands` ranks them), at most SUGGEST_LIMIT chips. A tap fills the box with the command
@@ -36,8 +40,10 @@ import { cn } from "@/lib/utils";
 //
 // The caller decides whether the strip is wanted at all and passes it as `open`: for Sent that is a
 // shell pane, box focused, switch on, no Type into terminal, no dialog card, not locked, no
-// attachment chip; for commands it is an agent pane, not locked, no Type into terminal, and a typed
-// token that matches at least one command.
+// attachment chip; for files it is an agent pane, box focused, not confirming a send, no Type into
+// terminal, no dialog card, not locked, and an active `@` token with entries (or a folder drill in
+// flight); for commands it is an agent pane, not locked, no Type into terminal, and a typed token that
+// matches at least one command.
 
 /** Lines from Sent, on a shell pane. */
 export interface SentSource {
@@ -77,6 +83,8 @@ export interface SuggestionStripProps {
   /** What the box holds now. */
   typed: string;
   source: SuggestionSource;
+  containerRef?: Ref<HTMLDivElement>;
+  onBlur?: (event: FocusEvent<HTMLButtonElement>) => void;
 }
 
 /** Keeps the text box focused through a tap on a chip. */
@@ -108,7 +116,7 @@ function chipsOf(source: SuggestionSource, sentOffered: readonly Suggestion[]): 
     }));
   }
   if (source.kind === "files") {
-    return source.files.slice(0, SUGGEST_LIMIT).map((file) => ({
+    return source.files.map((file) => ({
       key: file.key,
       ariaLabel: file.ariaLabel,
       suggestion: file.display,
@@ -137,7 +145,7 @@ function ariaLabelOf(source: SuggestionSource): string {
   return t("commands.title");
 }
 
-export function SuggestionStrip({ open, typed, source }: SuggestionStripProps) {
+export function SuggestionStrip({ open, typed, source, containerRef, onBlur }: SuggestionStripProps) {
   useLocale();
   // Sent ranks up to 300 lines per keystroke, so that ranking is memoised on the lines and the text;
   // the command list arrives already ranked (the composer calls `suggestCommands`).
@@ -154,6 +162,7 @@ export function SuggestionStrip({ open, typed, source }: SuggestionStripProps) {
   return (
     <Collapse open={open && hasRows}>
       <div
+        ref={containerRef}
         data-slot={slotOf(source)}
         role="group"
         aria-label={ariaLabelOf(source)}
@@ -169,6 +178,7 @@ export function SuggestionStrip({ open, typed, source }: SuggestionStripProps) {
                   // The line whole: its runs are separate spans, and a reader must not hear the space between two of them go missing.
                   aria-label={ariaLabel}
                   onMouseDown={keepFocus}
+                  onBlur={onBlur}
                   onClick={pick}
                   className={cn(STRIP_TAP_TARGET, CHIP, "max-w-[16rem] justify-start font-mono")}
                 >
@@ -185,6 +195,7 @@ export function SuggestionStrip({ open, typed, source }: SuggestionStripProps) {
                 <button
                   type="button"
                   onMouseDown={keepFocus}
+                  onBlur={onBlur}
                   onClick={source.onAll}
                   aria-label={t("sent.suggest.all.aria")}
                   className={cn(STRIP_TAP_TARGET, CHIP, "font-medium text-foreground")}

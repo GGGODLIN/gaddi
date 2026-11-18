@@ -431,6 +431,7 @@ export default defineConfig({
             { name: "router", test: /node_modules\/(?:react-router|@remix-run)\// },
             { name: "react", test: /node_modules\/(?:react|react-dom|scheduler)\// },
             { name: "lucide", test: /node_modules\/lucide-react\// },
+            { name: "vendor-ui", test: /node_modules\/(?:tailwind-merge|clsx|class-variance-authority)\// },
           ],
         },
         // NOTHING OF THE MATH ENGINES IS IN THIS BUILD. They are bundles of their own under `math/`,

@@ -168,6 +168,48 @@ describe("suggestFiles", () => {
         .join(""),
     ).toBe("ord");
   });
+
+  it("ranks an exact filename match ahead of prefix-matching folders so 12 folders cannot crowd it out", () => {
+    const dirs: FileEntry[] = Array.from({ length: 12 }, (_, i) => ({
+      name: `config-${String(i + 1).padStart(2, "0")}`,
+      kind: "dir" as const,
+    }));
+    const got = suggestFiles([...dirs, { name: "config", kind: "file" }], "", "config");
+    expect(got).toHaveLength(12);
+    expect(got[0]?.ariaLabel).toBe("@config");
+    expect(got[0]?.isDir).toBe(false);
+  });
+
+  it("never splits a UTF-16 surrogate pair when truncating a long astral filename", () => {
+    function hasLoneSurrogate(s: string): boolean {
+      for (let i = 0; i < s.length; i += 1) {
+        const code = s.charCodeAt(i);
+        if (code >= 0xd800 && code <= 0xdbff) {
+          const next = s.charCodeAt(i + 1);
+          if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+          i += 1;
+        } else if (code >= 0xdc00 && code <= 0xdfff) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    for (const tail of [".ts", "a.ts", "ab.tsx"]) {
+      const name = `${"😀".repeat(14)}${tail}`;
+      const got = suggestFiles([{ name, kind: "file" }], "", "ts");
+      expect(got).toHaveLength(1);
+      expect(got[0]!.display.line.startsWith("@…")).toBe(true);
+      expect(got[0]!.display.line.length).toBeLessThanOrEqual(28);
+      expect(hasLoneSurrogate(got[0]!.display.line)).toBe(false);
+      expect(
+        segmentsOf(got[0]!.display)
+          .filter((s) => s.matched)
+          .map((s) => s.text)
+          .join(""),
+      ).toBe("ts");
+    }
+  });
 });
 
 describe("applyFileSuggestion", () => {
