@@ -2,6 +2,8 @@
 
 Status: **Accepted outside Claude's Agent palette** (2026-08-17); superseded there by [ADR 9001](./9001-claude-operator-commands-join-the-reference-catalog.md)
 
+Date: 2026-08-17
+
 ## Context
 
 The Agent-commands sheet ships a small per-harness catalog (`web/src/lib/agent-commands.ts`) whose

@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-11
-- **Shipped in:** pending
 - **Trail:** a user asked whether skills can be called from the phone with `/`, and the operator's own
   palette had silently missed twenty of their skills ("可以做A，但我希望還是同一個入口，不要分原生與
   user skill，畢竟cc也沒分", 2026-10-11) · `bridge/claude-commands.ts` · `GET /api/pane/<id>/claude-commands`

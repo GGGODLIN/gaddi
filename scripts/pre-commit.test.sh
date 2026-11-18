@@ -365,6 +365,21 @@ case "$OUT" in
   *) fail "the pass did not name CREW_PROTOCOL.md: ${OUT}" ;;
 esac
 
+# A release merge can list more paths than fit in a pipe when grep stops at an early match.
+large_staged="$(printf 'docs/unchanged-%05d.md\n' {1..4000})"
+wire_guard "bridge/crew/router.ts
+CREW_PROTOCOL.md
+${large_staged}"
+assert_allowed "a large wire change with the contract doc staged"
+case "$OUT" in
+  *"staged CREW_PROTOCOL.md"*) ;;
+  *) fail "the large-list pass did not name CREW_PROTOCOL.md: ${OUT}" ;;
+esac
+wire_guard "bridge/crew/router.ts
+CREW_PROTOCOL.md.backup
+${large_staged}"
+assert_blocked "a large wire change missing the exact contract path" "no protocol decision was recorded"
+
 # The overlap is on the file list, so touching it is a wire change like any other. REMOVE_IN_1_9_0
 # together with `bridge/crew/v1-overlap.ts` itself.
 wire_guard "bridge/crew/v1-overlap.ts"

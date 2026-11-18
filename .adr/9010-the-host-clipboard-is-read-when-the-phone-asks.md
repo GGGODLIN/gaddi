@@ -1,6 +1,7 @@
 # 9010 — The host clipboard is read when the phone asks, never watched and never kept
 
 Status: **Accepted** (2026-10-11)
+Date: 2026-10-11
 
 Trail: the operator's roadmap (kept outside the repo), "host clipboard, taken from the phone", and a
 GPT-6 Pro review of the first draft on 2026-10-11. Files: `bridge/host-clipboard.ts`,

@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
-- **Shipped in:** pending
 - **Amends:** [0063](./0063-a-pane-keeps-its-place-when-its-state-changes.md) and
   [9003](./9003-the-switcher-orders-a-section-by-its-latest-state-change.md), in scope: the
   in-pane switcher sheet

@@ -2,9 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-07
-- **Shipped in:** pending
-- **Amends:** upstream [ADR 0129](./0129-an-anonymous-install-count-on-by-default.md) in this fork
-  (keeps [ADR 0034](./0034-collie-collects-nothing-and-opt-in-is-the-ceiling.md)'s default-off posture)
+- **Amends:** upstream [ADR 0129](./0129-an-anonymous-install-count-on-by-default.md) in this fork.
+- **Preserves:** [ADR 0034](./0034-collie-collects-nothing-and-opt-in-is-the-ceiling.md)'s default-off posture.
 - **Trail:** upstream `v1.27.0`–`v1.27.2` sync review (`4c35b3dea`) · `bridge/telemetry.ts`
   (`telemetryState`) · `bridge/config-schema.ts` (`COLLIE_TELEMETRY`) ·
   `web/src/lib/i18n/messages/*.ts` (`telemetry.card.cause.default`) · fork-only divergence

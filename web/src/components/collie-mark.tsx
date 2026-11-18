@@ -1,4 +1,3 @@
-// generated: sha256=8fa8112af3e93d80ac1c517373d73d05abb22978c7355375ed03b9f1fca3b7d8 from=gaddi-mark-art.ts
 // The Gaddi mark: the pixel-art head of a Gaddi dog. Fork-only (FORK.md, "Gaddi brand"): upstream's
 // generated orbit mark is ColliePWA's logo, which its TRADEMARKS.md keeps out of a fork.
 //
@@ -13,7 +12,7 @@
 // accent or forced bead colour. Under `prefers-reduced-motion` the hop stops and the colour still
 // says what state the mark is in.
 
-import { useMemo } from "react";
+import { useMemo, type ComponentType } from "react";
 
 import { GADDI_HEAD, GADDI_OUTLINE, GADDI_VIEW } from "./gaddi-mark-art";
 import { MARK_STYLE, useMark, type MarkProps, type MarkSpec } from "./mark-contract";
@@ -31,8 +30,7 @@ const MARKUP = `<g shape-rendering="crispEdges"><g class="cm-line">${GADDI_OUTLI
 
 const VIEW = { full: GADDI_VIEW, header: "0 4 60 52" };
 
-const SPEC: MarkSpec = {
-  id: "collie",
+const SPEC: Omit<MarkSpec, "id"> = {
   beads: 8,
   paced: /^cm-/,
   liveClass: "cm-live",
@@ -48,13 +46,20 @@ const SPEC: MarkSpec = {
 
 export type CollieMarkProps = MarkProps;
 
-export function CollieMark(props: CollieMarkProps) {
-  const m = useMark(SPEC, props);
-  const body = useMemo(() => ({ __html: MARKUP }), []);
-  return (
-    <svg {...m.root}>
-      <style>{STYLE}</style>
-      <g className={m.live ? undefined : "cm-drift"} dangerouslySetInnerHTML={body} />
-    </svg>
-  );
+// Theme IDs remain compatible with upstream themes. Every variant draws the fork's own art.
+export function collieFamilyMark(id: string, outline: string): ComponentType<CollieMarkProps> {
+  const spec: MarkSpec = { ...SPEC, id };
+  const markup = MARKUP.replace('<g class="cm-line">', `<g class="cm-line" opacity="${outline}">`);
+  return function GaddiFamilyMark(props: CollieMarkProps) {
+    const m = useMark(spec, props);
+    const body = useMemo(() => ({ __html: markup }), []);
+    return (
+      <svg {...m.root}>
+        <style>{STYLE}</style>
+        <g className={m.live ? undefined : "cm-drift"} dangerouslySetInnerHTML={body} />
+      </svg>
+    );
+  };
 }
+
+export const CollieMark = collieFamilyMark("collie", "1");

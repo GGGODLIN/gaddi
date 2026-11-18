@@ -365,6 +365,13 @@ export interface Config {
    */
   spacesFile?: string;
   /**
+   * Where the operator's tricks live, `tricks/`, a folder beside the operator files: one `<id>/` per trick
+   * with its `trick.toml` and provider (M94, bridge/tricks/). Read by the tricks runner only, and never
+   * here. `loadConfig` always sets it; optional so a hand-built Config may leave it out, which reads
+   * as "no tricks".
+   */
+  tricksDir?: string;
+  /**
    * Where the operator's prompt-cache overrides live — `cache-rules.toml`, the sixth file on the same
    * contract, read the same way (bridge/operator-cache-rules.ts) and likewise never read here.
    */
@@ -467,6 +474,13 @@ export interface Config {
    */
   multiSession: boolean;
   /**
+   * The inside wire's switch (`COLLIE_INSIDE`, M99, `bridge/inside/WIRE.md`). Null, the default: the
+   * wire is on while `collie harness link` has linked a harness on this machine (M99 spec 09). `off` is the
+   * kill switch: no socket, no hook target `inside` field, and every session keeps the screen path
+   * exactly as before. `on` opens it with no link (a test, a leg).
+   */
+  inside: boolean | null;
+  /**
    * Surface shadow mode (`COLLIE_SURFACE_SHADOW=1`, M56 spec 04): the bridge computes each agent pane's
    * Surface from the screen on every poll beside the old readers, logs every disagreement and serves
    * the Surface on the snapshot and on `GET /api/surface`. Off by default; nothing decides a send by it.
@@ -487,7 +501,7 @@ export interface Config {
   walky: boolean;
   /**
    * The walky talky pair cap (`COLLIE_WALKY_PAIR_LIMIT`): messages in ten minutes between the same two
-   * panes, either direction, counted by this bridge alone. 6 by default, 1 to 100; a value outside that
+   * panes, either direction, counted by this bridge alone. 12 by default, 1 to 100; a value outside that
    * range, or one that is not an integer, warns and takes the default.
    */
   walkyPairLimit: number;
@@ -732,6 +746,14 @@ export function resolveJournalRoots(
     "dsh-tui": envRoots("COLLIE_DSH_ROOT", join(env.DSH_HOME?.trim() || join(home, ".dsh"), "sessions"), env),
     // OpenClaw keeps one SQLite per agent under its state folder, which `OPENCLAW_STATE_DIR` moves.
     openclaw: envRoots("COLLIE_OPENCLAW_ROOT", env.OPENCLAW_STATE_DIR ?? join(home, ".openclaw"), env),
+    // MiniMax Code keeps dated session folders under `$MINIMAX_DATA_DIR/v2/sessions`, ~/.minimax/v2
+    // when that var is unset or blank (its README, § Configuration), and its SQLite index under
+    // v2/sqlite. The program's own variable is `MINIMAX_DATA_DIR`; there is no `MINIMAX_HOME`.
+    mcode: envRoots(
+      "COLLIE_MCODE_ROOT",
+      join(env.MINIMAX_DATA_DIR?.trim() || join(home, ".minimax"), "v2", "sessions"),
+      env,
+    ),
   };
 }
 
@@ -881,6 +903,7 @@ export function loadConfig(
     clipboardFile: join(configDir, "clipboard.toml"),
     cacheRulesFile: join(configDir, "cache-rules.toml"),
     spacesFile: join(configDir, "spaces.toml"),
+    tricksDir: join(configDir, "tricks"),
     trustedUser: env.COLLIE_TRUSTED_USER ?? "",
     trustedUserOptional: envBool("COLLIE_TRUSTED_USER_OPTIONAL", false, env),
     accessTeam: (env.COLLIE_ACCESS_TEAM ?? "").trim(),
@@ -900,6 +923,7 @@ export function loadConfig(
     stateDir,
     multiSession: envBool("COLLIE_MULTI_SESSION", true, env),
     surfaceShadow: envBool("COLLIE_SURFACE_SHADOW", false, env),
+    inside: env.COLLIE_INSIDE === undefined || env.COLLIE_INSIDE.trim() === "" ? null : envBool("COLLIE_INSIDE", false, env),
     sendProtocol: envBool("COLLIE_SEND_PROTOCOL", true, env),
     walky: envBool("COLLIE_WALKY", true, env),
     walkyPairLimit: envInt("COLLIE_WALKY_PAIR_LIMIT", PAIR_LIMIT, { min: 1, max: 100 }, env),

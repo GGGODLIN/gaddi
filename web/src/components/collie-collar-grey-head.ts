@@ -1,0 +1,1 @@
+export const GADDI_COLLAR_PREVIEW_OUTLINE = "0.55";
