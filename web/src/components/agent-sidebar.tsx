@@ -14,7 +14,7 @@ import { pinnedRows, shownGroups } from "@/lib/dash-view";
 import { paneRowKey, paneSpaceKey, tabKey } from "@/lib/hosts";
 import { groupPanesByWorkspace } from "@/lib/pane-groups";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
-import { nestPanes, toggleFoldedParent, triageTrees, useFoldedParents, type PaneTreeRow } from "@/lib/pane-tree";
+import { nestPanes, parentRowKeyOf, toggleFoldedParent, triageTrees, useFoldedParents, type PaneTreeRow } from "@/lib/pane-tree";
 import { useLastViewedShortcut } from "@/lib/last-viewed";
 import { descriptionNow } from "@/lib/description-now";
 import {
@@ -213,11 +213,24 @@ function rowDomId(pane: AgentView): string {
   return `switch-row-${paneRowKey(pane).replace(/[^A-Za-z0-9_-]/gu, "_")}`;
 }
 
-/** Scroll a row into view and give it the focus, for the summary line's jump. */
-function jumpTo(pane: AgentView): void {
-  const row = document.getElementById(rowDomId(pane));
-  row?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  row?.focus({ preventScroll: true });
+/** A folded urgent child has no row; its visible ancestor is the nearest way to reach it. */
+function jumpTo(pane: AgentView, panes: readonly AgentView[]): void {
+  const byKey = new Map(panes.map((p) => [paneRowKey(p), p]));
+  const seen = new Set<string>();
+  let current: AgentView | undefined = pane;
+  while (current !== undefined) {
+    const key = paneRowKey(current);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const row = document.getElementById(rowDomId(current));
+    if (row !== null) {
+      row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      row.focus({ preventScroll: true });
+      return;
+    }
+    const parent = parentRowKeyOf(current);
+    current = parent === null ? undefined : byKey.get(parent);
+  }
 }
 
 /** The switcher row draws the name, the space and the tab as text; the machine is a glyph only. */
@@ -290,9 +303,9 @@ export function ThreadSidebar({
   const [pendingJump, setPendingJump] = useState<AgentView | null>(null);
   useEffect(() => {
     if (pendingJump === null) return;
-    jumpTo(pendingJump);
+    jumpTo(pendingJump, agents);
     setPendingJump(null);
-  }, [pendingJump]);
+  }, [agents, pendingJump]);
 
   // An operator with no panes but a launchers.toml still has something to reach in here, so the
   // empty-panes text and the Launch section coexist rather than the text winning outright.
@@ -373,12 +386,17 @@ export function ThreadSidebar({
       : null;
   // The Tricks group trails every order; in best-first its rows are in the one flat list instead.
   const trickShown = bestRows !== null ? NO_PANES : hits === null ? trickRows : trickRows.filter(keep);
-  const shownRows =
-    bestRows ?? [
-      ...pinnedShown,
-      ...(ranked ? rankedRows : [...sectionsShown.flatMap((g) => g.rows), ...shellsShown]),
-      ...trickShown,
-    ];
+  const lastKey = hits !== null || lastViewed === undefined ? null : paneRowKey(lastViewed);
+  const attentionPinned = pinnedShown.filter((a) => paneRowKey(a) !== lastKey);
+  const attentionAgents = agents.filter((a) => keep(a) && !isPinned(a) && paneRowKey(a) !== lastKey);
+  const attentionShells = shellsShown.filter((p) => paneRowKey(p) !== lastKey);
+  const attentionTreeSections = order === "attention"
+    ? triageTrees(attentionAgents, hits === null ? folded : NO_FOLDED)
+      .toSorted((a, b) => Number(a.section.key === "working") - Number(b.section.key === "working"))
+    : [];
+  const shownRows = bestRows ?? (order === "attention"
+    ? [...attentionPinned, ...attentionTreeSections.flatMap((g) => g.rows.map((r) => r.pane)), ...attentionShells, ...trickShown]
+    : [...pinnedShown, ...(ranked ? rankedRows : [...sectionsShown.flatMap((g) => g.rows), ...shellsShown]), ...trickShown]);
   const hitOf = (p: AgentView): PaneMatch | undefined => hits?.get(paneRowKey(p));
 
   // The jump goes to the first urgent row the list SHOWS; when the query hides every urgent row, it
@@ -388,7 +406,7 @@ export function ThreadSidebar({
     firstUrgent === undefined
       ? undefined
       : firstUrgentShown !== undefined
-        ? () => jumpTo(firstUrgentShown)
+        ? () => jumpTo(firstUrgentShown, agents)
         : () => {
             setQuery("");
             setPendingJump(firstUrgent);
@@ -467,10 +485,6 @@ export function ThreadSidebar({
           {/* Pinned leads here too (ADR 0070): a pinned pane leaves its attention bucket, listed once;
               a pane already promoted to Last viewed leaves both Pinned and the buckets below. */}
           {(() => {
-            const lastKey = hits !== null || lastViewed === undefined ? null : paneRowKey(lastViewed);
-            const attentionPinned = pinnedShown.filter((a) => paneRowKey(a) !== lastKey);
-            const attentionAgents = agents.filter((a) => keep(a) && !isPinned(a) && paneRowKey(a) !== lastKey);
-            const attentionShells = shellsShown.filter((p) => paneRowKey(p) !== lastKey);
             return (
               <>
                 {attentionPinned.length > 0 && (
@@ -483,13 +497,12 @@ export function ThreadSidebar({
                         active={paneRowKey(a) === currentPaneKey}
                         onSelect={onSelect}
                         roomy={roomy}
+                        match={hitOf(a)}
                       />
                     ))}
                   </Section>
                 )}
-                {triageTrees(attentionAgents, hits === null ? folded : NO_FOLDED)
-                  .toSorted((a, b) => Number(a.section.key === "working") - Number(b.section.key === "working"))
-                  .map(({ section: g, rows, count }) => {
+                {attentionTreeSections.map(({ section: g, rows, count }) => {
                     if (count === 0) return null;
                     return (
                       <Section

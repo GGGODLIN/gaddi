@@ -93,6 +93,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 - **Complete references for tricks and themes.** `docs/tricks-reference.md` and `docs/themes-reference.md` list every key, limit and command, are generated from the code, and print with `collie docs tricks-reference` and `collie docs themes-reference`.
 - **Dialog taps keep their binding while the reply box is locked.** The merge keeps the countdown-safe prompt checks, restores Safari's stable Chat layout, and lets wrapped code blocks use the available width.
+- **The pane switcher reaches urgent rows inside folded groups.** Its summary can focus the visible parent, and Go opens the first result in the displayed order.
 
 ## [2.16.0] - 2026-11-15
 

@@ -393,7 +393,7 @@ function CodeSpan({ text }: { text: string }) {
   const file = !inLink && deliver !== null && isLocalFileHref(text.trim()) ? deliver(text.trim()) : null;
   if (file !== null && file.kind === "local") {
     return (
-      <button type="button" onClick={file.onOpen} className={`${CHIP_CLASS} ${LINK_CLASS}`}>
+      <button type="button" onClick={file.onOpen} className={`${chip} ${LINK_CLASS}`}>
         <Hit text={text} />
       </button>
     );
@@ -402,7 +402,7 @@ function CodeSpan({ text }: { text: string }) {
   const onLocal = inLink ? null : (openLocal?.(text.trim()) ?? null);
   if (onLocal !== null) {
     return (
-      <button type="button" onClick={onLocal} className={`${CHIP_CLASS} ${LINK_CLASS} ${breakClass(text)}`}>
+      <button type="button" onClick={onLocal} className={`${chip} ${LINK_CLASS} ${breakClass(text)}`}>
         <Hit text={text} />
       </button>
     );
