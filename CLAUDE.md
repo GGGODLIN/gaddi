@@ -401,9 +401,12 @@ page to be skimmed.
   `Bun.connect` (HTTP handlers, the socket client) stay out of the VITEST tier — Vitest-on-Node can't
   run them — so keep new backend logic pure/injectable enough for `bun test`, or exercise it through
   `web/`. Bun's own runner *can* run them, and the drill below is where that happens.
-- **`scripts/collie-cli.test.sh` passes only on Linux.** Its updater case expects the
-  `systemd-run` handoff, which `cli/update-run.ts` takes only on Linux, so the root `bun run test`
-  is red on macOS at that step. CI is Linux. The pre-push hook does not run this script.
+- **`scripts/collie-cli.test.sh` passes only on Linux.** On macOS it fails in two places: its
+  updater case expects `handed off to systemd-run --user --collect`, which `cli/update-run.ts`
+  (`launchPlan`) takes only when `host.platform === "linux"` even with a fake `systemd-run` on
+  `PATH`, and its `skill status --check` case calls GNU `sed -i` without a backup suffix (rejected
+  by macOS BSD `sed`). As a result, the root `bun run test` is red on macOS at that step. CI is
+  Linux. The pre-push hook does not run this script.
 - **A red local gate is a bug to fix, not a question of whether to skip it.** When pre-commit or
   pre-push fails on this machine for an environment reason, fix the hook or the test so it passes
   here; an escape hatch is for a single push the operator chose, not the standing answer.
