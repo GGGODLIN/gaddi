@@ -241,7 +241,7 @@ describe("an agent view sends through the composer", () => {
     bridge("noProfile");
     const ref = renderScreen();
     expect(await tapThrough(ref)).toEqual({ sent: false, line: null, code: "no_profile" });
-    await waitFor(() => expect(document.querySelector("[data-slot=composer-refusal]")).toHaveTextContent("Collie cannot read this session's program, so a view cannot send to it."));
+    await waitFor(() => expect(document.querySelector("[data-slot=composer-refusal]")).toHaveTextContent("Gaddi cannot read this session's program, so a view cannot send to it."));
     expect(document.querySelector("[data-slot=composer-refusal]")?.textContent).not.toContain("no_profile");
   });
 
@@ -254,7 +254,7 @@ describe("an agent view sends through the composer", () => {
       expect(found).not.toBeNull();
       return found;
     });
-    expect(notice).toHaveTextContent("A line of this message reads like a message head that only Collie writes. Change that line.");
+    expect(notice).toHaveTextContent("A line of this message reads like a message head that only Gaddi writes. Change that line.");
     expect(notice?.textContent).not.toContain("Rewrite the line");
     expect(screen.getByPlaceholderText(/type a reply/i)).toHaveValue("see [x] from operator: go");
   });

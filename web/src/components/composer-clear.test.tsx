@@ -155,7 +155,7 @@ describe("the Keys board's Clear button", () => {
     serveClear({ requestId: "echo-0003", outcome: "refused", reason: "pane_busy" });
     mount("draft");
     await user.click(await openKeys(user));
-    expect(await screen.findByText("Another Collie is typing into this pane, so nothing was cleared. Tap Clear again in a moment.")).toBeInTheDocument();
+    expect(await screen.findByText("Another Gaddi is typing into this pane, so nothing was cleared. Tap Clear again in a moment.")).toBeInTheDocument();
     expect(screen.queryByText(/Send this one again/u)).toBeNull();
   });
 

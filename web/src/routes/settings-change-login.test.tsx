@@ -154,7 +154,7 @@ describe("Change login: before the start", () => {
     const first = await screen.findByRole("button", { name: /Fix the build/ });
     expect(first).toHaveTextContent("lodge");
     expect(screen.getByRole("button", { name: /Write docs/ })).toHaveTextContent("workshop");
-    expect(screen.getByText("Sessions outside Collie that use this profile follow too.")).toBeInTheDocument();
+    expect(screen.getByText("Sessions outside Gaddi that use this profile follow too.")).toBeInTheDocument();
   });
 
   it("a tap on a session goes to it", async () => {
@@ -175,13 +175,13 @@ describe("Change login: before the start", () => {
     mount(["/settings/accounts/acc-work", "/settings/accounts/acc-work/login"], [agentPane("w1:p1")]);
     expect(await screen.findByText("Its sessions follow.")).toBeInTheDocument();
     expect(screen.queryByRole("listitem")).toBeNull();
-    expect(screen.queryByText(/outside Collie/)).toBeNull();
+    expect(screen.queryByText(/outside Gaddi/)).toBeNull();
     cleanup();
     serveList([defaultRow(), workRow({ identity: ME })]);
     mount(["/settings/accounts/acc-work", "/settings/accounts/acc-work/login"], [agentPane("w1:p1")]);
     expect(await screen.findByText("Its sessions follow.")).toBeInTheDocument();
     expect(screen.queryByRole("listitem")).toBeNull();
-    expect(screen.queryByText(/outside Collie/)).toBeNull();
+    expect(screen.queryByText(/outside Gaddi/)).toBeNull();
   });
 
   it("an agent whose sign-in does not reach running sessions shows no list and no outside line", async () => {
@@ -191,7 +191,7 @@ describe("Change login: before the start", () => {
     expect(await screen.findByText("Sessions you start from now on use the new login.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Fix the build/ })).toBeNull();
     expect(screen.queryByRole("listitem")).toBeNull();
-    expect(screen.queryByText(/outside Collie/)).toBeNull();
+    expect(screen.queryByText(/outside Gaddi/)).toBeNull();
   });
 
   it("an agent whose sign-in is not proven to reach running sessions says only new sessions use it, with no count", async () => {

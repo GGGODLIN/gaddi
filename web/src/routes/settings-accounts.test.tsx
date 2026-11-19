@@ -273,7 +273,7 @@ describe("Accounts: one account", () => {
   it("an own account says it is used as it is", async () => {
     serveAccounts(body({ accounts: [defaultRow(), workRow({ kind: "own", label: "Alt", folder: "~/.claude-alt" })] }));
     mount("/settings/accounts/acc-work");
-    expect(await screen.findByText("Collie uses the folder as it is: its own history, settings and sessions.")).toBeInTheDocument();
+    expect(await screen.findByText("Gaddi uses the folder as it is: its own history, settings and sessions.")).toBeInTheDocument();
   });
 
   it("Default cannot be removed and says no variable is set", async () => {
@@ -293,7 +293,7 @@ describe("Accounts: one account", () => {
   it("says when the hooks are missing and shows the line that installs them", async () => {
     serveAccounts(body({ accounts: [defaultRow(), workRow({ kind: "own", hooks: "missing" })] }));
     mount("/settings/accounts/acc-work");
-    expect(await screen.findByText("Collie's hooks are not installed in this folder. Sessions here may not show as agents.")).toBeInTheDocument();
+    expect(await screen.findByText("Gaddi's hooks are not installed in this folder. Sessions here may not show as agents.")).toBeInTheDocument();
     expect(screen.getByText("CLAUDE_CONFIG_DIR=~/.claude-work collie hooks install claude")).toBeInTheDocument();
   });
 
@@ -386,10 +386,10 @@ describe("Accounts: Add", () => {
     await userEvent.type(name, "Work");
     expect(screen.getAllByText("~/.claude-work").length).toBeGreaterThan(0);
     expect(screen.getByText("CLAUDE_CONFIG_DIR=~/.claude-work claude")).toBeInTheDocument();
-    expect(screen.getByText("Collie makes the folder and the links")).toBeInTheDocument();
+    expect(screen.getByText("Gaddi makes the folder and the links")).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Agent" }), "Codex");
     expect(screen.queryByRole("radio", { name: "Shared with Default" })).toBeNull();
-    expect(screen.getByText("Collie uses the folder as it is")).toBeInTheDocument();
+    expect(screen.getByText("Gaddi uses the folder as it is")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Folder" })).toBeInTheDocument();
   });
 
@@ -455,7 +455,7 @@ describe("Accounts: Add", () => {
     serveAccounts(body({ found: [FOUND_ALT] }));
     mount("/settings/accounts/add");
     await userEvent.click(await screen.findByRole("radio", { name: "Own folder" }));
-    const hint = "If the folder does not exist yet, Collie makes it empty.";
+    const hint = "If the folder does not exist yet, Gaddi makes it empty.";
     expect(screen.getAllByText(hint)).toHaveLength(1);
     await userEvent.type(screen.getByRole("textbox", { name: "Folder" }), "~/.claude-new");
     expect(screen.getAllByText(hint)).toHaveLength(1);
