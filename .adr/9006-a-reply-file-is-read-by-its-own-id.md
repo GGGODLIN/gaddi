@@ -2,9 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-09
-- **Shipped in:** pending
-- **Relates to:** [ADR 0088](./0088-paths-the-agent-prints-are-links.md) point 4, which this amends in
-  scope and does not rewrite. [ADR 0083](./0083-the-files-view-reads-the-changes-root.md) is unchanged:
+- **Amends:** [ADR 0088](./0088-paths-the-agent-prints-are-links.md) point 4, which this amends in
+  scope and does not rewrite.
+- **Relates to:** [ADR 0083](./0083-the-files-view-reads-the-changes-root.md) is unchanged:
   Files still reads one root-relative path, and `withinBound` is not widened.
 - **Trail:** the operator asked to open a `file://` link in an agent's reply, including a file a Bash
   command wrote outside the Changes root (`roadmap-validation.json` in this session's scratch pad).

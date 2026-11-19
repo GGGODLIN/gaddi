@@ -1,6 +1,7 @@
 # 9005 — A retelling is one short-lived child the operator named, never a service or a prompt Collie owns
 
-Status: **Accepted** (2026-09-26)
+- **Status:** Accepted
+- **Date:** 2026-09-26
 
 Trail: item 4 of the operator's roadmap (kept outside the repo), where option a ("the
 producer stays in the host's mod or sidecar, because the bridge may not call a model") was the

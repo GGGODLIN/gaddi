@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-10
-- **Shipped in:** fork 1.19.2
 - **Relates to:** [ADR 0001](./0001-one-managed-front-door.md) (one managed front door), which this
   keeps. [ADR 9002](./9002-the-agent-palette-stages-never-sends.md) (stage, never send), which the fix
   button follows. [ADR 0030](./0030-the-ui-is-translated-by-a-typed-dictionary-not-a-library.md),

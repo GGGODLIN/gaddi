@@ -1,11 +1,10 @@
 # 9003 — The switcher orders a section by its latest state change
 
-> Amended in scope by [9004](./9004-both-pane-switcher-entries-use-attention.md): the in-pane
-> switcher now uses the same frozen attention order.
+- **Amended in scope by:** [9004](./9004-both-pane-switcher-entries-use-attention.md): the in-pane
+  switcher now uses the same frozen attention order.
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
-- **Shipped in:** pending
 - **Amends:** [0063](./0063-a-pane-keeps-its-place-when-its-state-changes.md), in scope: the
   switcher's attention sections only
 - **Trail:** `web/src/lib/triage.ts` (`triage`, `newestFirst`) · Herdr v0.9.0

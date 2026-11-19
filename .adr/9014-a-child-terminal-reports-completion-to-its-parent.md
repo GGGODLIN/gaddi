@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-12
-- **Shipped in:** pending
 - **Trail:** Operator design discussion on 2026-11-12 (choosing Herdr App's sub-agent completion rule
   over independent unread squares and finished pushes on child workers) · Herdr App built-in `agents`
   mod (`mods/agents/main.js`, `kidStatus`) and `AGENTS.md` § *Sub-agents* ·

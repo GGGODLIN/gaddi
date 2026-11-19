@@ -1119,7 +1119,7 @@ describe("a partial or failed read before the first key (M100 spec 03)", () => {
     pane.readAnswer = (n) => (n <= 2 ? "failed" : "whole");
     const reply = await answer(ask, idOf(ask, "Yes"));
     expect(reply.receipt).toMatchObject({ outcome: "refused", reason: "unreadable", keys: [] });
-    expect(reply.detail).toBe("The screen could not be read, so Collie cannot see the dialog. Nothing was sent. Tap again.");
+    expect(reply.detail).toBe("The screen could not be read, so Gaddi cannot see the dialog. Nothing was sent. Tap again.");
     expect(pane.keysSeen).toEqual([]);
   });
 });

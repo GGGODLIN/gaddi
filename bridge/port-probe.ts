@@ -37,7 +37,7 @@ export function parseProbePort(raw: string): number | null {
 }
 
 /**
- * This machine's tailnet IPv4 address: the first non-internal IPv4 in 100.64.0.0/10, the shared
+ * This machine's tailnet IPv4 address: the first non-internal IPv4 in 100.64/10, the shared
  * address space Tailscale allocates from. Read by range, not by interface name, because the name is
  * `utunN` on macOS and `tailscale0` on Linux. IPv4 only: Vite and most dev servers accept a request
  * addressed to an IP without a host allowlist, and the phone types none of this.

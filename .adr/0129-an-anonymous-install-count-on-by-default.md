@@ -1,6 +1,7 @@
 # 0129: An anonymous install count, on by default
 
 - **Status:** Accepted
+- **Amended in scope by:** [ADR 9013](./9013-the-anonymous-install-count-is-off-by-default.md) in this fork.
 - **Date:** 2026-11-04
 - **Amended in scope by:** [ADR
   0134](./0134-the-trouble-tally-names-the-dialog-by-a-hash-of-its-key-hint-row.md): the trouble

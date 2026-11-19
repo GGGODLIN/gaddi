@@ -89,7 +89,7 @@ dataDescribe("one reader of linked for the pane read and the install ping", () =
       const paneIsLinked = paneLinkedReader({ enabled: () => on, hub: data.hub });
       const telemetry = createTelemetry({
         stateDir,
-        env: {},
+        env: { COLLIE_TELEMETRY: "1" },
         origin: "env",
         version: "1.29.0",
         installKind: "binary",
