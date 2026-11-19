@@ -395,7 +395,7 @@ export function ThreadSidebar({
       .toSorted((a, b) => Number(a.section.key === "working") - Number(b.section.key === "working"))
     : [];
   const shownRows = bestRows ?? (order === "attention"
-    ? [...attentionPinned, ...attentionTreeSections.flatMap((g) => g.rows.map((r) => r.pane)), ...attentionShells, ...trickShown]
+    ? [...(lastKey !== null && lastViewed !== undefined ? [lastViewed] : []), ...attentionPinned, ...attentionTreeSections.flatMap((g) => g.rows.map((r) => r.pane)), ...attentionShells, ...trickShown]
     : [...pinnedShown, ...(ranked ? rankedRows : [...sectionsShown.flatMap((g) => g.rows), ...shellsShown]), ...trickShown]);
   const hitOf = (p: AgentView): PaneMatch | undefined => hits?.get(paneRowKey(p));
 
@@ -526,7 +526,7 @@ export function ThreadSidebar({
                               roomy={roomy}
                               match={hitOf(entry.pane)}
                               tree={entry}
-                              onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
+                              onToggleFold={hits === null && entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
                             />
                           );
                         })}
@@ -658,7 +658,7 @@ export function ThreadSidebar({
                         roomy={roomy}
                         tree={entry}
                         match={hitOf(entry.pane)}
-                        onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
+                        onToggleFold={hits === null && entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
                       />
                     );
                   })}
@@ -927,14 +927,12 @@ function PaneRow({
                   </span>
                 </>
               )}
-              {/* The added account the session runs under (M101), a word after the place. Nothing when the
-                  pane has none, so a row without an account is the markup it always was. */}
-              {pane.account !== undefined && (
-                <span data-slot="pane-account" className="max-w-[35%] shrink-0 truncate">
-                  <MatchText text={pane.account.label} ranges={marks?.account} />
-                </span>
-              )}
             </>
+          )}
+          {pane.account !== undefined && (
+            <span data-slot="pane-account" className="max-w-[35%] shrink-0 truncate">
+              <MatchText text={pane.account.label} ranges={marks?.account} />
+            </span>
           )}
           {/* WHICH MACHINE, as its tint and its glyph alone (Altan, 2026-10-21): on a crew this sheet
               lists every machine's panes, and in activity order there is no heading to say whose. A
