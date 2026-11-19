@@ -117,7 +117,7 @@ async function sendAfterCanSend(
   const guarded = await guardDialog(target(args));
   if (!guarded.ok) return guarded.result;
   if (args.canSend?.() === false) return { status: "changed" };
-  return sendBoundKeys(args, keys, guarded.region, guarded.styled, guarded.columns, guarded.tail);
+  return sendBoundKeys(args, keys, guarded.region, guarded.styled, guarded.columns, guarded.tail, guarded.parts);
 }
 
 /** The tapped option's index in the model the user tapped: by identity, else by label and plan. */

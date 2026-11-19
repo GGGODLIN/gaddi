@@ -531,7 +531,7 @@ describe("unread card: your Keys pad (M102 spec 03)", () => {
   it("unread card: opened by a refusal, with no declared key, it still has the screen and Send past this screen", () => {
     const block = cardBlock();
     render(<UnreadDialogBlock cancel={null} lines={block.lines} onAction={vi.fn()} onTypeAnyway={vi.fn()} />);
-    expect(screen.getByText("Collie cannot read this screen. You can.")).toBeInTheDocument();
+    expect(screen.getByText("Gaddi cannot read this screen. You can.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send anyway" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Esc" })).toBeNull();
   });

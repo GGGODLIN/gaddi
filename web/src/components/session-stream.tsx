@@ -65,24 +65,8 @@ import { cn } from "@/lib/utils";
  */
 const STREAM_BLOCK = "flex min-w-0 flex-col -m-3 p-3";
 
-/**
- * A block near the tail (M104): the same box with no `content-visibility`, so a row that arrives there is drawn once,
- * at its own height, and never first at the 64px placeholder and one frame later at its size. It keeps the intrinsic
- * size's `auto`, which records the drawn height, so a block that later moves far up and turns `content-visibility:
- * auto` keeps that height while it is skipped.
- */
-const NEAR_BLOCK = "flex min-w-0 flex-col [contain-intrinsic-size:auto_64px] -m-3 p-3";
-
-/** How long the page waits, after its last change, before its silhouette is measured and kept (lib/chat-silhouette.ts). */
+/** How long the page waits after its last change before recording the silhouette. */
 const SILHOUETTE_SETTLE_MS = 400;
-
-/** How many blocks at the tail are {@link NEAR_BLOCK}s: more than a phone screen holds of new rows. */
-const NEAR_TAIL_BLOCKS = 8;
-
-/** The box of the block at `index` of `count`: skipped while off screen only far above the tail. */
-function blockBox(index: number, count: number): string {
-  return index < count - NEAR_TAIL_BLOCKS ? STREAM_BLOCK : NEAR_BLOCK;
-}
 
 /** A group that is the person's own turn. */
 function isUserGroup(group: readonly ChatItem[] | undefined): boolean {
@@ -1105,7 +1089,7 @@ export function SessionStream({
             item={pinnable ? item : null}
             pinned={item !== null && pins?.pinned.has(item.id) === true}
             onActions={pinnable ? pins?.onActions : undefined}
-            className={rhythm === "" ? blockBox(index, blocks.length) : `${blockBox(index, blocks.length)} ${rhythm}`}
+            className={rhythm === "" ? STREAM_BLOCK : `${STREAM_BLOCK} ${rhythm}`}
           >
             {opensRun && <AgentHead agent={agent} ts={first.ts} />}
             {drawn ? <ItemView item={group[0]!} /> : <ToolGroup items={group} liveOpens={showToolCalls} />}
@@ -1141,7 +1125,7 @@ export function SessionStream({
       {/* THE LINES THE PERSON SENT THAT THE PROGRAM HAS NOT WRITTEN BACK (durable panes only), after the program's own
           items and before the working row. Each is replaced in place by the program's item (lib/durable-pending.ts). */}
       {drawnLines.map((line, i) => (
-        <div key={line.requestId} data-slot="stream-pending" className={cn(NEAR_BLOCK, userRhythm(look.rhythm, blocks.length + i))}>
+        <div key={line.requestId} data-slot="stream-pending" className={cn(STREAM_BLOCK, userRhythm(look.rhythm, blocks.length + i))}>
           <PendingTurn text={line.text} state={line.state} at={line.at} />
         </div>
       ))}

@@ -359,7 +359,7 @@ describe("Official tricks: Add", () => {
       [502, "unreachable", "GitHub did not answer. Nothing was added."],
       [422, "mismatch", "The code did not match. Nothing was added."],
       [422, "too-large", "The code did not match. Nothing was added."],
-      [409, "busy", "Collie is adding another trick. Try again in a moment."],
+      [409, "busy", "Gaddi is adding another trick. Try again in a moment."],
       [409, "taken", "A trick with this name is already here."],
       [500, "failed", "Could not add Design Review. Try again."],
     ];
@@ -391,9 +391,9 @@ describe("Official tricks: the About sheet before the add", () => {
     expect(within(dialog).getByText("Turns an agent's UI notes into Decisions you approve by name.")).toBeInTheDocument();
     expect(within(dialog).getByText("Where it comes from")).toBeInTheDocument();
     expect(within(dialog).getByText("From AltanS/collie-tricks @ 0d80399")).toBeInTheDocument();
-    expect(within(dialog).getByText("Collie checks that the code matches this release before it adds it.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Gaddi checks that the code matches this release before it adds it.")).toBeInTheDocument();
     expect(within(dialog).queryByText("What it does")).toBeNull();
-    expect(within(dialog).queryByText("Written by the trick's author. Collie did not check it.")).toBeNull();
+    expect(within(dialog).queryByText("Written by the trick's author. Gaddi did not check it.")).toBeNull();
     expect(within(dialog).queryByRole("switch")).toBeNull();
     await user.click(within(dialog).getByRole("button", { name: "Add" }));
     await vi.waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -458,7 +458,7 @@ describe("Official tricks: Update", () => {
       return el;
     };
     await vi.waitFor(() => expect(row().querySelector('[data-line="official-update"]')).not.toBeNull());
-    expect(within(row()).getByText("A newer version comes with this Collie.")).toBeInTheDocument();
+    expect(within(row()).getByText("A newer version comes with this Gaddi.")).toBeInTheDocument();
     expect(document.querySelector('[data-trick="legs"] [data-line="official-update"]')).toBeNull();
     expect(document.querySelector("[data-official]")).toBeNull();
     await user.click(within(row()).getByRole("button", { name: "Update Running Builds" }));

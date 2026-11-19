@@ -386,12 +386,12 @@ describe("composer taps: Type, when arming refuses (fix 7)", () => {
     await waitFor(() => expect(document.querySelector("[data-slot='composer-primary'] .animate-spin")).toBeNull());
   });
 
-  it("no tap vanishes: Type under the idle cover says Collie is catching up", async () => {
+  it("no tap vanishes: Type under the idle cover says Gaddi is catching up", async () => {
     const user = userEvent.setup();
     mount();
     act(() => setLocked(true));
     await expectTapAnswers(() => user.click(screen.getByRole("button", { name: "Type into terminal" })));
-    expect(status()).toBe("Collie is catching up with the pane. Tap Type again in a moment.");
+    expect(status()).toBe("Gaddi is catching up with the pane. Tap Type again in a moment.");
   });
 
   it("no tap vanishes: Type while the page catches up says the same", async () => {
@@ -399,7 +399,7 @@ describe("composer taps: Type, when arming refuses (fix 7)", () => {
     mount();
     act(() => beginCatchUp());
     await expectTapAnswers(() => user.click(screen.getByRole("button", { name: "Type into terminal" })));
-    expect(status()).toBe("Collie is catching up with the pane. Tap Type again in a moment.");
+    expect(status()).toBe("Gaddi is catching up with the pane. Tap Type again in a moment.");
   });
 
   it("no tap vanishes: Use Type in the password notice, refused, keeps the draft and says why", async () => {
@@ -411,7 +411,7 @@ describe("composer taps: Type, when arming refuses (fix 7)", () => {
     await screen.findByRole("button", { name: /use type/i });
     act(() => beginCatchUp());
     await expectTapAnswers(() => user.click(screen.getByRole("button", { name: /use type/i })));
-    expect(status()).toBe("Collie is catching up with the pane. Tap Type again in a moment.");
+    expect(status()).toBe("Gaddi is catching up with the pane. Tap Type again in a moment.");
     // The draft went only when Type armed: it is still there, and so is the notice.
     expect(screen.getByRole("textbox")).toHaveValue("hunter2hunter2");
     expect(screen.getByRole("button", { name: /use type/i })).toBeInTheDocument();
@@ -474,7 +474,7 @@ describe("composer taps: paste of a file the box refuses (fix 9)", () => {
       paste([{ kind: "file", file: refused() }]);
       return Promise.resolve();
     });
-    expect(status()).toBe("Collie cannot attach this kind of file.");
+    expect(status()).toBe("Gaddi cannot attach this kind of file.");
   });
 
   it("no tap vanishes: a refused file with text on the clipboard stays a plain text paste, with no word", () => {
@@ -586,13 +586,13 @@ describe("composer taps: the Keys pad opened with the link down (fix 15)", () =>
 });
 
 describe("composer taps: Stop when the turn is not running (fix 16)", () => {
-  it("no tap vanishes: the dimmed Stop says Collie sees no running turn", async () => {
+  it("no tap vanishes: the dimmed Stop says Gaddi sees no running turn", async () => {
     const user = userEvent.setup();
     render(<ScreenStop onStop={() => Promise.resolve()} paneId="w1:p1" running={false} />);
     const stop = screen.getByRole("button", { name: "Stop the turn" });
     expect(stop).toHaveAttribute("aria-disabled", "true");
     await expectTapAnswers(() => user.click(stop));
-    expect(status()).toBe("Collie does not see a running turn, so Stop is off. If the agent is busy, press Esc on the Keys pad.");
+    expect(status()).toBe("Gaddi does not see a running turn, so Stop is off. If the agent is busy, press Esc on the Keys pad.");
   });
 });
 

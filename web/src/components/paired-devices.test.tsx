@@ -436,7 +436,7 @@ describe("PairedDevices — what the card says for each answer of the read", () 
   const DENIED: DevicesData = { enforced: false, current: null, devices: [], error: true, denied: true };
   const FAILED: DevicesData = { enforced: false, current: null, devices: [], error: true };
   const LOAD_ERROR = "Couldn’t load the paired devices from the bridge.";
-  const DENIED_LINE = "This browser has no access, so Collie cannot show the paired devices.";
+  const DENIED_LINE = "This browser has no access, so Gaddi cannot show the paired devices.";
   const DESCRIPTION = "Every read and every write needs a paired device.";
 
   test("an answered read with an empty list keeps its text, and no error line", () => {

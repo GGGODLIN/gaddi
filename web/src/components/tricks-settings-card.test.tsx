@@ -214,7 +214,7 @@ describe("TricksSettingsCard: the rows", () => {
 
   it("a watch that checks on a clock says so alone, never after the \"part is not shown\" prefix", async () => {
     const polled: WireTrickInfo = { ...LEGS, watch: ["~/notes/todo.md"], watchPollSeconds: 5 };
-    const line = "Collie could not watch these files for changes, so it checks them every 5 seconds.";
+    const line = "Gaddi could not watch these files for changes, so it checks them every 5 seconds.";
     expect(slotLine(polled, NOW)).toEqual({ text: line, trouble: false });
     // Nothing was refused: the row also never shows it as a trouble report, and the line holds no error code.
     expect(slotLine(polled, NOW).text).not.toContain("Part of this trick");
@@ -230,7 +230,7 @@ describe("TricksSettingsCard: the rows", () => {
 
   it("a trick that reads through the local API, where it is off, says so once and alone", async () => {
     const off: WireTrickInfo = { ...LEGS, access: "see", accessOff: true };
-    const line = "This trick reads through Collie's local API, which is off here.";
+    const line = "This trick reads through Gaddi's local API, which is off here.";
     expect(slotLine(off, NOW)).toEqual({ text: line, trouble: false });
     // A trick that is off has nothing to say yet; a trick whose socket stands says nothing.
     expect(slotLine({ ...off, on: false, state: "off" }, NOW).text).toBe("Added by agent · 2 h ago");
@@ -1028,12 +1028,12 @@ describe("review 8 V-N1: a switch on names the code the person read", () => {
     expect(screen.getByRole("switch", { name: "Browser leg" })).not.toBeChecked();
   });
 
-  it("a switch-on refused with 409 not-whole says Collie cannot show all of the code, and stays off; another failure keeps the generic line", async () => {
+  it("a switch-on refused with 409 not-whole says Gaddi cannot show all of the code, and stays off; another failure keeps the generic line", async () => {
     const user = userEvent.setup();
     server.use(http.post("/api/tricks/lodge/legs/switch", () => HttpResponse.json({ error: "not-whole", message: "The bridge's own words." }, { status: 409 })));
     renderCard(await storeWith([{ ...LEGS, on: false, state: "off" }]));
     await user.click(await screen.findByRole("switch", { name: "Browser leg" }));
-    await vi.waitFor(() => expect(currentStatus()?.text).toBe("Collie cannot show all of its code as it is, so it stays off."));
+    await vi.waitFor(() => expect(currentStatus()?.text).toBe("Gaddi cannot show all of its code as it is, so it stays off."));
     expect(screen.getByRole("switch", { name: "Browser leg" })).not.toBeChecked();
     // The same word on another status is not this refusal, and any other failure is the generic line.
     server.use(http.post("/api/tricks/lodge/legs/switch", () => HttpResponse.json({ error: "not-whole", message: "x" }, { status: 500 })));

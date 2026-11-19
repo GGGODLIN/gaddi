@@ -617,9 +617,9 @@ const HEADING_CLASS_LARGE = new Map<number, string>([
 
 /** Chat look E (lib/chat-look.ts): a fenced block's box, by word. `today` is the string Chat has always drawn. */
 const CODE_CLASS = {
-  today: "overflow-x-auto rounded-md border border-status-info/20 bg-status-info/5 px-2 py-1.5 font-mono text-[11px] leading-snug [font-variant-ligatures:none]",
-  neutral: "overflow-x-auto rounded-md border border-border bg-muted px-2 py-1.5 font-mono text-[11px] leading-snug [font-variant-ligatures:none]",
-  "neutral-12": "overflow-x-auto rounded-md border border-border bg-muted px-2.5 py-2 font-mono text-xs leading-normal [font-variant-ligatures:none]",
+  today: "rounded-md border border-status-info/20 bg-status-info/5 px-2 py-1.5 font-mono text-[11px] leading-snug [font-variant-ligatures:none]",
+  neutral: "rounded-md border border-border bg-muted px-2 py-1.5 font-mono text-[11px] leading-snug [font-variant-ligatures:none]",
+  "neutral-12": "rounded-md border border-border bg-muted px-2.5 py-2 font-mono text-xs leading-normal [font-variant-ligatures:none]",
 } as const;
 
 /** Chat look F (lib/chat-look.ts): a table's cells, by word. `today` boxes every cell. */
@@ -710,7 +710,7 @@ function CodeBlock({ text, look }: { text: string; look: ChatLook["code"] }) {
       <pre
         className={cn(
           CODE_CLASS[look],
-          wrapped && "whitespace-pre-wrap wrap-anywhere",
+          wrapped ? "whitespace-pre-wrap wrap-anywhere" : "overflow-x-auto",
         )}
       >
         {/* Wrapped text cannot be scrolled out from under the buttons, so the first lines flow around them. */}
