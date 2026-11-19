@@ -710,10 +710,10 @@ describe("after the tap", () => {
   it.each<["proposal" | "version", string]>([
     ["proposal", "Switch on the trick legs?"],
     ["version", "Use the new version of legs?"],
-  ])("a %s card of Collie's own reads Collie tricks on the tricks glyph, whatever its sender label says", (type, title) => {
+  ])("a %s card of Collie's own reads Gaddi tricks on the tricks glyph, whatever its sender label says", (type, title) => {
     const from: HillDecision["from"] = { kind: "collie", address: null, trickId: null, trickKey: null, memberId: "lodge", harness: null, label: "Collie", host: "lodge", trickHost: null, ref: { type, id: "legs", hash: "a".repeat(64) } };
     const { slot, container } = renderCard(hillDecision({ from, title, target: null }));
-    expect(slot("decision-meta")).toHaveTextContent("Collie tricks");
+    expect(slot("decision-meta")).toHaveTextContent("Gaddi tricks");
     expect(container.querySelector('[data-slot="decision-trick-mark"] [data-icon="tricks"]')).not.toBeNull();
     expect(container.querySelector('[data-slot="decision-collie-mark"]')).toBeNull();
   });
@@ -722,7 +722,7 @@ describe("after the tap", () => {
     const from: HillDecision["from"] = { kind: "collie", address: null, trickId: null, trickKey: null, memberId: "lodge", harness: null, label: "Collie", host: "lodge", trickHost: null, ref: { type, id: "legs", hash: "a".repeat(64) } };
     const { slot, container } = renderCard(hillDecision({ from, target: null }));
     expect(slot("decision-meta")).toHaveTextContent("Collie");
-    expect(slot("decision-meta")).not.toHaveTextContent("Collie tricks");
+    expect(slot("decision-meta")).not.toHaveTextContent("Gaddi tricks");
     expect(container.querySelector('[data-slot="decision-collie-mark"]')).not.toBeNull();
     expect(container.querySelector('[data-icon="tricks"]')).toBeNull();
   });

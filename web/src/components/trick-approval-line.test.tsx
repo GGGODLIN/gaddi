@@ -10,7 +10,7 @@ import type { HillDecision } from "@/lib/hill/wire";
 import { collieCard, hillDecision } from "@/test/hill-fixtures";
 
 // AN ANSWERED TRICK APPROVAL IS ONE LINE (Altan, 2026-11-18), AND AN OPEN ONE NEVER TRAPS THE SCROLL. The line: the tricks
-// glyph on its 16px tile, "Collie tricks", the trick's name and what happened to it. The scroll: a swipe that starts on
+// glyph on its 16px tile, "Gaddi tricks", the trick's name and what happened to it. The scroll: a swipe that starts on
 // the open card is the browser's, so nothing in the card calls preventDefault on a move or sets `touch-action: none`.
 
 const SELF = "lodge/%3#abcd";
@@ -64,7 +64,7 @@ describe("an answered trick approval collapses into one line", () => {
     // The glyph on its 16px tile, the label, the name and the outcome.
     expect(line.querySelector('[data-slot="decision-trick-mark"]')).not.toBeNull();
     expect(line.querySelector('[data-slot="decision-trick-mark"]')!.className).toContain("size-4");
-    expect(line).toHaveTextContent("Collie tricks");
+    expect(line).toHaveTextContent("Gaddi tricks");
     expect(line).toHaveTextContent(words);
     // It is a line: no card, no panel, no button, no hold.
     expect(container.querySelector('[data-slot="chat-approval"]')).toBeNull();

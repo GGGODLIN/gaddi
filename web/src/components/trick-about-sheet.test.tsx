@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { OfficialTrickAboutSheet, TrickAboutSheet, aboutParagraphs, repoFactsLine } from "@/components/trick-about-sheet";
 import { readOfficialTricksReply, readTrick } from "@/lib/tricks/wire";
 import { en, type MessageKey } from "@/lib/i18n/messages/en";
-import { ABOUT_MAX, AGENT_VIEW_TAP_WORDS, AGENT_VIEW_WORDS, FLOAT_OPENS_WORDS, FLOAT_WORDS, MENU_TAP_WORDS, MENU_WORDS, PLACE_KINDS, RULES_WORDS, SHOWS_IN_AGENT_VIEW, SHOWS_IN_LEAD, SHOWS_IN_WORDS, showsInLine, type WireOfficialTrick, type WireTrickInfo } from "@/lib/tricks/schema";
+import { ABOUT_MAX, AGENT_VIEW_TAP_WORDS, AGENT_VIEW_WORDS, FLOAT_OPENS_WORDS, FLOAT_WORDS, MENU_WORDS, PLACE_KINDS, RULES_WORDS, SHOWS_IN_AGENT_VIEW, SHOWS_IN_LEAD, SHOWS_IN_WORDS, showsInLine, type WireOfficialTrick, type WireTrickInfo } from "@/lib/tricks/schema";
 
 // A trick's About sheet: the name as the title, the description and the about paragraphs, then two groups
 // built only from what the bridge already sends for the row.
@@ -55,10 +55,10 @@ describe("TrickAboutSheet", () => {
     expect(paragraphs).toEqual(["It shows each check of the release branch.", "It never changes anything."]);
   });
 
-  it("says under the text that the author wrote it and Collie did not check it, with an about or a description", () => {
+  it("says under the text that the author wrote it and Gaddi did not check it, with an about or a description", () => {
     const { unmount } = open(FULL);
     const note = screen.getByRole("dialog").querySelector('[data-line="author-note"]');
-    expect(note).toHaveTextContent("Written by the trick's author. Collie did not check it.");
+    expect(note).toHaveTextContent("Written by the trick's author. Gaddi did not check it.");
     expect(note?.className).toContain("text-muted-foreground");
     // It sits after the about paragraphs and before the bridge's own facts.
     const body = screen.getByRole("dialog").querySelector('[data-slot="trick-about-body"]');
@@ -67,7 +67,7 @@ describe("TrickAboutSheet", () => {
     unmount();
     // A description alone is the text: its line, then the note, and no "no description" line.
     open({ ...BASE, description: "Only a line." });
-    expect(screen.getByText("Written by the trick's author. Collie did not check it.")).toBeInTheDocument();
+    expect(screen.getByText("Written by the trick's author. Gaddi did not check it.")).toBeInTheDocument();
     expect(screen.queryByText("This trick has no description.")).toBeNull();
     const alone = screen.getByRole("dialog").querySelector('[data-slot="trick-about-body"]');
     expect([...(alone?.children ?? [])].map((el) => el.getAttribute("data-section") ?? el.getAttribute("data-line"))).toEqual(["description", "author-note", "does", "from"]);
@@ -84,7 +84,7 @@ describe("TrickAboutSheet", () => {
   it("says so in one muted line when the trick has no about, and draws no author note", () => {
     open(BASE);
     expect(screen.getByText("This trick has no description.")).toBeInTheDocument();
-    expect(screen.queryByText("Written by the trick's author. Collie did not check it.")).toBeNull();
+    expect(screen.queryByText("Written by the trick's author. Gaddi did not check it.")).toBeNull();
     expect(screen.getByRole("dialog").querySelector('[data-line="description"]')).toBeNull();
   });
 
@@ -379,12 +379,12 @@ describe("the menu place's two lines (contract 2)", () => {
     const trick: WireTrickInfo = { host: "lodge", id: "ci", name: "CI", icon: "flask", on: true, state: "ok", places: ["menu"], provenance: { via: "folder" } };
     render(<TrickAboutSheet trick={trick} open onClose={vi.fn()} />);
     const does = screen.getByRole("list", { name: "What it does" });
-    expect([...does.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["It shows in: rows in each session's settings.", MENU_WORDS, MENU_TAP_WORDS]);
+    expect([...does.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["It shows in: rows in each session's settings.", MENU_WORDS, "A tap runs it and tells it which session. Gaddi gives it no way to type there."]);
     cleanup();
     const entry: WireOfficialTrick = { id: "ci", name: "CI", description: "Reruns CI.", repo: "https://example.com/tricks.git", repoName: "owner/tricks", commit: "a".repeat(40), state: "absent", addsMenu: true };
     render(<OfficialTrickAboutSheet entry={entry} open onClose={vi.fn()} busy={false} canWrite onAdd={vi.fn()} />);
     const official = screen.getByRole("list", { name: "What it does" });
-    expect([...official.querySelectorAll("li")].map((li) => li.textContent)).toEqual([MENU_WORDS, MENU_TAP_WORDS]);
+    expect([...official.querySelectorAll("li")].map((li) => li.textContent)).toEqual([MENU_WORDS, "A tap runs it and tells it which session. Gaddi gives it no way to type there."]);
     expect(readOfficialTricksReply(JSON.parse(JSON.stringify({ tricks: [entry] })))?.tricks[0]?.addsMenu).toBe(true);
   });
 });

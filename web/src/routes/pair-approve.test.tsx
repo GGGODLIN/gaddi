@@ -45,7 +45,7 @@ describe("PairApproveView, each state", () => {
     expect(screen.getByText("Chrome on Linux", { selector: "p" })).toBeInTheDocument();
     expect(screen.getByText("Asks from a tailnet address")).toBeInTheDocument();
     expect(screen.getByText("Only if you started this on a screen in front of you.")).toBeInTheDocument();
-    expect(screen.queryByText(/Collie cannot check this/)).toBeNull();
+    expect(screen.queryByText(/Gaddi cannot check this/)).toBeNull();
     expect(screen.queryByText(/outside your own network/)).toBeNull();
     expect(screen.queryByText(/ends with yours/)).toBeNull();
     expect(screen.getByRole("timer")).toHaveTextContent("Ends in 1:34");
@@ -66,7 +66,7 @@ describe("PairApproveView, each state", () => {
   it("through a front door: the socket's fact, and the door's word as a claim, never as fact (N1)", () => {
     render(<PairApproveView state={{ ...OPEN, route: "loopback", claimed: "tailnet" }} actions={actions()} />);
     expect(screen.getByText("Asks through a front door on this computer")).toBeInTheDocument();
-    expect(screen.getByText("The front door says it came from a tailnet address. Collie cannot check this.")).toBeInTheDocument();
+    expect(screen.getByText("The front door says it came from a tailnet address. Gaddi cannot check this.")).toBeInTheDocument();
     expect(screen.queryByText("Asks from a tailnet address")).toBeNull();
     expect(screen.queryByText(/outside your own network/)).toBeNull();
   });
@@ -78,7 +78,7 @@ describe("PairApproveView, each state", () => {
 
   it.each([
     ["internet", null, "Asks from an internet address"],
-    ["unknown", null, "Asks from an address Collie does not know"],
+    ["unknown", null, "Asks from an address Gaddi does not know"],
     ["loopback", "internet", "Asks through a front door on this computer"],
     ["loopback", "unknown", "Asks through a front door on this computer"],
   ] as const)("a %s socket with a %s claim adds the warning line", (route, claimed, line) => {
@@ -106,12 +106,12 @@ describe("PairApproveView, each state", () => {
   });
 
   it.each([
-    [{ kind: "approved", label: "Chrome on Linux" } as const, "Chrome on Linux can now use Collie.", "Done"],
+    [{ kind: "approved", label: "Chrome on Linux" } as const, "Chrome on Linux can now use Gaddi.", "Done"],
     [{ kind: "wrong-code" } as const, "That code does not match. Start again on the other device.", "Done"],
     [{ kind: "declined" } as const, "Done. That device was not let in.", "Done"],
     [{ kind: "gone" } as const, "This request has ended. Start again on the other device.", "Done"],
     [{ kind: "answered" } as const, "This request was already answered.", "Done"],
-    [{ kind: "error" } as const, "Could not reach Collie. Try again.", "Try again"],
+    [{ kind: "error" } as const, "Could not reach Gaddi. Try again.", "Try again"],
   ])("%j: the sentence and one way on", (state, line, action) => {
     render(<PairApproveView state={state} actions={actions()} />);
     expect(screen.getByRole("status")).toHaveTextContent(line);
@@ -198,7 +198,7 @@ describe("PairApproveRoute against a bridge", () => {
     await user.clear(name);
     await user.type(name, "  desk ");
     await user.click(within(group).getByRole("button", { name: "R2TN6F" }));
-    expect(await screen.findByText("desk can now use Collie.")).toBeInTheDocument();
+    expect(await screen.findByText("desk can now use Gaddi.")).toBeInTheDocument();
     expect(sent).toEqual({ code: "R2TN6F", label: "desk" });
     // The approver keeps its own token; it is never handed the new one.
     expect(getDeviceToken()).toBe(TOKEN);

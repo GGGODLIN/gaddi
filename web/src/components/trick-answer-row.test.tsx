@@ -17,7 +17,7 @@ import { collieCard, hillDecision, hillReceipt } from "@/test/hill-fixtures";
 import { server } from "@/test/setup";
 
 // THE ANSWER TO A TRICK APPROVAL IS ONE ROW IN CHAT (Altan, 2026-11-18), AND THE CARD'S OWN LINE STEPS ASIDE FOR IT. The
-// row: the tricks glyph, "Collie tricks", the trick's name and the result, the time and where it was signed, muted at the
+// row: the tricks glyph, "Gaddi tricks", the trick's name and the result, the time and where it was signed, muted at the
 // right; it opens the Messages sheet where the message card did. The duplicate: the collapsed line of the same decision is
 // not drawn while the row is on the screen, and stays when no row is.
 
@@ -101,7 +101,7 @@ describe("the answer to a trick approval draws as one row", () => {
     expect(drawn.dataset.message).toBe(MSG);
     // The look of the answered card's line: the glyph on its 16px tile, the label, the name and the result.
     expect(drawn.querySelector('[data-slot="decision-trick-mark"]')!.className).toContain("size-4");
-    expect(drawn).toHaveTextContent("Collie tricks");
+    expect(drawn).toHaveTextContent("Gaddi tricks");
     expect(drawn).toHaveTextContent(words);
     // Right side: the time and where it was signed, as the card said it.
     expect(drawn.querySelector('[data-slot="trick-answer-meta"]')).toHaveTextContent(clockTime(message.at));
@@ -120,7 +120,7 @@ describe("the answer to a trick approval draws as one row", () => {
     const open = vi.fn();
     await holds([decision]);
     chat([message], turn(message), open);
-    const button = screen.getByRole("button", { name: /Collie tricks/u });
+    const button = screen.getByRole("button", { name: /Gaddi tricks/u });
     expect(button).toBe(row());
     expect(button.className).toContain("min-h-11");
     await userEvent.click(button);
@@ -168,7 +168,7 @@ describe("the card's own line steps aside only for the row", () => {
     chat([message], turn(message));
     expect(row()).not.toBeNull();
     expect(line()).toBeNull();
-    expect(screen.getAllByText(/Collie tricks/u)).toHaveLength(1);
+    expect(screen.getAllByText(/Gaddi tricks/u)).toHaveLength(1);
   });
 
   it("is drawn again when the row leaves", async () => {

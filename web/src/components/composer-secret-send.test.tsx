@@ -280,7 +280,7 @@ describe("D, pass 2: a code the bridge found no sign-in field for", () => {
     await sendCode(user);
     const notice = await waitFor(() => {
       const found = document.querySelector<HTMLElement>('[data-slot="composer-refusal"]');
-      expect(found?.textContent).toMatch(/Collie cannot see the sign-in field now\. Nothing was typed\. Look at the screen, or use Type\. Type sends each key at once, with no check\./u);
+      expect(found?.textContent).toMatch(/Gaddi cannot see the sign-in field now\. Nothing was typed\. Look at the screen, or use Type\. Type sends each key at once, with no check\./u);
       return found!;
     });
     // The bridge's English line is not shown: it would claim the field is gone when the bridge may only have failed to read it.
@@ -297,17 +297,17 @@ describe("the M102 review 3: a crew member on an older Collie has no check that 
   it("the sign-in field on such a member's pane says so in one line", () => {
     mount({ olderMember: "minibox" });
     expect(codeField()).toBeInTheDocument();
-    expect(screen.getByText("minibox runs an older Collie, so it does not check that the sign-in field is still there before it types.")).toBeInTheDocument();
+    expect(screen.getByText("minibox runs an older Gaddi, so it does not check that the sign-in field is still there before it types.")).toBeInTheDocument();
   });
 
   it("a member whose name is unknown is named in a neutral word, never a sentence that starts with a space", () => {
     mount({ olderMember: "" });
-    expect(screen.getByText("This machine runs an older Collie, so it does not check that the sign-in field is still there before it types.")).toBeInTheDocument();
+    expect(screen.getByText("This machine runs an older Gaddi, so it does not check that the sign-in field is still there before it types.")).toBeInTheDocument();
   });
 
   it("the sign-in field on any other pane draws no such line", () => {
     mount();
     expect(codeField()).toBeInTheDocument();
-    expect(screen.queryByText(/runs an older Collie/u)).toBeNull();
+    expect(screen.queryByText(/runs an older Gaddi/u)).toBeNull();
   });
 });
