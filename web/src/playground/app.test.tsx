@@ -174,7 +174,7 @@ describe("composer states: the cannot-tell cards (M102 spec 04)", () => {
       expect(words("cannot-tell-secret")).toEqual(["It arrived", "Enter it again"]);
       expect(words("cannot-tell-read-only")).toEqual([]);
       // The wait: the sentence changes and Send again is off, with It arrived live.
-      expect(card("cannot-tell-waiting").textContent).toContain("Collie is waiting for the agent's own word");
+      expect(card("cannot-tell-waiting").textContent).toContain("Gaddi is waiting for the agent's own word");
       expect(within(card("cannot-tell-waiting")).getByRole("button", { name: "Send again" })).toHaveAttribute("aria-disabled", "true");
       // The queued card's unconfirmed state: Discard, then Send again on its right.
       expect(words("cannot-tell-queued")).toEqual(["Discard", "Send again"]);
