@@ -8,6 +8,8 @@ import { StatusDot } from "@/components/status-badge";
 import { UnseenMark } from "@/components/ui/unseen-mark";
 import { PaneActionsSheet } from "@/components/pane-actions-sheet";
 import { useLongPress } from "@/hooks/use-long-press";
+import { CrossfadeText } from "@/components/ui/crossfade-text";
+import { paneRowKey } from "@/lib/hosts";
 import { paneName } from "@/lib/pane-name";
 import { paneOrdinals } from "@/lib/pane-ordinal";
 import { isUnseen, shownStatus } from "@/lib/triage";
@@ -84,7 +86,8 @@ export function PaneStrip({
   // pills stay plain tap-to-switch — long-press is inert.
   const actionsEnabled = !!onRenamed && !!onClosed;
   const scrollerRef = useRef<HTMLDivElement>(null);
-  useRevealActive(scrollerRef, currentPaneId);
+  // The pane screen remounts for every pane it opens: the memory key keeps this row where it stood.
+  useRevealActive(scrollerRef, currentPaneId, `panes:${panes[0]?.host ?? ""}:${panes[0]?.workspaceId ?? ""}:${panes[0]?.tabId ?? ""}`);
 
   if (panes.length < 2) return null;
 
@@ -259,7 +262,9 @@ function PanePill({
       ) : (
         <StatusDot status={shownStatus(pane)} live className="size-2.5" />
       )}
-      <span>{name}</span>
+      <span>
+        <CrossfadeText text={name} identity={paneRowKey(pane)} />
+      </span>
       {!active && isUnseen(pane) && <UnseenMark on className="size-2.5" />}
       {/* The number is part of the pill's own text, not a decoration beside it: a screen reader
           hearing two pills called "claude" is in exactly the trouble the eye is. */}

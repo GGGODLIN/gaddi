@@ -10,9 +10,11 @@ import { WalkyIdChip, WalkyIds } from "@/components/walky-id-chip";
 import { useWalkyChips } from "@/components/walky-log";
 import { useLocale } from "@/hooks/use-locale";
 import { canCopyText } from "@/lib/clipboard";
+import { useChatLook, type ChatLook } from "@/lib/chat-look";
 import { mathEngineOf, useDesignPrefs } from "@/lib/design";
 import { codeSpanPath, findFilePaths } from "@/lib/file-paths";
 import { t } from "@/lib/i18n";
+import { linkTargetBeside } from "@/lib/link-target";
 import { findBareUrls, isLocalFileHref, headingAnchors, parseMarkdown, spansText, type MdBlock, type MdSpan } from "@/lib/markdown";
 import { closeStretch, composeStretches, liftStretches, parseStretches, stretches as allStretches } from "@/lib/stretch";
 import { splitHighlight } from "@/lib/transcript-search";
@@ -31,9 +33,9 @@ import { cn } from "@/lib/utils";
 // highlighting is a cross-cutting display concern, and the AST walk is already recursive.
 const QueryContext = createContext("");
 
-// A find hit, as text or as a whole formula. One literal for both, the one DESIGN.md §10 gap 6 lists
-// for a search highlight token.
-const FIND_MARK = "rounded-sm bg-amber-300/70 text-inherit dark:bg-amber-500/40";
+// A find hit, as text or as a whole formula. One class string for both, on the theme token `--find`
+// (DESIGN.md §13), the same ground `ui/match-text.tsx` marks matched letters with.
+const FIND_MARK = "rounded-sm bg-find text-inherit";
 
 /** Find searches the original TeX; paint the equation as a whole without breaking its layout. */
 function MathRun({ math, display = false }: { math: MdMath; display?: boolean }) {
@@ -78,6 +80,13 @@ function isDeliverableHref(href: string): boolean {
   if (trimmed.startsWith("~/")) return !trimmed.includes("..");
   return trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.startsWith("/\\") && !trimmed.split("/").includes("..");
 }
+
+/**
+ * Whether an outside link whose label is not its address shows the address beside it. Only a Decision's
+ * body asks for it (`showLinkTargets`): a Decision asks for a person's attention, and a label can hide
+ * a wrong page. Chat and every other screen leave it off and draw links as they always did.
+ */
+const LinkTargetsContext = createContext(false);
 
 /**
  * What the screen draws for one `![alt](src)` (ADR 0090), or null to draw the alt text, as an image
@@ -250,7 +259,7 @@ function Hit({ text }: { text: string }) {
 const NO_BREAK_MAX = 24;
 
 /** How a chip or a link is allowed to break, given the text it holds. See {@link NO_BREAK_MAX}. */
-function breakClass(text: string): string {
+export function breakClass(text: string): string {
   return text.length <= NO_BREAK_MAX ? "whitespace-nowrap" : "wrap-anywhere";
 }
 
@@ -262,7 +271,10 @@ function isPlainClick(e: React.MouseEvent): boolean {
   return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 }
 
-const LINK_CLASS = "text-primary underline underline-offset-2";
+/** A host this long or shorter never breaks inside; a longer one could not fit a phone line, so it may. */
+const HOST_NO_BREAK_MAX = 32;
+
+export const LINK_CLASS = "text-primary underline underline-offset-2";
 
 // Inside a link's label nothing else may be a link: an anchor inside an anchor is invalid HTML, and
 // the outer one is what the author meant.
@@ -275,12 +287,21 @@ const InLinkContext = createContext(false);
 const CHIP_CLASS =
   "rounded-sm border border-status-info/20 bg-status-info/10 px-1 py-px font-mono text-[0.9em] [font-variant-ligatures:none] text-status-info";
 
+/** Chat look I (lib/chat-look.ts): the chip on the neutral ground a code block takes under E. */
+const CHIP_CLASS_NEUTRAL =
+  "rounded-sm border border-border bg-muted px-1 py-px font-mono text-[0.9em] [font-variant-ligatures:none] text-foreground";
+
+function useChipClass(): string {
+  return useChatLook().chip === "neutral" ? CHIP_CLASS_NEUTRAL : CHIP_CLASS;
+}
+
 /**
  * A path the agent printed, as a chip that opens it in Files (ADR 0088). The chip is the code chip,
  * and the link affordance is the one every in-app link here wears, an underline, in the chip's own
  * ink: no new colour. A plain tap moves inside the app; a modified click is the browser's.
  */
 function PathChip({ target, text }: { target: FileLinkTarget; text: string }) {
+  const chip = useChipClass();
   return (
     <a
       href={target.href}
@@ -291,7 +312,7 @@ function PathChip({ target, text }: { target: FileLinkTarget; text: string }) {
       }}
       className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      <code className={`${CHIP_CLASS} underline underline-offset-2 ${breakClass(text)}`}>
+      <code className={`${chip} underline underline-offset-2 ${breakClass(text)}`}>
         <Hit text={text} />
       </code>
     </a>
@@ -360,6 +381,7 @@ function UrlLink({ href, text }: { href: string; text: string }) {
  * takes the other's text (a `://` run is never a file path).
  */
 function CodeSpan({ text }: { text: string }) {
+  const chip = useChipClass();
   const open = useFileLinks();
   const openLocal = useLocalLinks();
   const deliver = useContext(DeliverableContext);
@@ -394,7 +416,7 @@ function CodeSpan({ text }: { text: string }) {
         rel="noopener noreferrer"
         className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        <code className={`${CHIP_CLASS} underline underline-offset-2 ${breakClass(text)}`}>
+        <code className={`${chip} underline underline-offset-2 ${breakClass(text)}`}>
           <Hit text={text} />
         </code>
       </a>
@@ -409,13 +431,13 @@ function CodeSpan({ text }: { text: string }) {
       at = u.end;
     }
     if (at < text.length) nodes.push(<Hit key={`t${at}`} text={text.slice(at)} />);
-    return <code className={`${CHIP_CLASS} ${breakClass(text)}`}>{nodes}</code>;
+    return <code className={`${chip} ${breakClass(text)}`}>{nodes}</code>;
   }
   const found = open === null || inLink ? null : codeSpanPath(text);
   const target = found === null || open === null ? null : open(found);
   if (target !== null) return <PathChip target={target} text={text} />;
   return (
-    <code className={`${CHIP_CLASS} ${breakClass(text)}`}>
+    <code className={`${chip} ${breakClass(text)}`}>
       <Hit text={text} />
     </code>
   );
@@ -426,6 +448,7 @@ function LinkSpan({ span }: { span: Extract<MdSpan, { kind: "link" }> }) {
   const deliver = useContext(DeliverableContext);
   // An agent's localhost link opens at the machine's tailnet address (ADR 9007).
   const openLocal = useLocalLinks();
+  const showTargets = useContext(LinkTargetsContext);
   const label = (
     <InLinkContext.Provider value>
       <Spans spans={span.spans} />
@@ -448,11 +471,11 @@ function LinkSpan({ span }: { span: Extract<MdSpan, { kind: "link" }> }) {
     // `href` was scheme-checked in the parser. noreferrer/noopener because these URLs come from
     // agent output, and target=_blank keeps the PWA shell alive behind the tap.
     //
-    // Same break rule as a chip, and for the same reason: `http://bluefin:8788` is full of slashes
+    // Same break rule as a chip, and for the same reason: `http://lodge:8788` is full of slashes
     // and colons, every one of them a wrap opportunity, and an address split across two lines is
     // one you have to reassemble in your head before you trust the tap.
     const onLocal = openLocal?.(span.href) ?? null;
-    return (
+    const anchor = (
       <a
         href={span.href}
         target="_blank"
@@ -470,6 +493,20 @@ function LinkSpan({ span }: { span: Extract<MdSpan, { kind: "link" }> }) {
       >
         {label}
       </a>
+    );
+    const beside = showTargets ? linkTargetBeside(flatten(span.spans), span.href) : null;
+    if (beside === null) return anchor;
+    // Plain text after the anchor, so the link's name stays its label and a screen reader reads the address next.
+    return (
+      <>
+        {anchor}
+        <span data-slot="link-target" className="font-mono text-[11px] text-muted-foreground">
+          {" ("}
+          {/* The host is one word to read: it moves to a new line whole, and breaks only when it is longer than a line. */}
+          <span className={beside.host.length <= HOST_NO_BREAK_MAX ? "whitespace-nowrap" : "break-all"}>{beside.host}</span>
+          <span className="break-all">{`${beside.rest})`}</span>
+        </span>
+      </>
     );
   }
   const target = resolve?.(span.href);
@@ -570,6 +607,36 @@ const DOCUMENT_HEADING_CLASS = new Map<number, string>([
 ]);
 const DOCUMENT_HEADING_FALLBACK = "mt-4 mb-1 text-sm font-semibold leading-snug";
 
+// Chat look G2 (lib/chat-look.ts): one step larger than HEADING_CLASS, measured from the stream's own
+// text token so the reader's text size still moves them, and more air above than below.
+const HEADING_CLASS_LARGE = new Map<number, string>([
+  [1, "mt-5 text-[length:calc(var(--text-sm)*1.35)] font-semibold"],
+  [2, "mt-5 text-[length:calc(var(--text-sm)*1.2)] font-semibold"],
+  [3, "mt-5 text-[length:calc(var(--text-sm)+1px)] font-semibold"],
+]);
+
+/** Chat look E (lib/chat-look.ts): a fenced block's box, by word. `today` is the string Chat has always drawn. */
+const CODE_CLASS = {
+  today: "overflow-x-auto rounded-md border border-status-info/20 bg-status-info/5 px-2 py-1.5 font-mono text-[11px] leading-snug [font-variant-ligatures:none]",
+  neutral: "overflow-x-auto rounded-md border border-border bg-muted px-2 py-1.5 font-mono text-[11px] leading-snug [font-variant-ligatures:none]",
+  "neutral-12": "overflow-x-auto rounded-md border border-border bg-muted px-2.5 py-2 font-mono text-xs leading-normal [font-variant-ligatures:none]",
+} as const;
+
+/** Chat look F (lib/chat-look.ts): a table's cells, by word. `today` boxes every cell. */
+const TABLE_CELL = {
+  today: { th: "border px-2 py-1 font-semibold", td: "border px-2 py-1 align-top", tr: "" },
+  rules: {
+    th: "border-b border-rule px-2 py-1.5 text-[11px] font-semibold label-caps text-muted-foreground",
+    td: "border-b border-border px-2 py-1.5 align-top",
+    tr: "",
+  },
+  bands: {
+    th: "border-b border-rule px-2 py-1.5 text-[11px] font-semibold label-caps text-muted-foreground",
+    td: "border-b border-border px-2 py-1.5 align-top",
+    tr: "even:bg-muted/50",
+  },
+} as const;
+
 const ALIGN_CLASS = new Map<string, string>([
   ["left", "text-left"],
   ["center", "text-center"],
@@ -616,7 +683,7 @@ export type MarkdownVariant = "chat" | "document";
  * A fenced block scrolls sideways by default, so a tree, a table drawn in spaces or an aligned log
  * keeps its columns; the toggle wraps one block for reading a long line, and is not remembered.
  */
-function CodeBlock({ text }: { text: string }) {
+function CodeBlock({ text, look }: { text: string; look: ChatLook["code"] }) {
   useLocale();
   const [wrapped, setWrapped] = useState(false);
   const label = t("codeBlock.wrap");
@@ -642,8 +709,8 @@ function CodeBlock({ text }: { text: string }) {
       />
       <pre
         className={cn(
-          "rounded-md border border-status-info/20 bg-status-info/5 px-2 py-1.5 font-mono text-[11px] leading-snug [font-variant-ligatures:none]",
-          wrapped ? "whitespace-pre-wrap wrap-anywhere" : "overflow-x-auto",
+          CODE_CLASS[look],
+          wrapped && "whitespace-pre-wrap wrap-anywhere",
         )}
       >
         {/* Wrapped text cannot be scrolled out from under the buttons, so the first lines flow around them. */}
@@ -665,6 +732,7 @@ function CodeBlock({ text }: { text: string }) {
 }
 
 function Block({ block, anchor, variant }: { block: MdBlock; anchor: string | null; variant: MarkdownVariant }) {
+  const look = useChatLook();
   switch (block.kind) {
     case "math":
       return (
@@ -686,6 +754,14 @@ function Block({ block, anchor, variant }: { block: MdBlock; anchor: string | nu
           </div>
         );
       }
+      if (look.prose === "15-headings") {
+        const large = HEADING_CLASS_LARGE.get(block.level) ?? "mt-5 text-[length:calc(var(--text-sm)+1px)] font-semibold";
+        return (
+          <div id={anchor ?? undefined} className={`${large} leading-snug first:mt-0 ${anchor === null ? "" : "scroll-mt-28"}`}>
+            <Spans spans={block.spans} />
+          </div>
+        );
+      }
       const cls = HEADING_CLASS.get(block.level) ?? "text-sm font-semibold";
       // `scroll-mt-28` clears the Files screen's sticky file bar, so a tap on `#install` leaves the
       // heading in view and not behind it. Harmless where nothing sticks.
@@ -696,7 +772,7 @@ function Block({ block, anchor, variant }: { block: MdBlock; anchor: string | nu
       );
     }
     case "code":
-      return <CodeBlock text={block.text} />;
+      return <CodeBlock text={block.text} look={look.code} />;
     case "list": {
       const Tag = block.ordered ? "ol" : "ul";
       // `leading-relaxed`, the same as a paragraph. Without it a list took `text-sm`'s own 20px line
@@ -740,7 +816,7 @@ function Block({ block, anchor, variant }: { block: MdBlock; anchor: string | nu
                   {block.header.map((cell, i) => (
                     <th
                       key={i}
-                      className={`border px-2 py-1 font-semibold ${ALIGN_CLASS.get(block.align[i] ?? "left") ?? "text-left"}`}
+                      className={`${TABLE_CELL[look.table].th} ${ALIGN_CLASS.get(block.align[i] ?? "left") ?? "text-left"}`}
                     >
                       <Spans spans={cell} />
                     </th>
@@ -749,11 +825,11 @@ function Block({ block, anchor, variant }: { block: MdBlock; anchor: string | nu
               </thead>
               <tbody>
                 {block.rows.map((row, r) => (
-                  <tr key={r}>
+                  <tr key={r} className={TABLE_CELL[look.table].tr || undefined}>
                     {row.map((cell, c) => (
                       <td
                         key={c}
-                        className={`border px-2 py-1 align-top ${ALIGN_CLASS.get(block.align[c] ?? "left") ?? "text-left"}`}
+                        className={`${TABLE_CELL[look.table].td} ${ALIGN_CLASS.get(block.align[c] ?? "left") ?? "text-left"}`}
                       >
                         <Spans spans={cell} />
                       </td>
@@ -793,6 +869,7 @@ export function MarkdownText({
   headingIds = false,
   variant = "chat",
   stretches = false,
+  showLinkTargets = false,
 }: {
   text: string;
   className?: string;
@@ -811,6 +888,11 @@ export function MarkdownText({
    * drawn as tappable phrases only where the screen's {@link StretchTextContext} says so too.
    */
   stretches?: boolean;
+  /**
+   * Show the address beside an outside link whose label is not that address: `the CI run (ci.example/run/1)`.
+   * Off by default, so Chat is unchanged. A Decision's body turns it on (lib/link-target.ts).
+   */
+  showLinkTargets?: boolean;
 }) {
   const withImages = resolveImage !== undefined;
   const drawsStretches = useContext(StretchTextContext);
@@ -825,16 +907,22 @@ export function MarkdownText({
     math,
   );
   const anchors = useMemo(() => (headingIds ? headingAnchors(blocks) : null), [blocks, headingIds]);
+  // Chat look G (lib/chat-look.ts): agent reply prose one pixel over the stream's text token. `stretches`
+  // is the prop that already says "this text is agent reply prose", so thinking, notices and History keep text-sm.
+  const prose = useChatLook().prose;
+  const size = stretches && prose !== "today" ? "text-[length:calc(var(--text-sm)+1px)]" : "text-sm";
   return (
     <QueryContext.Provider value={query}>
       <LinkContext.Provider value={resolveLink ?? null}>
         <ImageContext.Provider value={resolveImage ?? null}>
           <StretchControlContext.Provider value={control}>
-            <div className={`font-content space-y-2 text-sm break-words ${className ?? ""}`}>
-              {blocks.map((block, i) => (
-                <Block key={i} block={block} anchor={anchors?.[i] ?? null} variant={variant} />
-              ))}
-            </div>
+            <LinkTargetsContext.Provider value={showLinkTargets}>
+              <div className={`font-content space-y-2 ${size} break-words ${className ?? ""}`}>
+                {blocks.map((block, i) => (
+                  <Block key={i} block={block} anchor={anchors?.[i] ?? null} variant={variant} />
+                ))}
+              </div>
+            </LinkTargetsContext.Provider>
           </StretchControlContext.Provider>
         </ImageContext.Provider>
       </LinkContext.Provider>

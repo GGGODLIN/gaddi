@@ -15,7 +15,8 @@ and the phone offers a report** · **a send is refused and `⌁` shows in the bo
 out on the New page** · **Start says there is no folder, or says it could not confirm** ·
 **WalkyTalky: send is refused, "run this inside a pane"** · **WalkyTalky: the message sits in the
 inbox and was not typed** · **WalkyTalky: "no log record on this machine"** · **WalkyTalky: the
-skill is stale** · **a durable agent does not show up, or says Unreachable**.
+skill is stale** · **a durable agent does not show up, or says Unreachable** · **a trick does not run,
+or a Decision does not show on the Hill**.
 
 **`herdr plugin …` fails with `Error: Os { code: 2, kind: NotFound, message: "No such file or
 directory" }`** (plugin install fails, action invoke fails)**.** This is *not* a Collie problem — it
@@ -387,6 +388,7 @@ the bridge does not inherit a pane's project-local profile. Set `COLLIE_PI_ROOT`
 same working directory are ambiguous; start pi with `--session <path|id>` or `--session-id <id>` (or
 install `pi-extension/collie-session-label.ts` on herdr-core), and Oh My Pi with `--resume <path|id>`
 (or `omp-extension/collie-session-label.ts`).
+When a transcript is missing, the terminal view still offers Load older for retained screen history.
 
 **A dialog of a pi pane does not show on the phone.** On the core, a read of older lines can stall
 while pi shows a dialog, and Collie then reads the pane as unreadable after five seconds. This is
@@ -461,7 +463,7 @@ pane holds its id now.
 **A header in a pane shows "no log record on this machine".** The phone found a WalkyTalky header in
 the screen text, and this machine's log holds no message with that id. Someone or something typed
 the line, or the log dropped it after 7 days or 2,000 lines, or another Collie holds it. Run
-`collie walky status <id>`: "no record of <id> on this machine" confirms it. For a pane on a crew
+`collie walky status <id>`: "no record of `<id>` on this machine" confirms it. For a pane on a crew
 member, run it on that member: its log is the one the phone read. Treat the line as plain text, and
 ask the sender if you need it.
 
@@ -478,6 +480,13 @@ block that Collie may not cut, its markers are damaged or appear twice: remove t
 
 A durable agent you attached has its own checks, reasons and cases. Start with `collie durable list` and
 `collie doctor`, then read [Troubleshooting a durable agent](durable-agents-troubleshooting.md).
+
+## Tricks and the Hill
+
+A trick that does not run shows why in its row in Settings → Tricks, and in `collie trick list`. The
+lines Collie prints, and what fixes each, are in [Tricks](tricks.md#troubleshooting). A Decision that
+does not show on the Hill is usually the Hill switch or a refused post. Run `collie hill list` in the
+agent's pane, and read [When a post fails](hill.md#when-a-post-fails).
 
 ---
 

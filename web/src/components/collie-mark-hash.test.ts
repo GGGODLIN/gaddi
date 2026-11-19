@@ -2,13 +2,15 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// The four marks and their contract are generated upstream (collie-brand/scripts/logo-ship.ts for
-// collie-mark.tsx and mark-contract.ts,
-// collie-brand/scripts/logo-ship-theme.ts for the three theme marks) and copied in whole. Each file's
+// The marks and their contract are generated upstream (collie-brand/scripts/logo-ship.ts for
+// collie-mark.tsx, its two coat variants and mark-contract.ts,
+// collie-brand/scripts/logo-ship-theme.ts for the theme marks) and copied in whole. Each file's
 // first line records a sha256 of everything after it; this test recomputes that hash and fails on ANY
 // hand edit made to the file in this repo. Re-copy it from collie-brand/assets/ instead of editing.
 describe.each([
   "collie-mark.tsx",
+  "collie-collar-mark.tsx",
+  "collie-blaze-mark.tsx",
   "kawaii-mark.tsx",
   "kawaii-tilt-mark.tsx",
   "pixel-mark.tsx",
