@@ -90,6 +90,13 @@ const BOX_FLOOR = /[└┘╰╯┗┛╚╝┴┻╧╩]/;
 const GROK_TIME = new RegExp(
   `(?:^\\s*|\\s{2,})\\d{1,2}:\\d{2}\\s?[AP]M(?=\\s*[${BOX_VERTICAL_GLYPH_CLASS}]?\\s*$)`,
 );
+// Terminal right-edge timestamps (24h or 12h, with optional seconds) that are not stripped from
+// `mirror` globally because a real reply can end with a clock time; instead `validEnds` also accepts
+// the row end right before the timestamp.
+const TRAILING_TIMESTAMP = new RegExp(
+  `\\s+(?:[01]?\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?(?:\\s*(?:am|pm))?(?=\\s*[${BOX_VERTICAL_GLYPH_CLASS}]?\\s*$)`,
+  "i",
+);
 
 /** A mirror row without the cells Grok paints round a reply: the scrollbar, then the time. */
 function withoutGrokMarks(row: string): string {
@@ -229,6 +236,27 @@ const elsewhere = (fit: ReplyFit): ReplyPlacement => ({ fit, endLine: -1 });
  */
 const PAINTED_SPELLING_MAX_CHARS = 65_536;
 
+// Operator prompts and composer drafts start with `❯` (Claude/Grok/Muse), `›` (Codex/Kiro), or
+// `»` (Codex Ultra). Short replies must not match these rows — even without a separating space,
+// such as `❯OK` or `›OK` — or a draft/prompt poses as the reply. Replies that carry an agent's own
+// bullet first (e.g. `• › OK` or `⏺ › OK`) do not match here.
+const PROMPT_ROW = /^\s*(?:[│┃|]\s*)?(?:[❯›]|»(?:\s|$))/;
+
+function spansPromptRow(
+  rows: readonly string[],
+  rowStarts: readonly number[],
+  rowEnds: readonly number[],
+  at: number,
+  end: number,
+): boolean {
+  for (let i = 0; i < rows.length; i++) {
+    if (rowStarts[i]! < end && rowEnds[i]! > at && PROMPT_ROW.test(rows[i]!)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Locate a journal turn on the mirror.
  *
@@ -239,8 +267,10 @@ const PAINTED_SPELLING_MAX_CHARS = 65_536;
  *   mirror by scrolling, and a >20 000-character part reaches us clamped so its real ending never
  *   arrives. When the tail is missing we answer `off-screen` and the caller shows NOTHING. Presenting
  *   an older message as "the reply you are looking at" is the one failure this must not have.
- * - The **head** probe then answers whether its opening is still on the screen. Short replies use
- *   their entire text as the probe, so they can be wrapped consistently too.
+ * - The **head** probe then answers whether its opening is still on the screen. Replies shorter than
+ *   {@link PROBE_CHARS} use their entire text as the probe, anchored to non-empty mirror row
+ *   boundaries outside prompt rows so a short reply like `OK` or `對` cannot match inside an
+ *   unrelated word or sentence.
  *
  * `endLine` exists so the caller can REPLACE those rows with the full message rather than print it
  * twice. Folding erases the row boundaries, so the row that the reply ends on is recovered by keeping
@@ -253,25 +283,54 @@ export function locateReply(mirrorText: string, entry: TranscriptEntry): ReplyPl
   const rows = sourceOrderRows(plain(mirrorText).split("\n").map(withoutGrokMarks));
   // Folding each row and concatenating is the same string as folding the whole screen — the fold
   // drops the separators either way — so these offsets index into one folded mirror.
+  const rowStarts: number[] = [];
   const rowEnds: number[] = [];
+  const validStarts = new Set<number>();
+  const validEnds = new Set<number>();
   let mirror = "";
   for (const row of rows) {
-    mirror += fold(row);
-    rowEnds.push(mirror.length);
+    const start = mirror.length;
+    rowStarts.push(start);
+    const folded = fold(row);
+    mirror += folded;
+    const end = mirror.length;
+    rowEnds.push(end);
+    if (folded !== "") {
+      validStarts.add(start);
+      validEnds.add(end);
+      const withoutTimestamp = row.replace(TRAILING_TIMESTAMP, "");
+      if (withoutTimestamp !== row) {
+        const contentFolded = fold(withoutTimestamp);
+        if (contentFolded !== "") {
+          validEnds.add(start + contentFolded.length);
+        }
+      }
+    }
   }
 
   for (const reply of spellingsOf(prose)) {
+    const anchored = reply.length < PROBE_CHARS;
     const probeLength = Math.min(PROBE_CHARS, reply.length);
     const tail = reply.slice(-probeLength);
-    const at = mirror.indexOf(tail);
-    if (at === -1) continue;
+    let searchFrom = mirror.length - tail.length;
+    while (searchFrom >= 0) {
+      const at = mirror.lastIndexOf(tail, searchFrom);
+      if (at === -1) break;
+      const end = at + tail.length;
+      if (
+        anchored &&
+        (!validStarts.has(at) || !validEnds.has(end) || spansPromptRow(rows, rowStarts, rowEnds, at, end))
+      ) {
+        searchFrom = at - 1;
+        continue;
+      }
 
-    const end = at + tail.length;
-    const endLine = rowEnds.findIndex((rowEnd) => rowEnd >= end);
-    return {
-      fit: mirror.includes(reply.slice(0, probeLength)) ? "whole" : "clipped",
-      endLine: endLine === -1 ? rows.length - 1 : endLine,
-    };
+      const endLine = rowEnds.findIndex((rowEnd) => rowEnd >= end);
+      return {
+        fit: anchored || mirror.includes(reply.slice(0, probeLength)) ? "whole" : "clipped",
+        endLine: endLine === -1 ? rows.length - 1 : endLine,
+      };
+    }
   }
   return elsewhere("off-screen");
 }

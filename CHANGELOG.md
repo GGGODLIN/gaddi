@@ -30,6 +30,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A message queued while Claude Code compacts shows its queued card in Chat.** A message sent from the phone during a compaction gets the same card, with Send now, as one queued during a normal turn.
 - **A slash command goes out when Claude draws its list above a plugin's band.** When Claude Code draws a typed command's list above a plugin's band of rows over the input box, Collie took the list for a moved screen: Effort and other harness bar commands stayed typed and never went in. The list now counts as the command's own when its pointer rests on the typed command, at most the volatile rows over the box away.
 - **File suggestions on `@` follow directory changes, root discovery, and keyboard focus.** Switching a pane's folder or opening a subfolder before the Files root is cached now resolves against the bridge's root without serving stale entries or collapsing the strip while drilling, and keyboard focus into the strip keeps the choices open (#757).
+- **Short replies no longer latch onto matching substrings elsewhere on screen.** A reply shorter than one probe, such as `OK` or a single character, now matches only when it spans full mirror rows outside prompt and draft lines instead of matching inside an unrelated word or sentence.
 
 ## [2.16.0] - 2026-11-15
 

@@ -177,6 +177,55 @@ describe("locateReply", () => {
     expect(fitOf("nothing of the sort is on this screen", short)).toBe("off-screen");
   });
 
+  it("does not match a short reply as a substring inside unrelated prose, across rows, or in a prompt row", () => {
+    const ok = turn("assistant", "OK");
+    expect(fitOf(rendered("Looking at the tokens in this file."), ok)).toBe("off-screen");
+    expect(fitOf(rendered("That sounds OK for now."), ok)).toBe("off-screen");
+    expect(fitOf(rendered("Everything looks OK"), ok)).toBe("off-screen");
+    expect(fitOf("⏺ hello\n  keep going", ok)).toBe("off-screen");
+    expect(fitOf("⏺ Looking at tokens.\n────\n❯ OK\n────", ok)).toBe("off-screen");
+    expect(fitOf("│ ❯ OK │", ok)).toBe("off-screen");
+    expect(fitOf("› OK", ok)).toBe("off-screen");
+    expect(fitOf("❯OK", ok)).toBe("off-screen");
+    expect(fitOf("›OK", ok)).toBe("off-screen");
+    expect(fitOf("│❯OK│", ok)).toBe("off-screen");
+    expect(fitOf("» OK", ok)).toBe("off-screen");
+    expect(fitOf("Looking at the tokens   14:23", ok)).toBe("off-screen");
+
+    const dui = turn("assistant", "對");
+    expect(fitOf(rendered("我們需要先對照這份文件，確認沒有遺漏。"), dui)).toBe("off-screen");
+    expect(fitOf(rendered("對，這樣做可以"), dui)).toBe("off-screen");
+    expect(fitOf(rendered("請先核對"), dui)).toBe("off-screen");
+  });
+
+  it("still locates short English and Chinese replies when they span full mirror rows", () => {
+    const ok = turn("assistant", "OK");
+    expect(locateReply("⏺ OK", ok)).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("• OK\n", ok)).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("• Done.\n", turn("assistant", "Done."))).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("◆ OK\n", ok)).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("❯ Say OK\n⏺ OK", ok)).toEqual({ fit: "whole", endLine: 1 });
+    expect(locateReply("❯ OK\n⏺ OK", ok)).toEqual({ fit: "whole", endLine: 1 });
+    expect(locateReply("⏺ OK\n❯ next\n⏺ OK\n", ok)).toEqual({ fit: "whole", endLine: 2 });
+    expect(locateReply("     OK                    8:48 PM    ", ok)).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("⏺ OK   14:23", ok)).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("⏺ OK   14:23:05", ok)).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("⏺ OK   2:23 pm", ok)).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("│ OK   14:23 │", ok)).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("⏺ OK   14:23", turn("assistant", "OK 14:23"))).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("• › OK", turn("assistant", "› OK"))).toEqual({ fit: "whole", endLine: 0 });
+    expect(locateReply("⏺ › OK", turn("assistant", "› OK"))).toEqual({ fit: "whole", endLine: 0 });
+
+    const dui = turn("assistant", "對");
+    expect(locateReply("⏺ 對", dui)).toEqual({ fit: "whole", endLine: 0 });
+
+    const zh = turn("assistant", "好，沒問題。");
+    expect(locateReply("⏺ 好，沒問題。", zh)).toEqual({ fit: "whole", endLine: 0 });
+
+    const wrapped = turn("assistant", "short answer for you");
+    expect(locateReply("⏺ short answer\n  for you", wrapped)).toEqual({ fit: "whole", endLine: 1 });
+  });
+
   // SGR parameters are digits, and digits survive the fold — an unstripped escape would corrupt the
   // probe it landed in. parseAnsi runs first precisely so it cannot.
   it("does not let SGR parameters leak into the comparison", () => {
