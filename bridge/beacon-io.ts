@@ -85,7 +85,21 @@ export interface ProcLivenessDeps {
   readonly readText?: (path: string) => string | null;
   /** One probe command's stdout, or null when it failed. Defaults to a real `execFile`. */
   readonly run?: (command: StartTimeCommand, pid: number) => Promise<string | null>;
+  /**
+   * Fast in-process existence check run before forking `ps` on macOS. Defaults to `process.kill(pid, 0)`.
+   */
+  readonly isAlive?: (pid: number) => boolean;
   readonly now?: () => number;
+}
+
+function defaultPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the process exists under another uid; ESRCH means it is gone.
+    return error instanceof Error && "code" in error && error.code === "EPERM";
+  }
 }
 
 function readTextOrNull(path: string): string | null {
@@ -127,6 +141,7 @@ export function procBeaconLiveness(deps: ProcLivenessDeps = {}): BeaconLiveness 
   const probe = startTimeProbe(deps.platform ?? HOST.platform);
   const readText = deps.readText ?? readTextOrNull;
   const run = deps.run ?? runCommand;
+  const isAlive = deps.isAlive ?? defaultPidAlive;
   const now = deps.now ?? Date.now;
   const cache = new Map<number, { at: number; start: Promise<number | null> }>();
   return {
@@ -135,6 +150,10 @@ export function procBeaconLiveness(deps: ProcLivenessDeps = {}): BeaconLiveness 
       if (stat !== null) return Promise.resolve(probe.stat.parse(stat));
       const command = probe.command;
       if (command === null) return Promise.resolve(null);
+      if (!isAlive(pid)) {
+        cache.delete(pid);
+        return Promise.resolve(null);
+      }
       const at = now();
       const hit = cache.get(pid);
       if (hit !== undefined && at - hit.at < COMMAND_PROBE_CACHE_MS) return hit.start;
@@ -145,7 +164,13 @@ export function procBeaconLiveness(deps: ProcLivenessDeps = {}): BeaconLiveness 
         for (const [key, value] of cache) {
           if (at - value.at >= COMMAND_PROBE_CACHE_MS) cache.delete(key);
         }
-        if (cache.size >= COMMAND_PROBE_CACHE_MAX) cache.clear();
+        // Evict only the oldest entry instead of clearing the whole table so remaining fresh
+        // entries survive an overflow (a fixed-order sweep larger than COMMAND_PROBE_CACHE_MAX
+        // live pids can still miss, but dead pids never enter the table).
+        if (cache.size >= COMMAND_PROBE_CACHE_MAX) {
+          const oldest = cache.keys().next().value;
+          if (oldest !== undefined) cache.delete(oldest);
+        }
       }
       cache.set(pid, { at, start });
       return start;

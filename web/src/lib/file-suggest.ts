@@ -166,7 +166,9 @@ function buildDisplay(
     }
   }
   const keepCount = MAX_FILE_CHIP_CHARS - 2;
-  const cut = nameSuffix.length - keepCount;
+  let cut = nameSuffix.length - keepCount;
+  const code = nameSuffix.charCodeAt(cut);
+  if (cut < nameSuffix.length && code >= 0xdc00 && code <= 0xdfff) cut += 1;
   const line = `@…${nameSuffix.slice(cut)}`;
   return {
     line,
@@ -194,7 +196,7 @@ function toFileSuggestion(
 /**
  * Filters and ranks one folder's entries for `@<insertPrefix><query>`: hides git-ignored entries and
  * whitespace-containing names (which split an unquoted `@` token), puts folders first on an empty
- * query, and ranks prefix → substring → fuzzy subsequence matches with shorter names preferred.
+ * query, and ranks exact → prefix → substring → fuzzy subsequence matches with shorter names preferred.
  */
 export function suggestFiles(
   entries: readonly FileEntry[],
@@ -211,21 +213,25 @@ export function suggestFiles(
   }
 
   const q = query.toLowerCase();
-  const ranked: { entry: FileEntry; tier: 0 | 1 | 2; marks: readonly (readonly [number, number])[] }[] = [];
+  const ranked: { entry: FileEntry; tier: 0 | 1 | 2 | 3; marks: readonly (readonly [number, number])[] }[] = [];
   for (const entry of visible) {
     const lower = entry.name.toLowerCase();
-    if (lower.startsWith(q)) {
+    if (lower === q) {
       ranked.push({ entry, tier: 0, marks: [[0, q.length]] });
+      continue;
+    }
+    if (lower.startsWith(q)) {
+      ranked.push({ entry, tier: 1, marks: [[0, q.length]] });
       continue;
     }
     const sub = lower.indexOf(q);
     if (sub > 0) {
-      ranked.push({ entry, tier: 1, marks: [[sub, sub + q.length]] });
+      ranked.push({ entry, tier: 2, marks: [[sub, sub + q.length]] });
       continue;
     }
     const fuzzy = subsequenceMarks(lower, q);
     if (fuzzy !== null) {
-      ranked.push({ entry, tier: 2, marks: fuzzy });
+      ranked.push({ entry, tier: 3, marks: fuzzy });
     }
   }
 
@@ -248,8 +254,8 @@ export interface AppliedFileSuggestion {
 
 /**
  * Replaces `token` in `text` with `suggestion`. Picking a file appends a trailing space (consuming an
- * adjacent ASCII space so mid-sentence picks never leave two spaces), closing both the strip and any
- * terminal `@` popup; picking a folder keeps `@folder/` open for the next segment.
+ * adjacent ASCII space so mid-sentence picks never leave two spaces), closing the active `@` token
+ * without sending; picking a folder keeps `@folder/` open for the next segment.
  */
 export function applyFileSuggestion(
   text: string,
