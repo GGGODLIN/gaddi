@@ -6,6 +6,7 @@ import type { MathPackStatus } from "@/lib/types";
 
 import { installApiStub } from "./fixtures/api";
 import { serveWithShellCsp } from "./fixtures/csp";
+import { STILL_MARK } from "./fixtures/still-mark";
 
 const PANE = encodeURIComponent(fixtureAgents[0]!.paneId);
 const FILE = `/pane/${PANE}/changes/files?path=README.md`;
@@ -28,7 +29,7 @@ async function installMathStub(page: Page) {
 
 /** The device's math engine, chosen before the first navigation (lib/design.ts, `collie:design:v1`). */
 async function chooseEngine(page: Page, engine: string) {
-  await page.addInitScript((value) => localStorage.setItem("collie:design:v1", JSON.stringify({ font: "aldrich", math: value })), engine);
+  await page.addInitScript((blob) => localStorage.setItem("collie:design:v1", blob), JSON.stringify({ ...STILL_MARK, font: "aldrich", math: engine }));
 }
 
 test.describe("equations off by default", () => {
@@ -215,7 +216,7 @@ test.describe("the math pack on the host", () => {
     await expect(page.getByRole("math")).toHaveCount(0);
     await expect(page.getByText(/\\sum_\{i=1\}/).first()).toBeVisible();
 
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/look");
     await expect(page.getByRole("button", { name: /Download the math engines/ })).toBeVisible();
     await expect(page.getByLabel("Engine", { exact: true })).toHaveValue("off");
     expect(state.posts).toBe(0);
@@ -225,7 +226,7 @@ test.describe("the math pack on the host", () => {
     await installMathStub(page);
     const state = await hostPack(page, { state: "absent" });
 
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/look");
     await expect(page.getByRole("button", { name: /Download the math engines/ })).toBeVisible();
     await page.getByLabel("Engine", { exact: true }).selectOption("katex");
     await expect(page.getByRole("progressbar", { name: "Math engines download" })).toBeVisible();
@@ -253,7 +254,7 @@ test.describe("the math pack on the host", () => {
     page.on("load", () => loads++);
 
     // The page starts with the stored engine and the host has no pack: KaTeX fails on this page.
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/look");
     await page.getByRole("button", { name: /Download the math engines/ }).click();
     await expect(page.getByRole("progressbar", { name: "Math engines download" })).toBeVisible();
     const before = loads;

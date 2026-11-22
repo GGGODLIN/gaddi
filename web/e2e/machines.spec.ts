@@ -31,11 +31,11 @@ async function landed(page: Page, path: string) {
   await expect.poll(() => at(page)).toBe(path);
 }
 
-test("Settings to Machines to a machine, its Alerts view, set a CPU alert, back twice", async ({ page }) => {
+test("Settings, Devices and machines to Machines to a machine, its Alerts view, set a CPU alert, back twice", async ({ page }) => {
   const { posted } = await installMachinesWorld(page);
 
-  await page.goto("/settings");
-  await page.getByRole("button", { name: new RegExp(`^${en["settings.section.machines.title"]}`, "u") }).click();
+  await page.goto("/settings/devices");
+  await page.getByRole("button", { name: new RegExp(`^${en["machines.entry.title"]}`, "u") }).click();
   await landed(page, "/machines");
   await expect(page.getByRole("heading", { name: en["machines.title"], level: 1 })).toBeVisible();
 
@@ -64,7 +64,7 @@ test("Settings to Machines to a machine, its Alerts view, set a CPU alert, back 
   await expect(page.getByRole("img", { name: /^CPU, last hour:/u })).toHaveCount(0);
 
   // The 95% segment of the CPU threshold posts the WHOLE object: the memory rule rides along.
-  await page.getByRole("radiogroup", { name: "CPU alert threshold" }).getByRole("radio", { name: "95%" }).click();
+  await page.getByRole("radiogroup", { name: "CPU above" }).getByRole("radio", { name: "95%" }).click();
   // The card's live line says it; the visible face beside it is the same words with a check.
   await expect(page.getByRole("status").filter({ hasText: en["machines.alerts.saved"] })).toHaveText(en["machines.alerts.saved"]);
   expect(posted).toEqual([
@@ -74,14 +74,14 @@ test("Settings to Machines to a machine, its Alerts view, set a CPU alert, back 
     },
   ]);
   await expect(
-    page.getByRole("radiogroup", { name: "CPU alert threshold" }).getByRole("radio", { name: "95%" }),
+    page.getByRole("radiogroup", { name: "CPU above" }).getByRole("radio", { name: "95%" }),
   ).toHaveAttribute("aria-checked", "true");
 
-  // Back twice: the arrow onto the list (the view switch replaced its entry), the edge swipe onto Settings.
+  // Back twice: the arrow onto the list (the view switch replaced its entry), the edge swipe onto Devices and machines.
   await page.getByRole("button", { name: en["machines.nav.back"] }).click();
   await landed(page, "/machines");
   await page.goBack();
-  await landed(page, "/settings");
+  await landed(page, "/settings/devices");
 });
 
 test("a card's firing line opens the machine on its Alerts view", async ({ page }) => {
@@ -102,7 +102,7 @@ test("the dashboard's Crew tab: a card opens its machine, and Back returns to th
   const tabs = page.locator('[data-slot="tab-bar"]');
   await tabs.getByRole("button", { name: en["crew.title"], exact: true }).click();
   await expect(tabs.getByRole("button", { name: en["crew.title"], exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("button", { name: "bluefin", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "lodge", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "workshop", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "workshop", exact: true }).click();
@@ -153,21 +153,21 @@ test("the list asks for the half hour, a machine's page reads its day once, and 
   expect(asked).toEqual([]);
 
   await page.goto("/machines");
-  await expect(page.getByRole("button", { name: "bluefin", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "lodge", exact: true })).toBeVisible();
   expect(asked.every((a) => a === "/api/machines?spark=30")).toBe(true);
 
   asked.length = 0;
-  await page.goto("/machines/bluefin");
+  await page.goto("/machines/lodge");
   await expect(page.getByRole("img", { name: /^CPU, last hour:/u })).toBeVisible();
-  expect(asked.filter((a) => a.includes("/history"))).toEqual(["/api/machines/bluefin/history"]);
+  expect(asked.filter((a) => a.includes("/history"))).toEqual(["/api/machines/lodge/history"]);
   // A minute later the page asks only for what it has not seen.
   await page.clock.runFor(61_000);
   await expect.poll(() => asked.filter((a) => a.includes("/history")).length).toBe(2);
-  expect(asked.filter((a) => a.includes("/history"))[1]).toMatch(/^\/api\/machines\/bluefin\/history\?since=\d+$/u);
+  expect(asked.filter((a) => a.includes("/history"))[1]).toMatch(/^\/api\/machines\/lodge\/history\?since=\d+$/u);
 
   // The Alerts view draws no chart and reads no history, not even on the minute.
   await page.getByRole("tab", { name: en["machines.view.alerts"] }).click();
-  await landed(page, "/machines/bluefin?tab=alerts");
+  await landed(page, "/machines/lodge?tab=alerts");
   await page.clock.runFor(125_000);
   expect(asked.filter((a) => a.includes("/history"))).toHaveLength(2);
 });

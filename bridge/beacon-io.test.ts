@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { COMMAND_PROBE_CACHE_MS, documentCarriesOurHooks, hooksInstalledProbe, HOOKS_PROBE_TTL_MS, procBeaconLiveness, readStartTimeSync } from "./beacon-io.ts";
 import { HOOK_MARKER } from "../cli/hooks.ts";
-import { parseHookTarget } from "./beacon/hook-targets.ts";
+import { identityFields, parseHookTarget } from "./beacon/hook-targets.ts";
 import { parseLstart, type StartTimeCommand } from "./beacon/liveness.ts";
 import { beaconFileName, beaconKey } from "./beacon/paths.ts";
 import { readBeacons } from "./beacon/reader.ts";
@@ -79,7 +79,7 @@ describe("parseHookTarget, the optional identity fields (M76 spec 02)", () => {
   const base = { schemaVersion: 1, stateDir: "/srv/a", pid: 4242, pidStartTime: 7, bootedAt: 1 };
 
   test("a record without mux, instance and port still parses, and reads them as unknown", () => {
-    expect(parseHookTarget(JSON.stringify(base))).toEqual({ ...base, mux: null, instance: null, port: null });
+    expect(parseHookTarget(JSON.stringify(base))).toEqual({ ...base, mux: null, instance: null, port: null, inside: null, parts: null });
   });
 
   test("a record with all three carries them", () => {
@@ -88,13 +88,34 @@ describe("parseHookTarget, the optional identity fields (M76 spec 02)", () => {
 
   test("a field of the wrong type or range is dropped, never a reason to refuse the record", () => {
     const wrong = { ...base, mux: 7, instance: "", port: 70000 };
-    expect(parseHookTarget(JSON.stringify(wrong))).toEqual({ ...base, mux: null, instance: null, port: null });
+    expect(parseHookTarget(JSON.stringify(wrong))).toEqual({ ...base, mux: null, instance: null, port: null, inside: null, parts: null });
     expect(parseHookTarget(JSON.stringify({ ...base, mux: "x".repeat(200), port: 1.5 }))).toMatchObject({ mux: null, port: null });
+    // The parts folder (M99 spec 09): absolute, else dropped.
+    expect(parseHookTarget(JSON.stringify({ ...base, parts: "/home/a/.config/collie/inside" }))?.parts).toBe("/home/a/.config/collie/inside");
+    expect(parseHookTarget(JSON.stringify({ ...base, parts: "rel/inside" }))?.parts).toBeNull();
     expect(parseHookTarget(JSON.stringify({ ...base, mux: ["herdr"], instance: {}, port: "8788" }))).toMatchObject({ mux: null, instance: null, port: null });
   });
 
   test("the required fields still decide: a record with no state dir is not a record", () => {
     expect(parseHookTarget(JSON.stringify({ ...base, stateDir: "", mux: "herdr" }))).toBeNull();
+  });
+});
+
+describe("parseHookTarget, the inside wire's socket (M99 spec 01)", () => {
+  const base = { schemaVersion: 1, stateDir: "/srv/a", pid: 4242, pidStartTime: 7, bootedAt: 1 };
+
+  test("a record names its socket and the wire version it speaks", () => {
+    const inside = { wire: 1, socket: "/srv/a/inside/sock" };
+    expect(parseHookTarget(JSON.stringify({ ...base, inside }))?.inside).toEqual(inside);
+    expect(identityFields({ inside })).toEqual({ inside });
+  });
+
+  test("a wrong inside field is dropped, never a reason to refuse the record", () => {
+    for (const inside of [{ wire: 0, socket: "/s" }, { wire: 1.5, socket: "/s" }, { wire: 1, socket: "rel/sock" }, { wire: 1 }, "x", [1]]) {
+      const record = parseHookTarget(JSON.stringify({ ...base, inside }));
+      expect(record?.stateDir).toBe("/srv/a");
+      expect(record?.inside).toBeNull();
+    }
   });
 });
 
@@ -169,16 +190,92 @@ describe("procBeaconLiveness", () => {
     expect(ps.runs).toEqual([]);
   });
 
-  test("Windows has no probe: null, and nothing runs", async () => {
+  test("Windows asks the native read alone: no stat file is read and nothing runs (#798)", async () => {
     const ps = fakePs(() => LSTART);
-    expect(await procBeaconLiveness({ platform: "win32", readText: () => null, run: ps.run }).startTimeOf(PID)).toBeNull();
+    const read: string[] = [];
+    const readText = (path: string) => (read.push(path), "1 (x) S 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 555 0 0");
+    const native = (pid: number) => (pid === PID ? 1_794_847_739_081_296 : null);
+    const win = procBeaconLiveness({ platform: "win32", readText, run: ps.run, native });
+    expect(await win.startTimeOf(PID)).toBe(1_794_847_739_081_296);
+    expect(await win.startTimeOf(PID + 1)).toBeNull();
+    expect(read).toEqual([]);
     expect(ps.runs).toEqual([]);
   });
 
   test("the hook target registration reads its own start with the same probe", () => {
     expect(readStartTimeSync(PID, { platform: "darwin", readText: () => null, run: () => LSTART })).toBe(STORED);
     expect(readStartTimeSync(PID, { platform: "darwin", readText: () => null, run: () => null })).toBeNull();
-    expect(readStartTimeSync(PID, { platform: "win32", readText: () => null, run: () => LSTART })).toBeNull();
+    expect(readStartTimeSync(PID, { platform: "win32", readText: () => null, run: () => LSTART, native: () => 42 })).toBe(42);
+    expect(readStartTimeSync(PID, { platform: "win32", readText: () => null, run: () => LSTART, native: () => null })).toBeNull();
+    expect(readStartTimeSync(PID, { platform: "freebsd", readText: () => null, run: () => LSTART, native: () => 42 })).toBeNull();
+  });
+
+  test("on macOS a dead pid short-circuits via isAlive without forking ps", async () => {
+    const ps = fakePs(() => LSTART);
+    const liveness = procBeaconLiveness({
+      platform: "darwin",
+      readText: () => null,
+      run: ps.run,
+      isAlive: (pid) => pid === PID,
+    });
+    expect(await liveness.startTimeOf(PID + 1)).toBeNull();
+    expect(await liveness.startTimeOf(PID + 2)).toBeNull();
+    expect(ps.runs).toEqual([]);
+    expect(await liveness.startTimeOf(PID)).toBe(STORED);
+    expect(ps.runs).toHaveLength(1);
+  });
+
+  test("on macOS the default pid check lets a live pid through to ps once", async () => {
+    const ps = fakePs(() => LSTART);
+    const liveness = procBeaconLiveness({ platform: "darwin", readText: () => null, run: ps.run });
+    expect(await liveness.startTimeOf(process.pid)).toBe(STORED);
+    expect(ps.runs).toEqual([["/bin/ps", "-o", "lstart=", "-p", String(process.pid)]]);
+  });
+
+  test("on macOS the default pid check reads a free pid as null without running ps", async () => {
+    let free = 4_194_000;
+    while (free > 1) {
+      try {
+        process.kill(free, 0);
+      } catch (error) {
+        if (error instanceof Error && "code" in error && error.code === "ESRCH") break;
+      }
+      free--;
+    }
+    const ps = fakePs(() => LSTART);
+    const liveness = procBeaconLiveness({ platform: "darwin", readText: () => null, run: ps.run });
+    expect(await liveness.startTimeOf(free)).toBeNull();
+    expect(ps.runs).toEqual([]);
+  });
+
+  test("on macOS the default pid check refuses pid 0 and -1, which process.kill would answer for a group or every process", async () => {
+    const ps = fakePs(() => LSTART);
+    const liveness = procBeaconLiveness({ platform: "darwin", readText: () => null, run: ps.run });
+    expect(await liveness.startTimeOf(0)).toBeNull();
+    expect(await liveness.startTimeOf(-1)).toBeNull();
+    expect(ps.runs).toEqual([]);
+  });
+
+  test("on macOS overflowing 256 live pids evicts only the oldest entries instead of clearing the whole cache", async () => {
+    let clock = 1000;
+    const ps = fakePs(() => LSTART);
+    const liveness = procBeaconLiveness({
+      platform: "darwin",
+      readText: () => null,
+      run: ps.run,
+      isAlive: () => true,
+      now: () => clock,
+    });
+    for (let pid = 1; pid <= 260; pid++) {
+      expect(await liveness.startTimeOf(pid)).toBe(STORED);
+    }
+    const afterFirstPass = ps.runs.length;
+    expect(afterFirstPass).toBe(260);
+    clock += 100;
+    for (let pid = 10; pid <= 260; pid++) {
+      expect(await liveness.startTimeOf(pid)).toBe(STORED);
+    }
+    expect(ps.runs.length - afterFirstPass).toBe(0);
   });
 
   test("on macOS a dead pid short-circuits via isAlive without forking ps", async () => {

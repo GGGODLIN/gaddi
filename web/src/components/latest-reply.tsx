@@ -5,6 +5,7 @@ import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { LatestExchange } from "@/lib/latest-reply";
+import { FOCUS_RING_INSET, HOVER_FILL } from "@/components/ui/button";
 import type { Scope } from "@/lib/scope";
 
 // The agent's newest finished exchange, standing IN PLACE OF the mirror rows that could only hold the
@@ -44,7 +45,7 @@ export function LatestReply({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 px-2.5 py-2 text-left transition-colors active:bg-muted/60"
+        className={cn("flex w-full items-center gap-1.5 px-2.5 py-2 text-left transition-colors active:bg-muted/60", FOCUS_RING_INSET, HOVER_FILL)}
       >
         <Icon
           name="disclosure"

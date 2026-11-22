@@ -1,10 +1,12 @@
-import { useId, type ReactNode } from "react";
+import { useId, type MouseEvent, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { FOCUS_RING, TRIGGER_OPEN } from "@/components/ui/button";
 import { UnseenMark } from "@/components/ui/unseen-mark";
 import { STRIP_TAP_TARGET } from "@/components/ui/labelled-strip";
 import { useLongPress } from "@/hooks/use-long-press";
 import { StatusDot } from "@/components/status-badge";
+import { CrossfadeText } from "@/components/ui/crossfade-text";
 import { TRIAGE_STATUS, type TriageKey } from "@/lib/triage";
 import { statusLabel } from "@/lib/types";
 import { useLocale } from "@/hooks/use-locale";
@@ -12,6 +14,11 @@ import { t } from "@/lib/i18n";
 
 interface ChipProps {
   label: string;
+  /**
+   * What the label NAMES (a Space, a tab), when a rename can change it: the label then crossfades from
+   * the old words to the new while this identity stays ({@link CrossfadeText}). Omit for a fixed word.
+   */
+  fade?: string;
   /**
    * A leading glyph, before the dot and the label, e.g. a server icon in a machine's tint. Drawn in
    * EVERY state the chip can take (resting, active, ringed, dimmed), so a state change repaints and
@@ -53,9 +60,16 @@ interface ChipProps {
   onLongPress?: () => void;
   /**
    * A plain tap when the chip is already `active` — opens actions instead of a no-op re-select,
-   * mirroring the pane pill. Only meaningful alongside {@link onLongPress}.
+   * mirroring the pane pill. Only meaningful alongside {@link onLongPress}. Gets the chip's own button,
+   * for a menu beside it.
    */
-  onTapActive?: () => void;
+  onTapActive?: (trigger: HTMLElement) => void;
+  /**
+   * The menu {@link onTapActive} opens is open. The chip then carries `aria-expanded` and the shared open
+   * look (`TRIGGER_OPEN`, ui/button.tsx), on every width: on a phone the sheet covers part of the page and
+   * the chip above it still says what it opened. Meaningful only on the active chip with `onTapActive`.
+   */
+  menuOpen?: boolean;
 }
 
 // Pill button shared by the space and tab strips: active fill, an optional desktop-focus ring, and
@@ -67,6 +81,7 @@ interface ChipProps {
 // matches how the space rows and section headings already read.
 export function Chip({
   label,
+  fade,
   glyph,
   ariaLabel,
   active,
@@ -77,6 +92,7 @@ export function Chip({
   onClick,
   onLongPress,
   onTapActive,
+  menuOpen = false,
 }: ChipProps) {
   useLocale();
   const longPress = useLongPress(onLongPress);
@@ -84,15 +100,17 @@ export function Chip({
   // A chip named by its act keeps its status in words as its DESCRIPTION: `aria-label` replaces
   // everything the button holds, the sr-only status word and the unseen mark's name included.
   const named = ariaLabel !== undefined;
+  // The active chip opens a menu when it is wired for one: that chip, and only it, answers hover and the open look.
+  const opensMenu = active && onTapActive !== undefined;
   const statusWords =
     !named || !status ? null : status === "ready" ? t("home.row.unseen") : statusLabel(TRIAGE_STATUS[status]);
 
   // A long-press already suppresses the ensuing click (via longPress.onClickCapture), so this only
   // ever sees a genuine tap. Tapping the already-active chip opens actions (when wired) rather than a
   // dead re-select.
-  function handleClick() {
+  function handleClick(e: MouseEvent<HTMLButtonElement>) {
     if (active && onTapActive) {
-      onTapActive();
+      onTapActive(e.currentTarget);
       return;
     }
     onClick();
@@ -106,6 +124,8 @@ export function Chip({
       role={radio ? "radio" : undefined}
       aria-checked={radio ? active : undefined}
       aria-current={!radio && active ? "true" : undefined}
+      aria-haspopup={opensMenu ? "dialog" : undefined}
+      aria-expanded={opensMenu ? menuOpen : undefined}
       aria-label={ariaLabel}
       aria-describedby={statusWords === null ? undefined : descriptionId}
       className={cn(
@@ -127,10 +147,13 @@ export function Chip({
         // that takes the drawn 34px box to a 46px TOUCH box. min-w-11 is the same floor in the other
         // axis: every chip but "All" is already past 44px wide, and "All" measured 43.
         STRIP_TAP_TARGET,
-        "flex min-w-11 shrink-0 select-none items-center justify-center gap-1.5 [-webkit-touch-callout:none] whitespace-nowrap rounded-md border border-transparent px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        "flex min-w-11 shrink-0 select-none items-center justify-center gap-1.5 [-webkit-touch-callout:none] whitespace-nowrap rounded-md border border-transparent px-3 py-1.5 text-sm font-medium transition-colors active:scale-95",
+        FOCUS_RING,
         active
-          ? "bg-primary text-primary-foreground"
+          ? cn("bg-primary text-primary-foreground", opensMenu && "hover:bg-primary/90")
           : "bg-muted text-muted-foreground hover:bg-muted/70",
+        // After the fills above so the open look is the last word; it matches only while `aria-expanded` is true.
+        opensMenu && TRIGGER_OPEN,
         ring && !active && "border-primary/40",
         dimmed && !active && "bg-transparent border-dashed border-border text-muted-foreground/60 line-through",
       )}
@@ -149,7 +172,7 @@ export function Chip({
           {!named && <span className="sr-only">{statusLabel(TRIAGE_STATUS[status])}</span>}
         </>
       )}
-      {label}
+      {fade === undefined ? label : <CrossfadeText text={label} identity={fade} />}
       {dimmed && !named && <span className="sr-only">{t("home.workspace.hidden")}</span>}
       {statusWords !== null && (
         <span id={descriptionId} className="sr-only">

@@ -11,7 +11,7 @@ import type { PaneCache, ServerSummary } from "@/lib/types";
 // dashboard row's name line (`agent-card.tsx`) and the pane header's workspace line
 // (`agent-chat.tsx`). `PaneMeta` had two layouts until 2026-09-14 — a column of two fixed corners
 // for the dashboard, a single inline row for the header — and the column read as an extra row on a
-// phone (Altan's phone feedback), so it is gone; every caller now gets the one row below. The claims
+// phone (Dev's phone feedback), so it is gone; every caller now gets the one row below. The claims
 // worth a test are the ones the copy kept breaking: the row keeps its height when both chips
 // self-hide, the pair is always the same pair, and the reading is a control only where the surface
 // offers the rule behind it.
@@ -110,10 +110,12 @@ describe("the row's shape", () => {
     });
     const chip = document.querySelector<HTMLElement>('[data-slot="cache-chip"]')!;
     expect(chip.tagName).toBe("BUTTON");
-    // 2px above and 16px below the 12px line. Never 16px above: the pane name's button ends 4px over
-    // this line, and the reach used to cut into it (e2e/pane-header-taps.spec.ts measures the hit).
-    expect(chip.className).toMatch(/before:-top-0\.5/);
-    expect(chip.className).toMatch(/before:-bottom-4/);
+    // 4px above (the gap to the name's line) and 4px below the 12px line. Never 16px above: the pane name's button ends 4px over
+    // this line, and the reach used to cut into it (e2e/pane-header-taps.spec.ts measures the hit). Never 16px
+    // below either: that reached out of the header over the phone's New tab (ADR 0171).
+    expect(chip.className).toMatch(/before:-top-1(?=\s|$)/);
+    expect(chip.className).toMatch(/before:-bottom-1(?=\s|$)/);
+    expect(chip.className).not.toMatch(/before:-bottom-4/);
     expect(chip.className).not.toMatch(/before:-inset-y-4/);
     await user.click(chip);
     expect(onOpenCache).toHaveBeenCalledTimes(1);

@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { startRoutePreload } from "./router";
 import { preloadMark } from "./components/brand-mark";
 import { glyphSetSettled, preloadGlyphSet } from "./components/icons/glyphs";
 import { onPreloadError } from "./lib/chunk-reload";
@@ -24,10 +25,15 @@ import "./lib/install";
 import { startPushTitleSync } from "./lib/push-titles";
 import { startViewportPin } from "./lib/viewport-pin";
 import { installHiddenPause } from "./lib/page-hidden";
+import { installPageZoom } from "./lib/page-zoom";
+import { loadPageZoomPref } from "./hooks/use-dash-prefs";
 
 // A hidden page runs no animation (issue 748): the root carries an attribute while it is hidden, and
 // index.css pauses every animation under it. First, so a page opened in the background never starts.
 installHiddenPause();
+// A pinch zooms the page unless this device turned Pinch to zoom off (lib/page-zoom.ts). The setting is
+// read once here and kept in that module, so a pinch reads no storage and a change in Settings needs no reload.
+installPageZoom(loadPageZoomPref);
 /** The longest the first paint waits for the worn glyph set's chunk. */
 const FIRST_PAINT_GLYPH_WAIT_MS = 150;
 
@@ -87,5 +93,8 @@ function paint(): void {
       <App />
     </StrictMode>,
   );
+  // After the first paint is asked for: the screens that load on demand are fetched once the browser
+  // is idle, so a tab open for a few seconds holds every screen, as before the split (ADR 0169).
+  startRoutePreload();
 }
 void firstGlyphs.finally(paint);

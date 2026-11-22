@@ -17,7 +17,7 @@ import { SpaceOverview } from "./space-overview";
 import { SpaceStrip } from "./space-strip";
 import { TabActionsSheet } from "./tab-actions-sheet";
 import { TabStrip } from "./tab-strip";
-import { STRIP_TAP_TARGET_SQUARE, TAB_ROW_ADD_TAP_TARGET } from "./ui/labelled-strip";
+import { STRIP_TAP_TARGET_SQUARE } from "./ui/labelled-strip";
 import { cn } from "@/lib/utils";
 
 // EVERY CAPABILITY-GATED CONTROL, IN BOTH STATES (M10/06). One file rather than a case bolted onto
@@ -250,13 +250,14 @@ describe("New tab — createTab", () => {
     expect(screen.queryByText("no tabs here.")).toBeNull();
   });
 
-  it("is the shared '+', bare in a 24px box with the tab row's own reach, plus the folder look's 12px gap", async () => {
+  it("is the shared '+', bare, drawn as the phone row's 44px square, plus the folder look's 12px gap", async () => {
     declares({ createTab: true });
     tabStrip();
     const plus = await screen.findByRole("button", { name: "New tab" });
-    // The default look is "folder": the "+" sits 12px (ml-3) off the last tab, nothing else added.
-    // Bare since 2026-11-06: in this row the dashed ring read as a placeholder (ui/add-button.tsx).
-    expect(classSet(plus)).toEqual([...handRolledPlus(TAB_ROW_ADD_TAP_TARGET, "size-6", false), "ml-3"].toSorted());
+    // The default look is "folder": the "+" sits 12px (ml-3) off the last tab. Bare since 2026-11-06: in this row
+    // the dashed ring read as a placeholder (ui/add-button.tsx). On the phone it is the row's whole 44px, drawn
+    // rather than reached (ADR 0171), so it needs no reach of its own.
+    expect(classSet(plus)).toEqual(cn(handRolledPlus("relative", "size-8", false).join(" "), "ml-3", "size-11 rounded-md").split(" ").toSorted());
   });
 });
 
@@ -355,15 +356,16 @@ describe("The Keys tray — sendKeys and unsupportedKeys", () => {
   it("greys exactly the buttons whose chord this multiplexer refuses", async () => {
     declares({ sendKeys: true }, {}, ["Enter"]);
     render(<NavTray onSend={vi.fn(async () => true)} unsupportedKeys={["Enter"]} />);
-    expect(screen.getByRole("button", { name: "Enter" })).toBeDisabled();
+    // Greyed in place with `aria-disabled`, the tap kept: it says why (M102 spec 11).
+    expect(screen.getByRole("button", { name: "Enter" })).toHaveAttribute("aria-disabled", "true");
     // …and nothing else: the door is open, one key is simply not behind it.
-    expect(screen.getByRole("button", { name: "Tab" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Esc" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Tab" })).not.toHaveAttribute("aria-disabled");
+    expect(screen.getByRole("button", { name: "Esc" })).not.toHaveAttribute("aria-disabled");
   });
 
   it("greys a chord whose BASE key is refused, modifier and all", () => {
     render(<NavTray onSend={vi.fn(async () => true)} unsupportedKeys={["c"]} />);
-    expect(screen.getByRole("button", { name: "Ctrl+C" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ctrl+C" })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("leaves every key live when the multiplexer refuses none", () => {

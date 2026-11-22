@@ -61,7 +61,7 @@ describe("hello", () => {
       ok: true,
       value: {
         protocol: { min: 1, max: 1 },
-        hostName: "denis-laptop",
+        hostName: "casey-laptop",
         epoch: EPOCH,
         ready: true,
         caps: { asks: true, starters: true, send: true, steer: true, abort: true, rename: false, close: false, actions: false, history: false, reopen: false },
@@ -165,8 +165,8 @@ describe("snapshot fixture", () => {
     const mux = toMuxSnapshot(read());
 
     expect(mux.spaces.map((space) => [space.spaceId, space.number, space.label, space.tabCount, space.paneCount, space.folder])).toEqual([
-      ["ws-notes", 1, "notes", 2, 3, "/home/denis/notes"],
-      ["ws-site", 2, "site", 1, 2, "/home/denis/site"],
+      ["ws-notes", 1, "notes", 2, 3, "/home/casey/notes"],
+      ["ws-site", 2, "site", 1, 2, "/home/casey/site"],
     ]);
     expect(mux.tabs.map((tab) => [tab.tabId, tab.spaceId, tab.number, tab.label, tab.paneCount])).toEqual([
       ["ws-notes:main", "ws-notes", 1, "main", 2],
@@ -192,7 +192,7 @@ describe("snapshot fixture", () => {
       spaceNumber: 1,
       tabId: "ws-notes:main",
       tabLabel: "main",
-      cwd: "/home/denis/notes",
+      cwd: "/home/casey/notes",
       focused: false,
       alive: true,
       agent: "durable",
@@ -214,8 +214,8 @@ describe("snapshot fixture", () => {
       }),
     );
     const cwd = (id: string) => mux.panes.find((pane) => pane.paneId === id)?.cwd;
-    expect(cwd("conv-02")).toBe("/home/denis/notes/papers");
-    expect(cwd("conv-01")).toBe("/home/denis/notes");
+    expect(cwd("conv-02")).toBe("/home/casey/notes/papers");
+    expect(cwd("conv-01")).toBe("/home/casey/notes");
     expect(cwd("conv-03")).toBe("");
   });
 
@@ -397,6 +397,26 @@ describe("the id rule drops what hangs from a bad id", () => {
       });
     });
     expect(snapshot.panes.map((pane) => pane.id)).toEqual(["conv-02", "conv-03", "conv-04"]);
+  });
+
+  test("a pane, a tab or a workspace that takes a trick session's prefix is dropped like a bad id (M94)", () => {
+    const pane = read((raw) => {
+      raw.panes = raw.panes.map((p) => (p.id === "conv-03" ? { ...p, id: "trick:lodge:legs:legs" } : p));
+    });
+    expect(pane.panes.map((p) => p.id)).toEqual(["conv-01", "conv-02", "conv-04", "conv-05"]);
+    const tab = read((raw) => {
+      raw.tabs = raw.tabs.map((t) => (t.id === "ws-notes:research" ? { ...t, id: "trick:lodge:legs" } : t));
+    });
+    expect(tab.tabs.map((t) => t.id)).toEqual(["ws-notes:main", "ws-site:main"]);
+    const space = read((raw) => {
+      raw.workspaces = raw.workspaces.map((w) => (w.id === "ws-notes" ? { ...w, id: "trick:lodge" } : w));
+    });
+    expect(space.workspaces.map((w) => w.id)).toEqual(["ws-site"]);
+    // Only the prefix is reserved: an id that merely holds the word keeps its pane.
+    const near = read((raw) => {
+      raw.panes = raw.panes.map((p) => (p.id === "conv-03" ? { ...p, id: "modular:3" } : p));
+    });
+    expect(near.panes.map((p) => p.id)).toContain("modular:3");
   });
 
   test("a repeated id keeps the first object", () => {

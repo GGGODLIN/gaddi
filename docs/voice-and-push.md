@@ -424,7 +424,7 @@ optional dependency during the build:
 ```bash
 collie push-keys     # 1. generate + write the VAPID keys
 collie restart       # 2. Collie reads them at start
-#                      3. on your phone: Settings → Alerts
+#                      3. on your phone: Settings → Notifications
 ```
 
 The `push-keys` command generates the keypair and writes `COLLIE_VAPID_PUBLIC` and
@@ -450,7 +450,7 @@ again. Providing a subject argument on an existing configuration updates only th
 and preserves the current keys.
 
 > **Note.** On Herdr versions before 0.8.0, actions remain fixed to the set cached during initial plugin
-> installation ([ADR 0006](../.adr/0006-update-advances-the-checkout-herdr-installed.md)). The
+> installation ([ADR 0143](../.adr/0143-how-an-install-updates-and-what-a-release-offers-it.md)). The
 > `push-keys` and `push-test` actions will not appear until you run `herdr plugin install`. Run
 > `bash scripts/collie-ctl.sh push-keys` directly instead. The wrapper script passes the command
 > directly to the binary.
@@ -476,15 +476,16 @@ message in the body. Selecting the notification navigates directly to that agent
 
 ### Which alerts Collie sends
 
-Five kinds, each with its own switch under **Settings → Alerts → Notify when**.
+Six kinds, each with its own switch under **Settings → Notifications → Notify me when**.
 
 | Alert | Fires when | Default |
 | --- | --- | --- |
-| Needs input | an agent is waiting on you | on |
+| Needs you | an agent waits on you or stopped on an error | on |
 | Finished | an agent completes its task | off |
-| App updates | a newer Collie release is available | on |
+| A new Collie version | a newer Collie release is available | on |
 | Machine load stays high | a machine's CPU, memory or fullest disk stays above a rule you set for it | on |
 | Cache about to go cold | a pane's prompt cache expires in about five minutes | off |
+| A Decision marked Now on the Hill | an agent or a trick posts a Decision marked `now` on the Hill | on |
 
 Finished fires when an agent goes from working to idle, so an agent you interrupt also counts as finished.
 
@@ -498,8 +499,21 @@ Machine load sends nothing until you set a rule on a machine's page. The switch 
 once. One alert is sent each time a value climbs and stays high, and a tap opens that machine's Status view. See
 [Machines](crew.md#machines).
 
+A Decision marked `now` sends one notification, with the Decision's title and summary and nothing
+else. A tap opens the Hill at that card. A newer version of the Decision replaces the notification,
+and the notification closes when the Decision is answered, withdrawn or expires. One session sends at
+most three an hour, and all of them together at most ten. In a crew, the agents of one member send at
+most six an hour together ([Decisions from any machine](crew.md#decisions-from-any-machine)). Past
+that the Decision still shows on the Hill, without a notification.
+
+The Hill is an experiment with its own switch in Settings → Tricks and the Hill, and it is off by default.
+Off, agents and tricks cannot post Decisions, nothing about a Decision is sent, and the Hill leaves the bar. Switching
+it off closes the notifications of the open Decisions. Those Decisions stay on the bridge and show
+again when you switch the Hill on. `collie hill off` and `collie hill on` move the same switch.
+
 Each device shows an alert's title in its own [language](configure.md#language), and English on a
-device that has not opened Collie since it was updated. The body stays as the bridge wrote it.
+device that has not opened Collie since it was updated. The body stays as the bridge wrote it, and a
+Decision's title stays in the words its poster wrote.
 
 Every switch is bridge-wide. A push fans out to every subscribed device, so there is nothing
 per-device to set.
@@ -533,6 +547,11 @@ includes one a `/model` switch made cold with time still left.
 > second window. A five-minute cache, Codex, OpenCode, pi and omp, warns about two and a half minutes
 > before it goes cold instead.
 
+A push about a session shows that session's project picture as its icon, the small square beside the
+title, when its repository names one. A session with no picture keeps Collie's icon, and so does
+Safari. Chrome on Android and desktop Chrome and Firefox show the picture
+([A project's own picture](configure.md#a-projects-own-picture)).
+
 ### The count on the app icon
 
 The installed app's icon shows how many alerts are waiting on you: every pane blocked on you, and,
@@ -541,6 +560,15 @@ as the pushes, so it counts exactly what notifies you.
 
 Opening a finished pane in Collie retracts its alert, from the lock screen and from the count. A
 blocked pane's alert stays until you answer it.
+
+To clear everything at once, tap **Clear all** under **Settings → Notifications → Clear notifications**.
+It does what opening every pane does: every pane counts as opened, the finished alerts are retracted,
+and the dashboard's green dots go. The phone you tapped on closes all its notifications at once.
+Other devices drop theirs when the retraction reaches them, or when Collie is next opened there. A
+pane blocked on you stays on the dashboard and in the count until you answer it.
+
+> **Note.** In a crew, Clear all reaches only the panes of the machine your phone talks to. A
+> member's panes keep their own record of what you have seen, so open each one there as before.
 
 Taking an alert off the lock screen costs a push that shows nothing, and Chrome allows a site only a
 few of those a day before it shows "This site has been updated in the background". So Collie sends
@@ -571,15 +599,15 @@ bin/collie push forget <substring>   # or: push forget --all
 
 **Why does Settings say "This browser doesn't support push notifications"?** iOS and iPadOS 16.4
 and newer allow Web Push only for a web app that you added to the home screen and opened from its
-icon. In a Safari tab, **Settings → Alerts** shows that line. See
+icon. In a Safari tab, **Settings → Notifications** shows that line. See
 [Put it on your phone](install.md#iphone-and-ipad) for the steps to add Collie.
 
 ![Put Collie on the home screen: iPhone and Android steps.](images/install/pwa-install.svg)
 
 **I added the icon. Do I set up again?** Yes. The home screen app keeps its own storage, separate
-from Safari. Pair it again in the app (`collie pair` on the host, then **Settings → System → Paired
+from Safari. Pair it again in the app (`collie pair` on the host, then **Settings → Devices and machines → Paired
 devices**, see [Pair a device](security.md#pair-a-device--the-write-credential)). Then turn on push in
-**Settings → Alerts** in that app.
+**Settings → Notifications** in that app.
 
 **Why does the switch say "Unavailable over plain HTTP"?** Push needs HTTPS. Over plain HTTP, for
 example with `COLLIE_SERVE_MODE=http` or a Headscale tailnet without certificates, the switch stays
@@ -619,14 +647,14 @@ the push says, and never how often it is sent.
 | One durable agent on one machine | 30 pushes an hour | One summary push, then no push from that durable agent for an hour |
 
 The summary reads "A durable agent on {host} is raising many asks", with the machine's name for host. In a
-crew it names the member. The Needs input switch and the snooze hold the summary
+crew it names the member. The Needs you switch and the snooze hold the summary
 back too. A cap never hides a question: every open question stays on the phone.
 
 Collie pushes a question once. It remembers each one by machine, durable agent and tool call, so a durable agent
 that restarts and asks the same question again shows it on the phone and sends no second push. A
 question is forgotten an hour after it closes. The memory is `durable-asks.json` in the state
 folder. In a crew the lead runs these rules and keeps that file, and the member sends no push for
-its own questions ([ADR 0100](../.adr/0100-an-ask-travels-as-data-and-is-answered-by-id.md)).
+its own questions ([ADR 0146](../.adr/0146-a-durable-agent-is-a-session-with-no-screen-that-acts-by-id.md)).
 
 
 ---

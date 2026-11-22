@@ -16,9 +16,10 @@ import { useLocation } from "react-router";
 import { isConnecting } from "@/lib/connection";
 import { useNav } from "@/hooks/use-nav";
 import { t } from "@/lib/i18n";
+import { shortcutTarget } from "@/lib/shortcuts/target";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/hooks/use-locale";
-import { useMuxLogoUrl, useMuxName } from "@/lib/mux-capability";
+import { useMuxLogo, useMuxName } from "@/lib/mux-capability";
 import { useConnectionLost, useConnectionTrouble } from "@/hooks/use-connection-lost";
 import { useLoadingStalled } from "@/hooks/use-loading-stalled";
 import { useOnline } from "@/hooks/use-online";
@@ -34,6 +35,7 @@ import { SectionLabel } from "@/components/ui/section-label";
 import type { BridgeStatus } from "@/lib/types";
 import type { Scope } from "@/lib/scope";
 import { Icon } from "@/components/icons/icon";
+import { NAV_EDGE, RECESS_ACCENT } from "@/components/ui/nav-edge";
 
 /** What a route claims about the SHAPE of the shared row, as opposed to the content it portals into
  *  it. These are the three things the shell itself has to draw differently, and every one of them is
@@ -42,12 +44,8 @@ import { Icon } from "@/components/icons/icon";
 interface HeaderClaim {
   /** Show the stacked identity beside the mark: the "Collie" brand line over the "on <mux>" line. */
   wordmark: boolean;
-  /** 頁首由 shell 承載，不會繼承 route 的欄寬，因此必須與內容採用相同限制。
-   *  `column` 保留 Settings、Crew、Updates 的窄欄；`wide` 保留終端頁的寬度梯度。
-   *  `responsive-column` 讓首頁與空間頁從 md 才套用梯度；短視窗仍維持窄欄，
-   *  避免手機橫向超過 md 時也被放寬。
-   *  `full` 不限制寬度，供未宣告欄寬的 route 使用。 */
-  width: "column" | "responsive-column" | "wide" | "full";
+  /** 數字欄寬讓大型螢幕的頁首對齊格線；responsive-column 另保留短視窗的窄欄。 */
+  width: "column" | "responsive-column" | "wide" | "full" | number;
   /** The route has taken the whole row (Settings, Crew, and either find bar). The shell then draws
    *  no mark, no caption and no slots — see `RouteHeader`. */
   override: boolean;
@@ -62,20 +60,30 @@ interface HeaderClaim {
    *  Keeping the inset is deliberate: the notch is not screen a mirror could use anyway, and a route
    *  that took the inset over would double it against the header's own the moment the row came back. */
   hidden: boolean;
+  /** An agent is starting on this screen: the mark turns with most of its beads in the info colour
+   *  (`CollieHome`'s `starting`). A claim, not a prop on the mark, because the shell owns the mark. */
+  starting: boolean;
+  /** The large-screen dashboard (ADR 0158, addendum 2026-11-21): the bar spans the window on the navigation's
+   *  recess with the `NAV_EDGE` under it, and only its ROW keeps the numeric `width`, so the mark stays over the
+   *  grid's first column. The row is 48px, the pane view's top strip, so the top edge does not move between the
+   *  dashboard and a pane, and the mark is drawn at {@link NAV_MARK_PX}, the sidebar head's size. */
+  span: boolean;
 }
 
 // What a route gets when no route has claimed the row: the bare shell. This is the FORGOT case, and
 // it is deliberately benign rather than empty — the mark, the strip, the rule and the 60px floor are
 // all the shell's own, so a route that renders no <RouteHeader/> at all still gets a real header of
 // the right height. The one thing it cannot get wrong is the thing the operator was looking at.
-const UNCLAIMED: HeaderClaim = { wordmark: false, width: "full", override: false, hidden: false };
+const UNCLAIMED: HeaderClaim = { wordmark: false, width: "full", override: false, hidden: false, starting: false, span: false };
 
 function sameClaim(a: HeaderClaim, b: HeaderClaim): boolean {
   return (
     a.wordmark === b.wordmark &&
     a.width === b.width &&
     a.override === b.override &&
-    a.hidden === b.hidden
+    a.hidden === b.hidden &&
+    a.starting === b.starting &&
+    a.span === b.span
   );
 }
 
@@ -95,6 +103,10 @@ interface HeaderSlots {
 }
 
 const HeaderSlotContext = createContext<HeaderSlots | null>(null);
+
+/** The Collie mark's drawing on the large screen's navigation rows, in px: the pane view's sidebar head and the
+ *  dashboard's spanned header. Its tap box stays 44px. */
+export const NAV_MARK_PX = 32;
 
 /**
  * WHERE THE ONE HEADER STANDS ON A LARGE SCREEN (ADR 0120). On the pane route at 600px and up the
@@ -221,8 +233,9 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
   // built on, which is what a support question needs.
   const mux = useMuxName();
   // The mark that goes with that name, served by the bridge from the ADAPTER's own bytes. Empty
-  // whenever no logo was published, and empty renders nothing — see useMuxLogoUrl.
-  const muxLogo = useMuxLogoUrl();
+  // whenever no logo was published, and empty renders nothing — see useMuxLogo. While the bytes are
+  // still being read, `held` keeps the mark's box in place so the word does not move.
+  const { url: muxLogo, held: muxLogoHeld } = useMuxLogo();
 
   const [center, setCenter] = useState<HTMLElement | null>(null);
   const [right, setRight] = useState<HTMLElement | null>(null);
@@ -297,6 +310,7 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
       lost={lost}
       applying={applying}
       reconnected={reconnected}
+      starting={claim.starting}
       online={online}
       lastSeenAt={lastSeenAt}
       {...(paper === undefined ? {} : { paper })}
@@ -304,6 +318,9 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
     />
   );
 
+  // A claim of a number of px (the large-screen dashboard's grid), as that number; the three words give null.
+  const claimedPx = claim.width === "column" || claim.width === "wide" || claim.width === "full" ? null : claim.width;
+  const spanned = dockedRow === null && claim.span;
   const header = (
     <>
       {/* A column, not a row: the sticky bar reserves the safe-area inset (see the class list), and
@@ -327,6 +344,7 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
           route's own content column, so it inherited that column's width for free. Hoisted, it has to
           state it — otherwise the dashboard's 640px rule would silently become the viewport's. */}
       <header
+        data-slot="app-header"
         className={cn(
           "sticky top-0 z-20 flex flex-col border-b bg-band-ground",
           /*
@@ -348,13 +366,18 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
           // reserved in the base string above. While a route has the row hidden (zen) there are no
           // two regions left to cut apart, so the edge goes transparent; nothing moves by a pixel
           // when it comes back.
-          claim.hidden ? "border-transparent" : "border-band-rule",
+          // Docked in a large screen's column the header closes on the firm edge (`--edge-firm`), 3:1 or more against
+          // the header and the transcript in every bundled theme: its own band, not a faint rule (2026-11-21).
+          claim.hidden ? "border-transparent" : spanned ? NAV_EDGE : dockedRow !== null ? "border-edge-firm" : "border-band-rule",
+          spanned && ["w-full bg-surface-recess [--band-ground:var(--surface-recess)] [--chrome:var(--surface-recess)]", RECESS_ACCENT],
           dockedRow === null && claim.width === "column" && "mx-auto w-full max-w-screen-sm",
           dockedRow === null && claim.width === "responsive-column" &&
             "mx-auto w-full max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl 2xl:max-w-[1400px] [@media(max-height:40rem)]:max-w-screen-sm",
+          dockedRow === null && claimedPx !== null && !spanned && "mx-auto w-full",
           dockedRow === null && claim.width === "wide" &&
             "mx-auto w-full max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl 2xl:max-w-[1400px]",
         )}
+        style={dockedRow === null && claimedPx !== null && !spanned ? { maxWidth: claimedPx } : undefined}
       >
         {/* The row and the prerelease strip leave TOGETHER, and through `Collapse` — DESIGN.md §1's
             only sanctioned way an in-flow surface arrives or leaves, which is what makes "hide the
@@ -393,7 +416,18 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
               `py-2` would now read identically and would hand a future taller-than-44px child its 8px
               back. That is a PROPOSAL, not a change — the number is left exactly where it was measured,
               one variable at a time. */}
-          <div data-slot="header-row" className="flex min-h-15 items-center gap-2 pl-4 pr-2 py-1">
+          {/* Spanned (the large-screen dashboard): 48px, the pane view's top strip, with 2px above and below the
+              44px tap boxes; `pl-[18px]` puts the 32px drawing in its 44px box (6px of air) on the grid's 24px edge.
+              `relative`: the views control is placed in this row (`DashboardViews`). */}
+          <div
+            data-slot="header-row"
+            // A route that owns the spanned row (the large-screen Settings) leads with a 44px control at 4px, so its 20px icon
+            // stands on the 16px ink edge of the list below it.
+            // Docked in a large screen's column the floor is 54px, not 60: the space bar's page band takes the other
+            // 6px, so the transcript under the header keeps its top and its height (wide-layout.tsx).
+            className={cn("flex items-center gap-2 pr-2", spanned ? cn("relative mx-auto min-h-12 w-full py-0.5", claim.override ? "pl-1" : "pl-[18px]") : cn(dockedRow !== null ? "min-h-13.5" : "min-h-15", "py-1 pl-4"))}
+            style={spanned && claimedPx !== null ? { maxWidth: claimedPx } : undefined}
+          >
             {!claim.override && (
               <>
                 {/* The mark is the shell's, not a slot — which is now literal rather than a promise: it
@@ -402,7 +436,7 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
                     the route's own thing (space → dashboard, pane → dashboard, history → the pane)
                     without the callback's identity re-rendering anything. */}
                 {/* Docked on a large screen, the mark stands in the sidebar instead (HeaderDock). */}
-                {dockedRow === null && homeMark()}
+                {dockedRow === null && (spanned ? homeMark(undefined, NAV_MARK_PX) : homeMark())}
                 {/* THE IDENTITY, STACKED: the brand over the multiplexer this collie drives, both
                     beside the mark. It was ONE 18px line — "Collie on <mux>" — and on a phone that
                     line ran out of room inside the multiplexer's NAME, the one word here the reader
@@ -467,12 +501,16 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
                     aria-label would otherwise replace both lines for a screen reader. The brand word moved out of the button with it, so the tap target
                     is the mark's own 44px box and nothing else — the floor §6 asks for, and the same
                     box the gear at the other end of the row has. */}
+                {/* SPANNED (the large-screen 48px header) the block is CENTRED ON THE ROW, not hung from the mux line:
+                    the eyebrow is in flow, and the mux line is drawn only once a name has arrived, so one line
+                    ("Collie" alone) sits on the mark's middle and two lines sit there as a pair (11 + 2 + 20 = 33px
+                    in 44, 5px or more above and below). The 60px row keeps the hung eyebrow described above. */}
                 <div
                   data-slot="header-identity"
                   hidden={!claim.wordmark}
-                  className="shrink-0 whitespace-nowrap"
+                  className={cn("shrink-0 whitespace-nowrap", spanned && "flex flex-col justify-center gap-0.5")}
                 >
-                  <SectionLabel className="flex h-0 items-end leading-none">
+                  <SectionLabel className={spanned ? "block leading-none" : "flex h-0 items-end leading-none"}>
                     GADDI
                   </SectionLabel>
                   {/* The line the freed width is FOR — "on <mux>", the sentence the brand line
@@ -487,7 +525,8 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
                       that makes two stacked runs one sentence rather than two loose labels, and it
                       is the only translated word here — the brand and the multiplexer's own name
                       are names, and names are not translated. */}
-                  <span className="block min-h-6 text-base">
+                  {/* In the spanned 48px row the line is 20px (`text-sm`), and absent until a name arrives. */}
+                  <span className={cn("block", spanned ? "text-sm leading-5" : "min-h-6 text-base")} hidden={spanned && mux === ""}>
                     {mux !== "" && (
                       <>
                         {t("nav.mux.onPrefix")}{" "}
@@ -509,6 +548,18 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
                             className="mr-1 inline-block size-[1.15em] align-[-0.2em]"
                           />
                         )}
+                        {/* The mark is known to come (the config named it) and its bytes are still being
+                            read, a second request that ends after the first paint. This empty box has
+                            the image's exact size, gap and alignment, so when the picture lands the
+                            word beside it stays where it was (DESIGN.md §2). When the read fails, or
+                            the bridge named no mark, the box is not drawn: one shift, once. */}
+                        {muxLogo === "" && muxLogoHeld && (
+                          <span
+                            aria-hidden="true"
+                            data-slot="mux-logo-hold"
+                            className="mr-1 inline-block size-[1.15em] align-[-0.2em]"
+                          />
+                        )}
                         {mux}
                       </>
                     )}
@@ -521,7 +572,7 @@ export function AppHeaderHost({ bridge, error, lastSeenAt, children }: AppHeader
                 <div
                   data-slot="header-center"
                   ref={setCenter}
-                  className="flex min-w-0 flex-1 items-center"
+                  className={cn("flex min-w-0 flex-1 items-center", !spanned && "relative")}
                 />
                 {/* gap-1, not gap-3: the icon buttons now carry their own 12px of padding to reach 44px,
                     so a 12px gap on top of that reads as a gulf. 4px keeps the apparent spacing between
@@ -588,6 +639,12 @@ interface RouteHeaderProps {
   /** Take the header row off the screen entirely — the pane's zen mode, and nothing else today. See
    *  `HeaderClaim.hidden` for what survives (the element, its inset, its reserved rule) and why. */
   hidden?: boolean;
+
+  /** An agent is starting on this screen (the bridge has not read its first screen yet). The mark
+   *  turns at the loading pace with three beads in four in the info colour. See `HeaderClaim.starting`. */
+  starting?: boolean;
+  /** Span the window on the recess, 48px tall, the row at `width` (the large-screen dashboard). See `HeaderClaim.span`. */
+  span?: boolean;
 }
 
 /**
@@ -624,6 +681,8 @@ export function RouteHeader({
   rightTrail,
   override,
   hidden = false,
+  starting = false,
+  span = false,
 }: RouteHeaderProps) {
   const slots = useContext(HeaderSlotContext);
   // Loud, not lenient. A <RouteHeader/> outside the host means a route was mounted with no header
@@ -638,9 +697,9 @@ export function RouteHeader({
   // effect, not a passive one: it lands in the same commit the portal's children do, before the
   // browser paints, so there is no frame in which the row's shape and its contents disagree.
   useLayoutEffect(() => {
-    claim(owner, { wordmark, width, override: overridden, hidden });
+    claim(owner, { wordmark, width, override: overridden, hidden, starting, span });
     return () => release(owner);
-  }, [claim, release, owner, wordmark, width, overridden, hidden]);
+  }, [claim, release, owner, wordmark, width, overridden, hidden, starting, span]);
 
   // The mark's tap. No deps: `onHome` is a new closure on every render and the shell reads this
   // through a ref at click time, so keeping it current costs one assignment and re-renders nothing.
@@ -684,6 +743,7 @@ export function SettingsGear({ scope }: { scope?: Scope }) {
       type="button"
       onClick={() => nav.down(settingsPath(scope))}
       aria-label={t(offered ? "nav.settings.updateAvailable.aria" : "nav.settings.aria")}
+      {...shortcutTarget("settings")}
       // A real 44px box, NOT padding pulled back by a negative margin. The negative-margin trick
       // keeps icons visually tight but lets adjacent boxes overlap (two -m-3 buttons pull 24px
       // against a 12px gap, so a neighbour steals 12px of this one's hit area) and drags the last

@@ -129,6 +129,32 @@ describe("ActionsRow", () => {
     expect(controls.className).not.toMatch(/rounded|border|bg-/);
   });
 
+  it("keeps Actions beside the switcher and sends each tap to its own handler", async () => {
+    const openActions = vi.fn();
+    const openSwitcher = vi.fn();
+    const ref = vi.fn();
+    render(
+      <ActionsRow
+        general={[general()]}
+        agent="claude"
+        onRun={took}
+        actions={{ onClick: openActions, label: "Actions", open: false }}
+        handle={{ ref, onClick: openSwitcher, label: "Switch pane" }}
+      />,
+    );
+    const actions = screen.getByRole("button", { name: "Actions" });
+    const switcher = screen.getByRole("button", { name: "Switch pane" });
+    expect(actions.nextElementSibling).toBe(switcher);
+    expect(actions.querySelector('svg[data-icon="open-actions"]')).not.toBeNull();
+    expect(switcher.querySelector('svg[data-icon="pane-switcher"]')).not.toBeNull();
+    await userEvent.click(actions);
+    expect(openActions).toHaveBeenCalledOnce();
+    expect(openSwitcher).not.toHaveBeenCalled();
+    await userEvent.click(switcher);
+    expect(openSwitcher).toHaveBeenCalledOnce();
+    expect(ref.mock.calls.some(([node]) => node?.getAttribute("data-slot") === "composer-actions")).toBe(true);
+  });
+
   it("pins the switcher's bare mark at its right end when one is handed down, and nothing when none is", async () => {
     // The grip used to be a 30px band of its own above the composer, then a chevron on this belt's
     // rule — which stood over whichever pill was in the middle of the band. It stands at the belt's
@@ -662,7 +688,7 @@ describe("ActionsRow — the composer's clear slot", () => {
     expect(slotOf(undo).nextElementSibling).toBe(screen.getByRole("button", { name: "Changes" }));
   });
 
-  it("eases in and out through Collapse on its x axis; a swap between X and Undo runs no transition", () => {
+  it("eases in through Collapse on its x axis, leaves by opacity holding its width until a key press (M104); a swap between X and Undo runs no transition", () => {
     vi.useFakeTimers();
     try {
       const row = (clear?: NonNullable<ActionsRowProps["clear"]>) => (
@@ -688,8 +714,25 @@ describe("ActionsRow — the composer's clear slot", () => {
       expect(slotOf(screen.getByRole("button", { name: "Undo clear" }))).toBe(box);
       expect(box).toHaveAttribute("data-state", "open");
 
-      // The box empties: it heads closed at once, and the held Undo cannot be pressed on its way out.
+      // The box empties (M104): the slot stays open and keeps its width, the mark fades out by opacity, and the held
+      // mark is unseen, unread and cannot be pressed.
       rerender(row());
+      expect(box).toHaveAttribute("data-state", "open");
+      const held = box.querySelector("[data-belt-clear-slot='held']");
+      expect(held).not.toBeNull();
+      expect(held).toHaveAttribute("inert");
+      expect(held).toHaveClass("opacity-0");
+      act(() => {
+        vi.advanceTimersByTime(COLLAPSE_MS + 1);
+      });
+      expect(box).toHaveAttribute("data-state", "open");
+      expect(screen.queryByRole("button", { name: /Undo clear|Clear message/ })).toBeNull();
+
+      // The next key press lets the slot close as it always did.
+      act(() => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
+        vi.advanceTimersByTime(1);
+      });
       expect(box).toHaveAttribute("data-state", "closed");
       expect(box.firstElementChild).toHaveAttribute("inert");
       act(() => {

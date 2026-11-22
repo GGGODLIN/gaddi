@@ -3,8 +3,10 @@
 #
 # The caller gets the code, the toolchain and `bun install` ready. This script does none of that.
 # It runs `bun test` over bridge, cli and scripts, and prints one line per suite. Exit 0 means: no
-# failing test, and no suite with more skipped tests than its own budget allows. Any other result
-# exits 1.
+# failing test, and every suite passed at least one. Any other result exits 1.
+#
+# The skip count is printed, not judged. A test that cannot run on Windows says why where it skips
+# (`test.skipIf`, or a named helper such as `apiSocketTest`), not in a list kept here.
 #
 # Works in Windows PowerShell 5.1 and in PowerShell 7.
 #
@@ -148,7 +150,6 @@ param(
   [int]$MaxSkipsCli = 66,
   [int]$MaxSkipsScripts = 35
 )
-$skipBudget = @{ bridge = $MaxSkipsBridge; cli = $MaxSkipsCli; scripts = $MaxSkipsScripts }
 $ErrorActionPreference = "Continue"
 $ProgressPreference = "SilentlyContinue"
 
@@ -184,7 +185,6 @@ function Get-BunCount([string[]]$lines, [string]$word) {
 
 $failed = $false
 $allFails = @()
-$overBudget = @()
 $totalSkips = 0
 
 # One suite = one command line. cmd.exe does the redirect, so PowerShell never wraps or
@@ -210,7 +210,6 @@ foreach ($name in $suites.Keys) {
   [System.IO.File]::WriteAllLines("$Out\$name.fails", [string[]]$failing)
   Write-Output ("{0,-8} {1} pass, {2} fail, {3} skip" -f $name, $pass, $fail, $skip)
   $totalSkips += $skip
-  if ($skip -gt $skipBudget[$name]) { $overBudget += ("{0} {1}, allowed {2}" -f $name, $skip, $skipBudget[$name]) }
   $allFails += @($failing | ForEach-Object { "{0}: {1}" -f $name, $_ })
   if ($pass -eq 0) {
     # No summary line, or none passed: a suite that ran nothing must not look green.
@@ -226,13 +225,7 @@ foreach ($name in $suites.Keys) {
   }
 }
 
-$allowed = $MaxSkipsBridge + $MaxSkipsCli + $MaxSkipsScripts
-Write-Output ("skips    {0} (allowed {1}: bridge {2}, cli {3}, scripts {4})" -f $totalSkips, $allowed, $MaxSkipsBridge, $MaxSkipsCli, $MaxSkipsScripts)
-if ($overBudget.Count -gt 0) {
-  Write-Output ("         too many skipped tests: {0}." -f ($overBudget -join "; "))
-  Write-Output "         Remove the skip. If a test truly cannot run on Windows, raise that suite's -MaxSkips<Suite> in scripts/windows-suites.ps1 and say why in the PR."
-  $failed = $true
-}
+Write-Output ("skips    {0}" -f $totalSkips)
 if ($allFails.Count -gt 0) {
   Write-Output "failing tests (first 40):"
   $allFails | Select-Object -First 40 | ForEach-Object { Write-Output "         $_" }

@@ -215,6 +215,12 @@ export interface Config {
    * (`bridge/mux/tern/exec.ts`). Set via `COLLIE_TERN_BIN`. Inert unless {@link mux} is `tern`.
    */
   ternBin: string;
+  /**
+   * Absolute path to the `rex` binary, when the operator has one somewhere unusual. Empty (the
+   * default) probes fixed paths — `~/.local/bin`, `/usr/local/bin`, `/usr/bin` and Homebrew's — and
+   * never `PATH` (`bridge/mux/rex/exec.ts`). Set via `COLLIE_REX_BIN`. Inert unless {@link mux} is `rex`.
+   */
+  rexBin: string;
   /** Path to Herdr's control socket. A non-Herdr-launched daemon must discover this itself. */
   socketPath: string;
   /**
@@ -320,6 +326,11 @@ export interface Config {
    */
   keysFile: string;
   /**
+   * Where the operator's keyboard shortcuts live, `shortcuts.toml`, the sibling of `keys.toml` in the
+   * same dir, read the same way (bridge/operator-shortcuts.ts) and likewise never read here.
+   */
+  shortcutsFile: string;
+  /**
    * Where the operator's Quick-dock groups live — `quick-replies.toml`, the third sibling in the
    * same dir, read the same way (bridge/operator-quick-replies.ts) and likewise never read here.
    */
@@ -364,6 +375,13 @@ export interface Config {
    * test fixture) may leave it out, which reads as "no labels".
    */
   spacesFile?: string;
+  /**
+   * Where the operator's tricks live, `tricks/`, a folder beside the operator files: one `<id>/` per trick
+   * with its `trick.toml` and provider (M94, bridge/tricks/). Read by the tricks runner only, and never
+   * here. `loadConfig` always sets it; optional so a hand-built Config may leave it out, which reads
+   * as "no tricks".
+   */
+  tricksDir?: string;
   /**
    * Where the operator's prompt-cache overrides live — `cache-rules.toml`, the sixth file on the same
    * contract, read the same way (bridge/operator-cache-rules.ts) and likewise never read here.
@@ -467,6 +485,13 @@ export interface Config {
    */
   multiSession: boolean;
   /**
+   * The inside wire's switch (`COLLIE_INSIDE`, M99, `bridge/inside/WIRE.md`). Null, the default: the
+   * wire is on while `collie harness link` has linked a harness on this machine (M99 spec 09). `off` is the
+   * kill switch: no socket, no hook target `inside` field, and every session keeps the screen path
+   * exactly as before. `on` opens it with no link (a test, a leg).
+   */
+  inside: boolean | null;
+  /**
    * Surface shadow mode (`COLLIE_SURFACE_SHADOW=1`, M56 spec 04): the bridge computes each agent pane's
    * Surface from the screen on every poll beside the old readers, logs every disagreement and serves
    * the Surface on the snapshot and on `GET /api/surface`. Off by default; nothing decides a send by it.
@@ -486,8 +511,14 @@ export interface Config {
    */
   walky: boolean;
   /**
+   * Project files (`COLLIE_PROJECT_FILES`, ADR 0160): whether this machine reads a repository's own
+   * `collie.toml` at all. On by default; off reads none and serves no project picture. The operator's
+   * own config wins over every repository's file.
+   */
+  projectFiles: boolean;
+  /**
    * The walky talky pair cap (`COLLIE_WALKY_PAIR_LIMIT`): messages in ten minutes between the same two
-   * panes, either direction, counted by this bridge alone. 6 by default, 1 to 100; a value outside that
+   * panes, either direction, counted by this bridge alone. 12 by default, 1 to 100; a value outside that
    * range, or one that is not an integer, warns and takes the default.
    */
   walkyPairLimit: number;
@@ -513,6 +544,12 @@ export interface Config {
    * stripped. `collie serve` publishes at this path instead of the root when it is set.
    */
   basePath: string;
+  /**
+   * Whether `/auth/` answers with a redirect to {@link basePath} instead of the placeholder page
+   * (`COLLIE_AUTH_RETURN=1`). For a front door that signs in on every path and has no page of its
+   * own at `/auth/`: a request that reaches the bridge there has already been signed in.
+   */
+  authReturn: boolean;
 }
 
 /**
@@ -732,6 +769,14 @@ export function resolveJournalRoots(
     "dsh-tui": envRoots("COLLIE_DSH_ROOT", join(env.DSH_HOME?.trim() || join(home, ".dsh"), "sessions"), env),
     // OpenClaw keeps one SQLite per agent under its state folder, which `OPENCLAW_STATE_DIR` moves.
     openclaw: envRoots("COLLIE_OPENCLAW_ROOT", env.OPENCLAW_STATE_DIR ?? join(home, ".openclaw"), env),
+    // MiniMax Code keeps dated session folders under `$MINIMAX_DATA_DIR/v2/sessions`, ~/.minimax/v2
+    // when that var is unset or blank (its README, § Configuration), and its SQLite index under
+    // v2/sqlite. The program's own variable is `MINIMAX_DATA_DIR`; there is no `MINIMAX_HOME`.
+    mcode: envRoots(
+      "COLLIE_MCODE_ROOT",
+      join(env.MINIMAX_DATA_DIR?.trim() || join(home, ".minimax"), "v2", "sessions"),
+      env,
+    ),
   };
 }
 
@@ -845,6 +890,7 @@ export function loadConfig(
     tmuxBin: (env.COLLIE_TMUX_BIN ?? "").trim(),
     zellijBin: (env.COLLIE_ZELLIJ_BIN ?? "").trim(),
     ternBin: (env.COLLIE_TERN_BIN ?? "").trim(),
+    rexBin: (env.COLLIE_REX_BIN ?? "").trim(),
     socketPath,
     dialMode: envEnum("COLLIE_HERDR_DIAL", ["auto", "net", "bun"] as const, "auto", env),
     port: envInt("COLLIE_PORT", DEFAULT_PORT, { min: 1, max: 65535 }, env),
@@ -872,6 +918,7 @@ export function loadConfig(
     submitKeys: submitKeys.length ? submitKeys : ["Enter"],
     commandsFile: join(configDir, "commands.toml"),
     keysFile: join(configDir, "keys.toml"),
+    shortcutsFile: join(configDir, "shortcuts.toml"),
     quickRepliesFile: join(configDir, "quick-replies.toml"),
     themeFile: join(configDir, "theme.toml"),
     fontsDir: join(configDir, "fonts"),
@@ -881,6 +928,7 @@ export function loadConfig(
     clipboardFile: join(configDir, "clipboard.toml"),
     cacheRulesFile: join(configDir, "cache-rules.toml"),
     spacesFile: join(configDir, "spaces.toml"),
+    tricksDir: join(configDir, "tricks"),
     trustedUser: env.COLLIE_TRUSTED_USER ?? "",
     trustedUserOptional: envBool("COLLIE_TRUSTED_USER_OPTIONAL", false, env),
     accessTeam: (env.COLLIE_ACCESS_TEAM ?? "").trim(),
@@ -900,11 +948,14 @@ export function loadConfig(
     stateDir,
     multiSession: envBool("COLLIE_MULTI_SESSION", true, env),
     surfaceShadow: envBool("COLLIE_SURFACE_SHADOW", false, env),
+    inside: env.COLLIE_INSIDE === undefined || env.COLLIE_INSIDE.trim() === "" ? null : envBool("COLLIE_INSIDE", false, env),
     sendProtocol: envBool("COLLIE_SEND_PROTOCOL", true, env),
     walky: envBool("COLLIE_WALKY", true, env),
+    projectFiles: envBool("COLLIE_PROJECT_FILES", true, env),
     walkyPairLimit: envInt("COLLIE_WALKY_PAIR_LIMIT", PAIR_LIMIT, { min: 1, max: 100 }, env),
     skipServe: envBool("COLLIE_SKIP_SERVE", false, env),
     basePath: normaliseBasePath(env.COLLIE_BASE_PATH),
+    authReturn: envBool("COLLIE_AUTH_RETURN", false, env),
   };
 }
 

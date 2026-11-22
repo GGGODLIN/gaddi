@@ -54,7 +54,7 @@ const IMAGE_TOKEN = /\[Image#\d+\]/g;
  * Live-probed 2026-10-14 (Claude Code 2.1.299, a 1,400-character paste with six newlines):
  *   `<text> P`          → `[Image #2][Pasted text #3 +6 lines]`
  *   `<text> P P`        → `[Image #7] [Image #8][Pasted text #9 +6 lines]`, the 2026-10-14
- *                         minibuch send that stalled, because only one trailing path was counted
+ *                         workshop send that stalled, because only one trailing path was counted
  *   `<text> /usr/x P`   → `[Image #14][Pasted text #15 +7 lines]`, the kept pieces gain a newline
  *   `<300 chars> P\n<rest>` and `<300 chars> P P\n<rest>` → one or two images, `+7 lines`
  *   `P <text>`, `P P <text>` → no image, or one: the piece `P <text>` is not a path
@@ -68,6 +68,31 @@ export function liftedPaste(sent: string): { images: number; text: string } {
   const kept = pieces.filter((piece) => !isUploadImagePath(piece));
   const images = pieces.length - kept.length;
   return images === 0 ? { images, text: sent } : { images, text: kept.join("\n") };
+}
+
+/** Claude's image token as its journal writes it, white space kept: `[Image #24]`. */
+const JOURNAL_IMAGE_TOKEN = /\[Image #\d+\]/g;
+
+/** White space folded to one space, the ends cut: the queue's own comparison (journal/receipt-queue.ts). */
+function foldSpace(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Whether `written`, a text Claude's journal holds for a message (a `queue-operation` row's content, or the
+ * prompt it delivers), is Claude's spelling of `sent` with its image paths lifted ({@link liftedPaste}): the
+ * journal writes `[Image #N]` where the box showed the token, so a screenshot queued while the agent works
+ * reads `[Image #24]` there, and the words around it stay. STRICT, because a wrong yes hides a message that
+ * waits: as many tokens as {@link liftedPaste} finds upload paths (at least one), and the rest of `written`,
+ * tokens out, equal to the paste Claude kept, white space folded. Where the tokens sit is not compared: a
+ * token carries no content, and the count is the check. A send Claude keeps as text (2.1.312 does, for a path
+ * inside a paragraph) equals its journal text and never reaches this.
+ */
+export function liftedSpelling(sent: string, written: string): boolean {
+  const lift = liftedPaste(sent);
+  if (lift.images === 0) return false;
+  if ((written.match(JOURNAL_IMAGE_TOKEN)?.length ?? 0) !== lift.images) return false;
+  return foldSpace(written.replace(JOURNAL_IMAGE_TOKEN, " ")) === foldSpace(lift.text);
 }
 
 /** How many upload image paths in a send Claude lifts into an {@link IMAGE_TOKEN}. */

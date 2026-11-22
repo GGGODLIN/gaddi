@@ -31,8 +31,8 @@
 // journal — bridge/operator-fonts.ts serves an operator's own font files under it. That does not
 // widen anything, because the rule was never "only the journal touches the disk". The rule is:
 //
-//   A CLIENT-SUPPLIED VALUE BECOMES A PATH IN THREE PLACES ONLY: THE JOURNAL, THE CHANGES VIEW,
-//   AND THE FILES VIEW.
+//   A CLIENT-SUPPLIED VALUE BECOMES A PATH IN FOUR PLACES ONLY: THE JOURNAL, THE CHANGES VIEW,
+//   THE FILES VIEW AND A BRANCH'S FOLDER.
 //
 // In the journal it is a pane id, never a path. The Changes view (bridge/changes.ts, ADR 0065) is
 // the second place, and it is bounded by a LISTED-PATHS rule: the client names a repo and a file,
@@ -40,7 +40,7 @@
 // the pane's folder returned, and the file one git itself listed as changed there; anything else is
 // refused before a path exists. The one file it reads off disk itself (an untracked one) goes
 // through `containedRealpath` against the repo's real path as well. The font surface does not become
-// a third such place: `GET /api/fonts/<basename>` LOOKS the request's name UP in the rows the
+// another such place: `GET /api/fonts/<basename>` LOOKS the request's name UP in the rows the
 // operator's own `theme.toml` declared and takes THAT row's path, so a name nobody declared is
 // refused before any path exists. Containment then runs anyway, as an independent second check on
 // the real paths.
@@ -54,14 +54,24 @@
 // (bridge/folder-browse.ts, #467) is this same place pointed at home: the client's text is resolved
 // under home, refused on the same shape, contained on real paths through this function, denied the
 // same folders, and answered with folder names only (ADR 0083's header names it). A new reader may
-// reuse this function; it may not become a fourth place without an ADR that says why and names its bound.
+// reuse this function; it may not become a fifth place without an ADR that says why and names its bound.
 //
-// A deliverable read (bridge/deliverables.ts, ADR 9006) is not that fourth place. The client sends
+// A branch's folder (bridge/worktree-folder.ts, ADR 0145) is the FOURTH place: the phone names a
+// PARENT folder, and the bridge names the child after the branch. Its bound is that module's own
+// rule, run at plan and again at create (absolute, no `..` as sent, a real directory under home, no
+// link below home, no dotdir, not inside the repo, and a child that does not exist yet).
+//
+// Not places, because they reuse a bound that is already here: a trick's file input
+// (bridge/tricks/inputs.ts) reads through the Files view's own reader under the pane's Files root,
+// and the folder browser above is the Files bound pointed at home.
+//
+// A deliverable read (bridge/deliverables.ts, ADR 9006) does not add another place. The client sends
 // a pane id and an opaque id. The path is the one the bridge finds again in that session's assistant
 // reply, and a path carried in the request is never the file that gets opened.
 
 import { realpath as realpathNativeCb } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
+import { join } from "node:path";
 
 import { HOST, type Host, isInside } from "../host.ts";
 
@@ -125,6 +135,63 @@ export async function containedRealpath(
 }
 
 /**
+ * How many candidates {@link firstContained} may refuse in one lookup before it answers null.
+ *
+ * A lookup matches by session id, so in practice it meets one candidate, rarely two. But a name match
+ * can be looser than the id (a suffix), and anything that writes into a sessions root can plant names;
+ * without a cap one lookup could turn into thousands of `realpath` calls. Past the cap the answer is
+ * "nothing this root may serve", the same fail-closed null as a refusal.
+ */
+export const MAX_REFUSED_CANDIDATES = 32;
+
+/**
+ * The first of `candidates` that `root` really contains, in the order given, or null (#839, #840).
+ *
+ * A refused candidate is skipped; null means no candidate under this root is served. A lookup by
+ * session id can meet more than one file for the id under one root (an older date folder, another
+ * project folder, a second matching name), and the first in order may be a symlink out of the root or
+ * a dangling one. Returning that refusal as the answer read as "this root has no log for the id" while
+ * a readable one sat beside it. Each candidate goes through the same {@link containedRealpath} with
+ * the same root, so nothing a refusal kept out is ever served; only the next candidate is asked.
+ *
+ * The caller owns the order (newest first, where the names carry a time) and passes a lazy sequence
+ * where building every candidate up front would cost a directory walk the first hit makes needless.
+ * At most `limit` refusals are tried ({@link MAX_REFUSED_CANDIDATES}).
+ */
+export async function firstContained(
+  candidates: Iterable<string> | AsyncIterable<string>,
+  root: string,
+  limit: number = MAX_REFUSED_CANDIDATES,
+): Promise<string | null> {
+  let refused = 0;
+  for await (const candidate of candidates) {
+    const real = await containedRealpath(candidate, root);
+    if (real !== null) return real;
+    refused += 1;
+    if (refused >= limit) return null;
+  }
+  return null;
+}
+
+/**
+ * `join(root, dir, ...rest)` for each of `dirs` where something exists at it, newest modified first,
+ * and on a tie the folder name that sorts first. For {@link firstContained}, where the folder names
+ * carry no time (Claude's project folders, grok's, kiro's buckets): the file decides, so the log being
+ * written wins over an older one for the same id, on every disk. A symlink counts by its target, so a
+ * dangling one is passed over. Costs one `stat` per folder; a lookup that calls it is cached.
+ */
+export async function existingNewestFirst(root: string, dirs: Iterable<string>, ...rest: string[]): Promise<string[]> {
+  const found: { dir: string; path: string; mtimeMs: number }[] = [];
+  for (const dir of dirs) {
+    const path = join(root, dir, ...rest);
+    const st = await stat(path).catch(() => null);
+    if (st !== null) found.push({ dir, path, mtimeMs: st.mtimeMs });
+  }
+  found.sort((a, b) => b.mtimeMs - a.mtimeMs || (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0));
+  return found.map((f) => f.path);
+}
+
+/**
  * Normalise an adapter's root configuration to the list it searches, in order.
  *
  * Adapters accept a bare string as well as a list purely so a caller with one root (every test
@@ -135,6 +202,20 @@ export async function containedRealpath(
 export function rootList(roots: string | readonly string[]): string[] {
   const list = typeof roots === "string" ? [roots] : [...roots];
   return list.map((r) => r.trim()).filter((r) => r !== "");
+}
+
+/**
+ * An adapter's roots: fixed, or read again at each use. The live form is how an added account's own
+ * folder joins the search with no restart (M101, ADR 0141): the registry hands the adapter a function
+ * over the configured roots plus the accounts' roots, and every lookup asks it.
+ */
+export type RootSource = string | readonly string[] | (() => readonly string[]);
+
+/** The roots of `source` now, normalised as {@link rootList} does. */
+export function rootReader(source: RootSource): () => string[] {
+  if (typeof source === "function") return () => rootList(source());
+  const fixed = rootList(source);
+  return () => fixed;
 }
 
 /**

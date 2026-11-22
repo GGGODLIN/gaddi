@@ -50,11 +50,13 @@ import {
   rememberPending,
   type RowReducer,
 } from "./reduce.ts";
-import { containedRealpath, exists, loadTail, readSinceFile, rootList, statFile } from "./files.ts";
+import { containedRealpath, existingNewestFirst, firstContained, loadTail, readSinceFile, rootReader, statFile, type RootSource } from "./files.ts";
+import { MAX_OPEN_FILES_PIDS, openFiles as defaultOpenFiles, type OpenFiles } from "./open-files.ts";
 import { clamp, MAX_RESULT_CHARS, MAX_TEXT_CHARS, stripAnsi, summarizeToolInput } from "./text.ts";
 import { classifyToolCall } from "./tool-call.ts";
 import type {
   AgentSessionRef,
+  DiscoverHints,
   JournalAdapter,
   TranscriptEntry,
   TranscriptPart,
@@ -162,11 +164,22 @@ function processAlive(pid: number): boolean {
   }
 }
 
-/** Inner text of the first `<user_query>…</user_query>`, trimmed; null when the tag isn't present. */
+/**
+ * Inner text of the first `<user_query>…</user_query>`, trimmed; null when the tag isn't present.
+ *
+ * Found with `indexOf`, never a regex: the text is whatever a person typed, and the old
+ * `/<user_query>\s*([\s\S]*?)\s*<\/user_query>/` took time in the cube of an open tag's trailing
+ * blanks when the close was missing (8 KB took 36 s, with the bridge stopped). The first open tag
+ * pairs with the first close after it, as the regex did; a later open tag cannot find a close the
+ * first one missed.
+ */
 export function extractUserQuery(text: string): string | null {
-  const m = /<user_query>\s*([\s\S]*?)\s*<\/user_query>/.exec(text);
-  if (!m) return null;
-  const inner = (m[1] ?? "").trim();
+  const OPEN = "<user_query>";
+  const open = text.indexOf(OPEN);
+  if (open === -1) return null;
+  const close = text.indexOf("</user_query>", open + OPEN.length);
+  if (close === -1) return null;
+  const inner = text.slice(open + OPEN.length, close).trim();
   return inner === "" ? null : inner;
 }
 
@@ -445,13 +458,19 @@ export class GrokTranscriptSource implements TranscriptSource {
   // an outward link after the first resolve would otherwise be served. CLAUDE.md requires every
   // path — including one we already accepted — to go through containedRealpath on the real paths.
   private readonly pathCache = new Map<string, { path: string; root: string }>();
-  private readonly roots: string[];
+  private readonly rootsNow: () => string[];
+
+  /** The roots now: fixed, or the live list an added account joins (M101). */
+  private get roots(): string[] {
+    return this.rootsNow();
+  }
 
   constructor(
-    roots: string | readonly string[],
+    roots: RootSource,
     private readonly isAlive: (pid: number) => boolean = processAlive,
+    private readonly openFiles: OpenFiles = defaultOpenFiles,
   ) {
-    this.roots = rootList(roots);
+    this.rootsNow = rootReader(roots);
   }
 
   /**
@@ -495,7 +514,8 @@ export class GrokTranscriptSource implements TranscriptSource {
     const sessionId = ref.value;
     const cached = this.pathCache.get(sessionId);
     if (cached !== undefined) {
-      const real = await containedRealpath(cached.path, cached.root);
+      // A root that left the config (an account removed) serves nothing more, cache or not.
+      const real = this.roots.includes(cached.root) ? await containedRealpath(cached.path, cached.root) : null;
       if (real !== null) {
         if (real !== cached.path) this.pathCache.set(sessionId, { path: real, root: cached.root });
         return real;
@@ -512,6 +532,11 @@ export class GrokTranscriptSource implements TranscriptSource {
     return null;
   }
 
+  /**
+   * The session's `chat_history.jsonl` in a folder of `root` that `root` contains. The folders are
+   * tried newest log first ({@link existingNewestFirst}), and a refused log is skipped for the next
+   * folder that holds the id (#839, see {@link firstContained}).
+   */
   private async findUnder(root: string, sessionId: string): Promise<string | null> {
     let dirs: string[];
     try {
@@ -519,12 +544,7 @@ export class GrokTranscriptSource implements TranscriptSource {
     } catch {
       return null;
     }
-    for (const dir of dirs) {
-      const candidate = join(root, dir, sessionId, "chat_history.jsonl");
-      if (!(await exists(candidate))) continue;
-      return containedRealpath(candidate, root);
-    }
-    return null;
+    return firstContained(await existingNewestFirst(root, dirs, sessionId, "chat_history.jsonl"), root);
   }
 
   stat = statFile;
@@ -532,9 +552,54 @@ export class GrokTranscriptSource implements TranscriptSource {
 
   /** The live read, byte-counted like every harness that writes a JSONL file. */
   readSince = readSinceFile;
+
+  /**
+   * The session one of the pane's foreground grok processes holds. First grok's own list, the
+   * `active_sessions.json` its writer keeps: the latest session of a listed pid wins, or failing
+   * any pid match, the one live session whose cwd is this pane's. Then the process's open files,
+   * where a `chat_history.jsonl` names the session directly. Both answers are keys for `resolve`,
+   * which still finds and contains the file; nothing short of one unambiguous match answers.
+   */
+  async discoverSession(cwd: string, hints?: DiscoverHints): Promise<AgentSessionRef | null> {
+    const pids = (hints?.processes ?? [])
+      .filter((p) => p.argv.some((arg) => /(^|\/)grok$/.test(arg)))
+      .map((p) => p.pid)
+      .filter((pid): pid is number => pid !== undefined && pid > 0);
+    const sessions = await this.activeSessions();
+    const ref = (id: string): AgentSessionRef | null => {
+      if (!isGrokSessionId(id)) return null;
+      return { kind: "id", value: id };
+    };
+    if (sessions !== null) {
+      const live = sessions.filter((s) => this.isAlive(s.pid));
+      const byPid = pids.length === 0 ? [] : live.filter((s) => pids.includes(s.pid));
+      const pick =
+        byPid.length > 0
+          ? latestOpened(byPid)?.sessionId
+          : hints?.shared !== true && live.filter((s) => s.cwd === cwd).length === 1
+            ? live.find((s) => s.cwd === cwd)?.sessionId
+            : undefined;
+      const fromList = pick === undefined ? null : ref(pick);
+      if (fromList !== null && (await this.resolve(fromList)) !== null) return fromList;
+    }
+    for (const pid of pids.slice(0, MAX_OPEN_FILES_PIDS)) {
+      const seen = new Set<string>();
+      for (const path of await this.openFiles(pid)) {
+        // Both separators: how the bridge reads any path a command or a fixture printed
+        // (agy.ts's lock and database names do the same).
+        const m = /(?:^|[/\\])([0-9a-f-]{36})[/\\]chat_history\.jsonl$/.exec(path);
+        const id = m?.[1];
+        if (id === undefined || !isGrokSessionId(id) || seen.has(id)) continue;
+        seen.add(id);
+        const fromOpenFiles = ref(id);
+        if (fromOpenFiles !== null && (await this.resolve(fromOpenFiles)) !== null) return fromOpenFiles;
+      }
+    }
+    return null;
+  }
 }
 
-export function grokJournal(roots: string | readonly string[]): JournalAdapter {
+export function grokJournal(roots: RootSource): JournalAdapter {
   const source = new GrokTranscriptSource(roots);
   return {
     agent: "grok",
@@ -542,5 +607,6 @@ export function grokJournal(roots: string | readonly string[]): JournalAdapter {
     parse: parseGrokTranscript,
     reducer: createGrokReducer,
     reconcile: (ref, cwd) => source.reconcile(ref, cwd),
+    discover: (cwd, hints) => source.discoverSession(cwd, hints),
   };
 }

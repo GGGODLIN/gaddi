@@ -1,8 +1,11 @@
+import { HOST } from "../bridge/host.ts";
 import { HERDR_MUX } from "../bridge/mux/herdr/adapter.ts";
 import { HERDR_CORE_MUX, herdrCoreSocketFor } from "../bridge/mux/herdr-core/adapter.ts";
 import { HC_GENERATION, readHcCore, type HcCoreReading } from "../bridge/mux/herdr-core/client.ts";
 import { DURABLE_MUX } from "../bridge/mux/durable/adapter.ts";
 import { buildMuxRegistry, muxEndpointVar, muxNames } from "../bridge/mux/registry.ts";
+import { REX_MUX } from "../bridge/mux/rex/adapter.ts";
+import { defaultRexSocket, resolveRexBinary, rexBinaryCandidates } from "../bridge/mux/rex/exec.ts";
 import { TERN_MUX } from "../bridge/mux/tern/adapter.ts";
 import { defaultTernSocket, resolveTernBinary, ternBinaryCandidates } from "../bridge/mux/tern/exec.ts";
 import { TMUX_MUX } from "../bridge/mux/tmux/adapter.ts";
@@ -12,7 +15,7 @@ import { defaultTuiosSocket } from "../bridge/mux/tuios/client.ts";
 import { ZELLIJ_MUX } from "../bridge/mux/zellij/adapter.ts";
 import { resolveZellijBinary, zellijBinaryCandidates } from "../bridge/mux/zellij/exec.ts";
 import { parseSessionList, ZELLIJ_LIST_SESSIONS_ARGS } from "../bridge/mux/zellij/protocol.ts";
-import { liveHookTargets } from "./beacon.ts";
+import { liveHookTargets, type PidProbeDeps } from "./beacon.ts";
 import type { CliContext } from "./context.ts";
 import { EXIT, type Io } from "./io.ts";
 import type { Exec, Files } from "./sys.ts";
@@ -84,6 +87,8 @@ export interface MuxListDeps {
   readonly exec: Exec;
   readonly files: Files;
   readonly uid?: number | undefined;
+  /** How a bridge's pid is checked (`cli/beacon.ts` `readPidStartTime`). Absent means the host's real probe. */
+  readonly pidProbe?: PidProbeDeps | undefined;
   /** The herdr-core dial. Absent means the real one. */
   readonly dial?: ((socketPath: string, timeoutMs: number) => Promise<HcCoreReading>) | undefined;
 }
@@ -172,6 +177,20 @@ const probeTern: Probe = async (deps) => {
   return binary === null ? absent() : absent(`${binary}, no daemon socket at ${socket}`);
 };
 
+/**
+ * Rex: the platform's default socket, else the binary. A file check only, like Tern's: a rex call
+ * would start a server unless told not to, and this verb never starts a multiplexer. The socket path
+ * is probed on both platforms — `$XDG_RUNTIME_DIR/rex/server.sock` on Linux, and on macOS (where no
+ * XDG runtime dir is set) the app-managed `~/Library/Application Support/rex/server.sock`.
+ */
+const probeRex: Probe = async (deps) => {
+  const uid = deps.uid ?? process.getuid?.() ?? 1000;
+  const socket = defaultRexSocket(deps.ctx.env.XDG_RUNTIME_DIR, uid, deps.ctx.home, HOST.platform);
+  if (deps.files.exists(socket)) return { present: true, answering: null, where: socket, version: null };
+  const binary = resolveRexBinary((deps.ctx.env.COLLIE_REX_BIN ?? "").trim(), (path) => deps.files.exists(path), rexBinaryCandidates(deps.ctx.home));
+  return binary === null ? absent() : absent(`${binary}, no server socket at ${socket}`);
+};
+
 const probeTuios: Probe = async (deps) => {
   const uid = deps.uid ?? process.getuid?.() ?? 1000;
   const named = (deps.ctx.env[muxEndpointVar(TUIOS_MUX)] ?? "").trim();
@@ -187,6 +206,7 @@ const PROBES: ReadonlyMap<string, Probe> = new Map([
   [ZELLIJ_MUX, probeZellij],
   [TERN_MUX, probeTern],
   [TUIOS_MUX, probeTuios],
+  [REX_MUX, probeRex],
 ]);
 
 /** Shown for `durable`, which is not a terminal and has nothing to look for. */
@@ -228,7 +248,7 @@ export async function muxListReport(deps: MuxListDeps): Promise<MuxListReport> {
     }),
   );
 
-  const targets = liveHookTargets({ ctx: deps.ctx, files: deps.files, uid: deps.uid });
+  const targets = liveHookTargets({ ctx: deps.ctx, files: deps.files, uid: deps.uid, pidProbe: deps.pidProbe });
   const driversOf = (mux: string): Driver[] =>
     targets.filter((target) => target.mux === mux).map((target) => ({ instance: target.instance, port: target.port, pid: target.pid }));
   const unplaced = targets

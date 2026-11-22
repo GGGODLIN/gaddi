@@ -39,3 +39,9 @@ and space view do not change their order.
   stay nested under their unpinned root parent inside the attention sections (`triageTrees`), and the
   family takes the most urgent bucket and newest transition timestamp among its members, matching
   Herdr App's Priority view.
+- **Addendum (2026-11-22):** The dashboard summary and the Belt's Layers button open the fork's
+  standalone attention panel. The phone's Belt keeps Layers at the right and puts Actions beside it.
+  Actions retains the upstream palette and its pane list ([0165](./0165-actions-is-one-palette-of-registry-actions.md));
+  the desktop sidebar keeps the upstream layout. Swiping the phone's Belt up still opens the
+  attention panel. Separating the two lists lets upstream change its navigation without changing
+  the fork's frozen attention order.

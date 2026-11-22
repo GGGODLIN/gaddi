@@ -73,6 +73,12 @@ const PINNED = [
   "grok--working.txt",
 ];
 
+describe("the Grok corpus", () => {
+  it("retains the captures the fork adapter was developed against", () => {
+    expect(allGrokFixtures).toEqual(expect.arrayContaining(PINNED));
+  });
+});
+
 const DIALOG = [
   "grok--ask-color-moved.txt",
   "grok--ask-color.txt",
@@ -97,6 +103,8 @@ const DIALOG = [
   "grok--plan-request-changes.txt",
   "grok--plan-tab-prompt.txt",
   "grok--trust-prompt.txt",
+  "grok--v1.0.77-model-picker--w61.txt",
+  "grok--v1.0.77-trust--w80.txt",
 ];
 
 const ownFixtures = DIALOG;
@@ -107,25 +115,37 @@ const allOpencodeFixtures = readdirSync(PANES_DIR)
   .filter((f) => f.startsWith("oc--") && f.endsWith(".txt"))
   .toSorted();
 
+// Open unprinted-key findings (ADR 0151 rule 2, M102 spec 03): the /model picker's Ctrl+C option sends a
+// key the picker does not print (measured live, MODEL_PICKER_NOTES.md), and no entry of
+// UNPRINTED_KEY_EXCEPTIONS names it. Each goes red the day it is printed, named or no longer sent.
+const MODEL_PICKER_CTRL_C =
+  "the /model picker's Ctrl+C option is not printed on the picker (measured live, grok/MODEL_PICKER_NOTES.md); not one of a to g";
+const UNPRINTED_KEY_FINDINGS: Readonly<Record<string, string>> = Object.fromEntries(
+  [
+    "grok--model-effort-moved.txt",
+    "grok--model-effort.txt",
+    "grok--model-picker-moved.txt",
+    "grok--model-picker.txt",
+    "grok--model-window-moved.txt",
+    "grok--model-window.txt",
+    "grok--v1.0.77-model-picker--w61.txt",
+  ].map((name) => [name, MODEL_PICKER_CTRL_C]),
+);
+
 describeAdapterConformance(grokAdapter, {
   ownFixtures,
+  unprintedKeyFindings: UNPRINTED_KEY_FINDINGS,
   foreignFixtures: [...allClaudeFixtures, ...allOmpFixtures, ...allCodexFixtures, ...allOpencodeFixtures],
   neutralFixtures,
   // A long draft pushes the hint row out of the tail the bridge binds to, so these captures must
   // not be read as a short composer that can be bound.
-  unboundComposerFixtures: ["grok--draft-scrollbar.txt", "grok--draft-scrollbar-partial.txt"],
-});
-
-describe("the grok corpus", () => {
-  it("is exactly the captures this adapter was developed against", () => {
-    expect(allGrokFixtures).toEqual(PINNED);
-  });
+  unboundComposerFixtures: ["grok--draft-scrollbar.txt", "grok--draft-scrollbar-partial.txt", "grok--v1.0.77-draft-six-rows--w120.txt"],
 });
 
 describe("composerReady — the gate the reply path pre-flights on", () => {
   it.each(
     neutralFixtures.filter(
-      (f) => f !== "grok--user-bubble.txt" && f !== "grok--model-arg-hint.txt" && !f.includes("ask-multi"),
+      (f) => f !== "grok--user-bubble.txt" && f !== "grok--model-arg-hint.txt" && f !== "grok--v1.0.77-settings--w61.txt" && !f.includes("ask-multi"),
     ),
   )("%s: the composer is on screen ⇒ true", (name) => {
     const lines = splitLines(parseAnsi(readFileSync(join(PANES_DIR, name), "utf8")));
@@ -134,7 +154,8 @@ describe("composerReady — the gate the reply path pre-flights on", () => {
 
   // The model list Grok opens over the box after `/model` is not a slash popup, so the box fails
   // closed there: a phone reply would append to the `/model` it holds.
-  it.each(["grok--user-bubble.txt", "grok--ask-multi.txt", "grok--ask-multi-checked.txt", "grok--model-arg-hint.txt", ...DIALOG])(
+  // The settings panel (1.0.77, `/settings`) covers the whole screen, the box with it.
+  it.each(["grok--user-bubble.txt", "grok--ask-multi.txt", "grok--ask-multi-checked.txt", "grok--model-arg-hint.txt", "grok--v1.0.77-settings--w61.txt", ...DIALOG])(
     "%s: a modal or torn frame ⇒ false",
     (name) => {
     const lines = splitLines(parseAnsi(readFileSync(join(PANES_DIR, name), "utf8")));

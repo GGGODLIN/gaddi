@@ -4,7 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import {
   channelFor,
   includeAssetsFor,
@@ -15,6 +16,7 @@ import {
   type Channel,
   type ChannelEvidence,
 } from "./vite-icons";
+import { ineffectiveImportError, isForbiddenIneffectiveImport, mainChunkBudgetPlugin } from "./vite-bundle-guard";
 import { mathEnginesPlugin } from "./vite.math";
 import { glyphSetsPlugin, isGlyphChunkModule } from "./vite-glyphs";
 
@@ -45,10 +47,11 @@ if (wildcardDevHost) {
 }
 const allowedHosts = wildcardDevHost ? true : devHosts.length > 0 ? devHosts : undefined;
 
-// `bun run playground` (COLLIE_PLAYGROUND=1) reuses this same Vite dev server on its own port
+// `bun run playground` / `bun run design` (COLLIE_PLAYGROUND=1, bound to `COLLIE_DEV_HOST`, default
+// 127.0.0.1) reuses this same Vite dev server on its own port
 // (5199), but it must never resolve a real Collie instance: no root app, no bridge. This plugin
 // only exists under that flag — normal `bun run dev` keeps the proxy above untouched — and it does
-// two things: bounce `/` and `/index.html` to `/playground.html`, and answer every `/api/*` request
+// two things: bounce `/` and `/index.html` to `/design.html` (the design reference), and answer every `/api/*` request
 // itself (404, before the proxy above ever sees it) so nothing reaches a bridge.
 const playgroundOnlyPlugin: Plugin | null =
   process.env.COLLIE_PLAYGROUND === "1"
@@ -57,7 +60,7 @@ const playgroundOnlyPlugin: Plugin | null =
         configureServer(server) {
           server.middlewares.use((req, res, next) => {
             if (req.url === "/" || req.url === "/index.html") {
-              res.writeHead(302, { Location: "/playground.html" });
+              res.writeHead(302, { Location: "/design.html" });
               res.end();
               return;
             }
@@ -214,8 +217,8 @@ const buildInfoPlugin: Plugin = {
 };
 
 // A release build must ship index.html byte-for-byte unchanged, so this only rewrites the four
-// icon <link> hrefs, and only for index.html — never playground.html, which carries its own
-// -playground links statically instead (see playground.html itself). vite-icons.ts's
+// icon <link> hrefs, and only for index.html — never the dev pages (design.html, playground.html),
+// which carry their own -playground links statically instead (see design.html itself). vite-icons.ts's
 // transformIndexIcons is a no-op on the release channel, so the `if` here is belt-and-braces: it
 // also means the hook never even inspects a file that isn't index.html.
 const channelIconsPlugin: Plugin = {
@@ -247,6 +250,40 @@ function chunkFolder(ids: readonly string[]): string {
   if (ids.length > 0 && ids.every(isGlyphChunkModule)) return "glyphs";
   return "assets";
 }
+
+// THE BUILD TAKES REACT ROUTER'S PRODUCTION FILES. Its package exports map names only
+// `dist/development/` for every condition, so a plain import bundles the development build. The
+// production twin beside it differs by one flag, `ENABLE_DEV_WARNINGS = false`, which lets the minifier
+// drop the console warnings the development build carries. Build only: `vite dev` keeps the warnings.
+// Found through the package's own `package.json` export, so a hoisted install resolves it too.
+//
+// Resolved in `buildStart`, never at module load: loading this file must not need `node_modules`. A real
+// build always has them (cli/build.ts installs both trees first), but `cli/build.test.ts` loads the config
+// from a scratch checkout with stub packages only, to read the build identity it stamps.
+let reactRouterProduction: string | null = null;
+function resolveReactRouterProduction(): string {
+  try {
+    const manifest = createRequire(import.meta.url).resolve("react-router/package.json");
+    return resolve(dirname(manifest), "dist/production/index.mjs");
+  } catch (error) {
+    throw new Error(
+      "The web build needs react-router installed: run `bun install` in web/ first. " +
+        `(${error instanceof Error ? error.message : String(error)})`,
+      { cause: error },
+    );
+  }
+}
+const reactRouterProductionPlugin: Plugin = {
+  name: "collie-react-router-production",
+  apply: "build",
+  enforce: "pre",
+  buildStart() {
+    reactRouterProduction = resolveReactRouterProduction();
+  },
+  resolveId(source) {
+    return source === "react-router" ? reactRouterProduction : null;
+  },
+};
 
 // ADR 0052: ONE BUILD SERVES ANY MOUNT. The shell (index.html) is built ROOT-ABSOLUTE, every
 // reference `/…`, and the bridge resolves it to the mount it was started with when it serves the
@@ -293,12 +330,14 @@ export default defineConfig({
   },
   define: { __BUILD_INFO__: JSON.stringify(BUILD_INFO) },
   plugins: [
+    reactRouterProductionPlugin,
     react(),
     glyphSetsPlugin(import.meta.dirname),
     tailwindcss(),
     mathEnginesPlugin(),
     buildInfoPlugin,
     channelIconsPlugin,
+    mainChunkBudgetPlugin,
     VitePWA({
       // Build the manifest + service worker. We use `injectManifest` (not the default generateSW)
       // because we hand-write the SW in `src/sw.ts` to add `push` + `notificationclick` handlers a
@@ -360,9 +399,10 @@ export default defineConfig({
         // If these are ever re-copied, take the `collie-tile-dark-*` files, not the light ones.
         //
         // A dev build (channel !== "release") swaps this pair for the `-dev` tiles instead
-        // (vite-icons.ts's manifestFor) — same dark polarity, same safe-zone padding, orange
-        // paint, so a dev install is unmistakable next to a release install on the same home
-        // screen without breaking either fact above.
+        // (vite-icons.ts's manifestFor): the same mark and safe-zone padding on an orange ground,
+        // so a dev install is unmistakable next to a release install on the same home screen.
+        // The dark-tile argument above is about the release set; a dev splash shows an orange
+        // tile on the dark `background_color`, which is the point of the channel.
         // vite-icons.ts spells the tile srcs root-absolute; the manifest is relative (above).
         icons: channelManifest.icons.map((icon) => ({
           src: `./${icon.src.replace(/^\/+/, "")}`,
@@ -379,7 +419,9 @@ export default defineConfig({
         // `unicode-range` already makes them lazy (index.css), so precaching them would charge
         // every install for glyphs most herds never paint. src/sw.ts caches them on first use.
         globPatterns: ["**/*.{js,css,html,svg,png,ico,webmanifest}"],
-        // Keep the main chunk in the offline precache without increasing the existing limit.
+        // The main chunk must stay in the precache (M46 offline reading), and Workbox refuses to
+        // build past its 2 MiB default. ADR 0169 holds the size
+        // history and what to do before raising it again.
         maximumFileSizeToCacheInBytes: PRECACHE_MAX_FILE_BYTES,
         // A release build's precache must not carry the dev channel's icons, and neither build
         // may carry the playground's — see vite-icons.ts's precacheIgnoresFor. Without this, a
@@ -425,6 +467,12 @@ export default defineConfig({
     // A couple of small chunks beat one big one on a phone over the tailnet.
     chunkSizeWarningLimit: 900,
     rolldownOptions: {
+      // A lazy module that a static import pulled back into another chunk fails the build, except the
+      // listed ones (vite-bundle-guard.ts, ADR 0169). Every other log goes on as before.
+      onLog(level, log, handler) {
+        if (isForbiddenIneffectiveImport(log)) throw new Error(ineffectiveImportError(log));
+        handler(level, log);
+      },
       output: {
         codeSplitting: {
           groups: [

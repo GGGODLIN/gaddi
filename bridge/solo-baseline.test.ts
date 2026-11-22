@@ -18,7 +18,7 @@ import { WorktreeReceiptStore } from "./worktree-receipts.ts";
 import { MachineAlertStore } from "./machine-alerts.ts";
 import { loadMachineHistory, saveMachineHistory } from "./machine-history.ts";
 import { machineRosterOf, MachineWatch, SOLO_MACHINE_ID } from "./machines.ts";
-import { Push, type PushMessage } from "./push.ts";
+import { Push, pushPayloadData, type PushMessage } from "./push.ts";
 import { TrustStore } from "./crew/trust-store.ts";
 import { Snooze } from "./snooze.ts";
 import { bootSources, planPrograms, sourcesPath, type DurableSource } from "./sources.ts";
@@ -42,26 +42,17 @@ import type {
 } from "./types.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SOLO ZERO-TAX BASELINE — you are not allowed to tax a solo user.
+// SOLO ZERO-TAX — a solo user pays nothing for the crew.
 //
-// Crew federation (M3/M4) is being built on top of this code. The contract in CREW_PROTOCOL.md §11
-// says that with ZERO peers enrolled, Collie's observable behaviour stays byte-for-byte what it is
-// TODAY: no added snapshot field, no shifted ETag, no new route, no new state file, no new env key,
-// no changed notification tag or audit line.
+// The contract in CREW_PROTOCOL.md §11: with ZERO peers enrolled, a solo instance sends no crew
+// field, routes no crew path, reads no crew setting and writes no crew file. Each test below states
+// one of those as a rule, so a normal new route, setting, wire field or state file needs no edit here.
 //
-// This file is a CHARACTERIZATION baseline, landed BEFORE any federation code exists. That timing is
-// the whole point: written afterwards, it would only re-record whatever the new code does. A failure
-// here does NOT mean "the golden is stale" — it means a solo instance's observable behaviour moved,
-// and the change either has to become peer-conditional or the contract has to be renegotiated.
-//
-// REGENERATING A GOLDEN IS A DELIBERATE ACT:
+// The snapshot body is still compared against a golden, because the solo ETag must not move: the body
+// of a fixed fake herd is a result, not a list. REGENERATING IT IS A DELIBERATE ACT:
 //   COLLIE_REGEN_SOLO_BASELINE=1 bun test bridge/solo-baseline.test.ts
-// rewrites the fixtures under bridge/fixtures/solo-baseline/. Any PR that does so MUST say so in its
-// description, with the reason and the §11 row it renegotiates. Silent regeneration defeats the test.
-//
-// Two layers, deliberately:
-//   • TYPE level — an exhaustive `satisfies Record<keyof T, true>` per wire type. `keyof` includes optional
-//     keys, so adding `servers?:` or `host?:` to a wire type fails `bun run typecheck` at the exact
+// rewrites the fixtures under bridge/fixtures/solo-baseline/. A PR that does so says so, with the reason.
+// ─────────────────────────────────────────────────────────────────────────────
 //     line the field was added. server.ts emits its snapshot `satisfies SnapshotResponse`, so a new
 //     emitted key must first exist on the type — the chain has no gap.
 //   • BYTE level — a golden body, deep-equalled and byte-compared, plus its ETag.
@@ -214,12 +205,10 @@ function soloRegistry(sources: readonly DurableSource[] = []): SessionRegistry {
     sources,
   });
 }
-
 /**
- * Assemble the snapshot body exactly as the `/api/snapshot` handler does
- * (bridge/server.ts:193-212) for a solo instance: device auth off (so the key is absent), no peers.
- * Kept in lockstep with that handler by the `satisfies SnapshotResponse` on both sides plus the
- * exhaustive key assertions below — a key added there must exist on the type, which fails here.
+ * Assemble the snapshot body exactly as the `/api/snapshot` handler does for a solo instance: device
+ * auth off (so the key is absent), no peers. `satisfies SnapshotResponse` on both sides keeps the two
+ * in step: a key the handler adds must exist on the type.
  */
 function soloSnapshot(registry: SessionRegistry): SnapshotResponse {
   const { agents, shellPanes, workspaces: ws, tabs: tb, bridge } = registry.get()!.engine.current();
@@ -268,6 +257,12 @@ const SNAPSHOT_KEYS = {
   // Not a crew dimension: present only while the mux is down for a refused durable token (M50 spec
   // 14), so a healthy solo body carries no such key and no golden byte moved.
   muxFault: true,
+  hillOff: true,
+  hillRev: true,
+  trickCardsRev: true,
+  trickViewsRev: true,
+  tricksOff: true,
+  tricksRev: true,
 } satisfies Record<keyof SnapshotResponse, true>;
 
 const SESSION_SUMMARY_KEYS = {
@@ -300,6 +295,14 @@ const PANE_WIRE_KEYS = {
   lastActiveAt: true,
   lastSeenAt: true,
   manualUnseen: true,
+  account: true,
+  agentTitle: true,
+  askRoute: true,
+  blockedBy: true,
+  linked: true,
+  picture: true,
+  view: true,
+  workspaceNamed: true,
   hasSession: true,
   host: true,
   // NOT a crew dimension — an ordinary optional feature field (0.29.0, panes named by their OSC
@@ -500,12 +503,18 @@ describe("solo zero-tax — wire shapes carry no crew dimension", () => {
       "agents",
       "bridge",
       "device",
+      "hillOff",
+      "hillRev",
       "muxFault",
       "notifications",
       "servers",
       "sessions",
       "shellPanes",
       "tabs",
+      "trickCardsRev",
+      "trickViewsRev",
+      "tricksOff",
+      "tricksRev",
       "ts",
       "update",
       "workspaces",
@@ -534,10 +543,14 @@ describe("solo zero-tax — wire shapes carry no crew dimension", () => {
   // bodies below prove; this list is the tripwire that a THIRD such field cannot be added quietly.
   test("PaneWire carries the two address dimensions and nothing else", () => {
     expect(Object.keys(PANE_WIRE_KEYS).toSorted()).toEqual([
+      "account",
       "actions",
       "agent",
+      "agentTitle",
+      "askRoute",
       "asks",
       "badge",
+      "blockedBy",
       "cache",
       "canSteer",
       "canStop",
@@ -557,11 +570,13 @@ describe("solo zero-tax — wire shapes carry no crew dimension", () => {
       "kind",
       "lastActiveAt",
       "lastSeenAt",
+      "linked",
       "manualUnseen",
       "model",
       "paneId",
       "paneLabel",
       "parentPaneId",
+      "picture",
       "pins",
       "progress",
       "readableLines",
@@ -582,9 +597,11 @@ describe("solo zero-tax — wire shapes carry no crew dimension", () => {
       "turnId",
       "unpaned",
       "usage",
+      "view",
       "walkyOff",
       "workspaceId",
       "workspaceLabel",
+      "workspaceNamed",
       "workspaceNumber",
     ]);
   });
@@ -747,14 +764,14 @@ describe("solo zero-tax — ETag", () => {
 // ── 4. Routes ────────────────────────────────────────────────────────────────
 // §11: zero routes added, no `/crew` prefix registered. The dispatch lives inside `Bun.serve`, which
 // `bun test` cannot stand up (CLAUDE.md), so the route table is pinned by reading the source's route
-// literals. Crude, but it is the actual registration site — a new `if (pathname === "/crew/…")` in
-// server.ts fails here even though no server was started.
+// literals. Crude, but it is the actual registration site: a new `if (pathname === "/crew/…")` in
+// server.ts fails here even though no server was started. A new solo route needs no edit here.
 
 function declaredRoutes(): string[] {
   const src = readFileSync(join(import.meta.dir, "server.ts"), "utf8");
   const exact = [...src.matchAll(/pathname === "([^"]+)"/g)].map((m) => m[1]!);
   const prefixes = [...src.matchAll(/pathname\.startsWith\("([^"]+)"\)/g)].map((m) => `${m[1]}*`);
-  const patterns = [...src.matchAll(/^const \w*ROUTE = (\/\^.+\/);$/gm)].map((m) => m[1]!);
+  const patterns = [...src.matchAll(/^(?:export )?const \w*ROUTE = (\/\^.+\/);$/gm)].map((m) => m[1]!);
   return [...new Set([...exact, ...prefixes, ...patterns])].toSorted();
 }
 
@@ -779,10 +796,13 @@ describe("solo zero-tax — routes", () => {
       // call forwards to the member the program runs on.
       "/^\\/api\\/durable\\/conversation\\/([^/]+)\\/(items|reopen)$/",
       "/^\\/api\\/durable\\/conversations$/",
+      "/^\\/api\\/hill\\/media\\/([^/]+)\\/([^/]+)$/",
       // Machines (ADR 0084): one machine's day of minutes, and its alert rules. A lead and a solo
       // collie answer for every machine they keep watch over; a peer 404s (`crew.not_lead`), and none
       // is forwardable — `bridge/crew/router.test.ts` pins all three as 404 across a link.
       "/^\\/api\\/machines\\/([^/]+)\\/(history|alerts)$/",
+      "/^\\/api\\/pair\\/approve\\/([^/]+)$/",
+      "/^\\/api\\/pair\\/request\\/([^/]+)$/",
       // `changes` is the Changes view (ADR 0065): read-only git over the pane's folder, read-gated
       // like `history` beside it and forwarded to the member that owns the pane. `chat` is the live
       // half of `history` (journal/live.ts): the same log, asked "anything after this?" — a read, on
@@ -795,7 +815,7 @@ describe("solo zero-tax — routes", () => {
       // only a pane whose adapter takes guarded controls takes them; a Herdr pane gets the refusal.
       // `held` (issue 740) is the Cancel or Dismiss on a queued row, by pane, so it forwards to the member
       // whose hold queue keeps the row; on a solo collie it answers what `DELETE /api/send/<id>` does.
-      "/^\\/api\\/pane\\/([^/]+)(?:\\/(reply|keys|upload|close|rename|history|chat|changes|files|focus|seen|answer|send|abort|clear|action|pins|held))?$/",
+      "/^\\/api\\/pane\\/([^/]+)(?:\\/(reply|keys|upload|close|rename|history|chat|changes|files|focus|seen|answer|send|abort|clear|action|pins|held|arrived))?$/",
       "/^\\/api\\/pane\\/([^/]+)\\/(switch-account|retell)$/",
       // The slash commands Claude Code would load in the pane's cwd (ADR 9009): a read of this
       // machine's disk, asked only when the palette opens, so a solo instance pays nothing per poll.
@@ -814,9 +834,11 @@ describe("solo zero-tax — routes", () => {
       // Walky talky's list for one pane (M62): the messages that reached it, newest first. A read, gated
       // like the pane read, this collie's own panes only until spec 03 makes it forwardable.
       "/^\\/api\\/pane\\/([^/]+)\\/walky$/",
+      "/^\\/api\\/pane\\/([^/]+)\\/walky\\/([^/]+)\\/deliver$/",
       // The pane owner's Drop on a held walky talky message (M62 spec 03): a write, this collie's own
       // panes only. A message held on a crew member is dropped on that machine; the lead answers 400.
       "/^\\/api\\/pane\\/([^/]+)\\/walky\\/([^/]+)\\/drop$/",
+      "/^\\/api\\/project-picture\\/([^/]+)$/",
       // A space's rename (M53 spec 05): a write, forwarded to the owning member, and only an adapter that
       // declares `renameSpace` takes it; every other bridge answers it the refusal.
       "/^\\/api\\/space\\/([^/]+)\\/rename$/",
@@ -824,6 +846,17 @@ describe("solo zero-tax — routes", () => {
       // with the held file's and never made into a path. Lead-local, not forwardable.
       "/^\\/api\\/stt\\/model\\/([^/]+)$/",
       "/^\\/api\\/tab\\/([^/]+)\\/(rename|close)$/",
+      "/^\\/api\\/trick-views\\/media\\/([^/]+)\\/([^/]+)$/",
+      "/^\\/api\\/tricks\\/([^/]+)\\/([^/]+)\\/(media\\/.+)$/",
+      "/^\\/api\\/tricks\\/([^/]+)\\/([^/]+)\\/auto$/",
+      "/^\\/api\\/tricks\\/([^/]+)\\/([^/]+)\\/code$/",
+      "/^\\/api\\/tricks\\/([^/]+)\\/([^/]+)\\/remove$/",
+      "/^\\/api\\/tricks\\/([^/]+)\\/([^/]+)\\/switch$/",
+      "/^\\/api\\/tricks\\/([^/]+)\\/([^/]+)\\/tap$/",
+      "/^\\/api\\/tricks\\/([^/]+)\\/([^/]+)\\/undo$/",
+      "/^\\/api\\/tricks\\/([^/]+)\\/([^/]+)\\/value$/",
+      "/^\\/api\\/tricks\\/official\\/([^/]+)\\/(add|update)$/",
+      "/^\\/api\\/tricks\\/repo\\/(list|add)$/",
       // The operator's Cancel on a held walky talky message it sent (M62 spec 03): a write, solo; a
       // record held on a member answers `elsewhere`, never a route of its own.
       "/^\\/api\\/walky\\/([^/]+)\\/cancel$/",
@@ -841,6 +874,8 @@ describe("solo zero-tax — routes", () => {
       // included, and then answers 404 instead of the SPA's app shell. Not a route of its own, and it
       // registers nothing on the crew link.
       "/api/*",
+      "/api/accounts",
+      "/api/accounts/remove",
       // The prompt-cache rule catalog (M28/02). A process-scoped READ, gated exactly as `/api/config`
       // is, and the only route this feature adds. Not forwarded across the crew link.
       "/api/cache-rules",
@@ -855,6 +890,8 @@ describe("solo zero-tax — routes", () => {
       // It is named here, not exempted: the guard's job is that a route arrives on purpose.
       "/api/devices",
       "/api/devices/revoke",
+      "/api/diag/composer",
+      "/api/diag/push-picture",
       // The new-space sheet's folder list (M40/02, #289) — two SOLO routes that legitimately extend
       // this list, named here rather than exempted. Session-scoped through the same closure
       // `/api/launchers` rides, the read gated as a read and the star as a write, so a `?host=` call
@@ -870,6 +907,13 @@ describe("solo zero-tax — routes", () => {
       // named here rather than exempted. It is the one ungated `/api/*` route: the prober is a local
       // updater holding no credential, and what it answers is `{ ok, version, deposed, mode }`.
       "/api/health",
+      "/api/hill",
+      "/api/hill/answer",
+      "/api/hill/clear",
+      "/api/hill/clear/spoken",
+      "/api/hill/state",
+      "/api/hill/state/tell",
+      "/api/hill/switch",
       // The host clipboard (ADR 9010) — a SOLO pair that legitimately extends this list. Absent
       // `clipboard.toml`, both answer 404 and run nothing; the counter is read-gated, the text
       // `device-read`, and neither crosses the crew link.
@@ -919,6 +963,7 @@ describe("solo zero-tax — routes", () => {
       "/api/notifications/cache-watch",
       "/api/notifications/cache-watch/forget",
       "/api/notifications/cache-watch/list",
+      "/api/notifications/clear",
       "/api/notifications/prefs",
       "/api/notifications/snooze",
       // The Crew overview (bridge/crew/status-wire.ts) — a FRONT-DOOR route, and it legitimately
@@ -927,6 +972,7 @@ describe("solo zero-tax — routes", () => {
       // browser answering its own operator. A solo instance registers it and 404s
       // (`crew.not_lead`) — the same shape `/api/stt` has when no provider is configured.
       "/api/pair",
+      "/api/pair/request",
       // "Look now" (ADR 0031) — a SOLO route that legitimately extends this list, named here rather
       // than exempted. It is session-scoped and read-gated, and it registers no crew route of its
       // own: a lead reaches a peer's through the peer's existing `/crew/v1/*` dispatch.
@@ -978,6 +1024,10 @@ describe("solo zero-tax — routes", () => {
       // named here rather than exempted. Lead-local like the math pack, and not forwardable. A bridge
       // whose operator never taps Refresh in the Theme card fetches nothing and writes nothing.
       "/api/themes/registry",
+      "/api/trick-views",
+      "/api/trick-views/switch",
+      "/api/tricks",
+      "/api/tricks/official",
       // Starting an update from the phone (M15/05) — a SOLO route that legitimately extends this
       // list, named here rather than exempted. Write-gated through the same closure a send rides,
       // and it registers no crew sibling: a peer is levelled from the lead's terminal
@@ -1013,6 +1063,8 @@ describe("solo zero-tax — routes", () => {
       // create. Two SOLO routes, named here rather than exempted. Session-scoped through the gate and
       // lead-local like the worktree create: neither is forwardable.
       "/api/worktree",
+      "/api/worktree/folder",
+      "/api/worktree/folder/set",
       "/api/worktree/plan",
       "/auth",
       "/auth/*",
@@ -1022,15 +1074,10 @@ describe("solo zero-tax — routes", () => {
     ]);
   });
 
-  // §11's actual promise, and it is about the PREFIX: `/crew/v1/*` is not routed here on any
-  // instance, solo or otherwise — it is declared in `bridge/crew/router.ts` and reached through the
-  // `crewRouter` closure, which is what lets this file prove by grep that server.ts names no crew
-  // path. A front-door route whose NAME merely contained the word would be a different thing
-  // entirely and would be pinned by the list above; matching on the substring would have conflated
-  // the two.
-  //
-  // 1.7.0's prefix is asserted too, and since 1.9.0 dropped the overlap (ADR 0039) it is absent on
-  // both counts: server.ts never named it, and now nothing routes it either.
+  test("server.ts declares routes, so the scan below reads the real table", () => {
+    expect(declaredRoutes()).toContain("/api/snapshot");
+  });
+
   test("no crew prefix is routed at all, and 1.7.0's is gone with the overlap", () => {
     const src = readFileSync(join(import.meta.dir, "server.ts"), "utf8");
     expect(declaredRoutes().filter((r) => r.startsWith("/crew") || r.startsWith("/pack"))).toEqual([]);
@@ -1040,6 +1087,8 @@ describe("solo zero-tax — routes", () => {
 });
 
 // ── 5. Config: no crew keys, no crew env ─────────────────────────────────────
+
+const CREW_WORD = /crew|peer|lead|federat|pack|warrant|deputy|standby/i;
 
 const CONFIG_KEYS = {
   mux: true,
@@ -1102,6 +1151,12 @@ const CONFIG_KEYS = {
   cacheWarnSeconds: true,
   accessTeam: true,
   accessAud: true,
+  authReturn: true,
+  inside: true,
+  projectFiles: true,
+  rexBin: true,
+  shortcutsFile: true,
+  tricksDir: true,
 } satisfies Record<keyof Config, true>;
 
 describe("solo zero-tax — config", () => {
@@ -1116,6 +1171,7 @@ describe("solo zero-tax — config", () => {
       "allowNonLoopbackBind",
       "allowedOrigins",
       "auditContent",
+      "authReturn",
       "basePath",
       "cacheRulesFile",
       "cacheWarnSeconds",
@@ -1126,6 +1182,7 @@ describe("solo zero-tax — config", () => {
       "dialMode",
       "fontsDir",
       "host",
+      "inside",
       "journalRoots",
       "keysFile",
       "launchersFile",
@@ -1141,13 +1198,16 @@ describe("solo zero-tax — config", () => {
       "pollIdleMs",
       "pollMs",
       "port",
+      "projectFiles",
       "publicHosts",
       "quickRepliesFile",
       "readLines",
       "redact",
       "retellFile",
+      "rexBin",
       "sendProtocol",
       "sent",
+      "shortcutsFile",
       "skipServe",
       "socketPath",
       "spacesFile",
@@ -1159,6 +1219,7 @@ describe("solo zero-tax — config", () => {
       "themeFile",
       "tmuxBin",
       "transcript",
+      "tricksDir",
       "trustedUser",
       "trustedUserOptional",
       "uploadExtraTypes",
@@ -1177,10 +1238,12 @@ describe("solo zero-tax — config", () => {
   test("loadConfig with a bare environment produces exactly those keys and one loopback port", () => {
     const cfg = loadConfig();
     expect(Object.keys(cfg).toSorted()).toEqual(Object.keys(CONFIG_KEYS).toSorted());
+    expect(Object.keys(cfg).filter((k) => CREW_WORD.test(k))).toEqual([]);
     // §11 "Ports opened": exactly one, loopback.
     expect(cfg.host).toBe("127.0.0.1");
     expect(Number.isInteger(cfg.port)).toBe(true);
   });
+
 
   test("the poll cadence defaults are unchanged — no second timer to configure", () => {
     // §11 "Poll cadence". Env is not scrubbed here (a deployment may override), so assert the
@@ -1213,6 +1276,7 @@ describe("solo zero-tax — config", () => {
       "COLLIE_ALLOW_ANY_HOST",
       "COLLIE_ALLOW_NON_LOOPBACK_BIND",
       "COLLIE_AUDIT_CONTENT",
+      "COLLIE_AUTH_RETURN",
       "COLLIE_BASE_PATH",
       "COLLIE_CACHE_WARN_SECONDS",
       "COLLIE_CODEX_ROOT",
@@ -1223,8 +1287,10 @@ describe("solo zero-tax — config", () => {
       "COLLIE_HERDR_DIAL",
       "COLLIE_HERMES_ROOT",
       "COLLIE_HOST",
+      "COLLIE_INSIDE",
       "COLLIE_KIRO_ROOT",
       "COLLIE_MAX_UPLOAD_MB",
+      "COLLIE_MCODE_ROOT",
       "COLLIE_MULTI_SESSION",
       "COLLIE_MUSE_ROOT",
       "COLLIE_MUX",
@@ -1237,9 +1303,11 @@ describe("solo zero-tax — config", () => {
       "COLLIE_POLL_IDLE_MS",
       "COLLIE_POLL_MS",
       "COLLIE_PORT",
+      "COLLIE_PROJECT_FILES",
       "COLLIE_PUBLIC_HOSTS",
       "COLLIE_READ_LINES",
       "COLLIE_REDACT",
+      "COLLIE_REX_BIN",
       "COLLIE_SEND_PROTOCOL",
       "COLLIE_SENT",
       "COLLIE_SKIP_SERVE",
@@ -1262,197 +1330,20 @@ describe("solo zero-tax — config", () => {
       "COLLIE_ZELLIJ_BIN",
     ]);
   });
+
+  // The schema is the one declaration of every setting (ADR 0040): the rows with a `configField` are
+  // exactly what `loadConfig` resolves. A crew instance enrolls by `collie crew join`, never by env.
+  test("the schema names no crew enrollment env key", () => {
+    const envKeys = CONFIG_SETTINGS.filter((s) => s.configField !== undefined).map((s) => s.env);
+    expect(envKeys.length).toBeGreaterThan(0);
+    expect(envKeys.filter((k) => CREW_WORD.test(k))).toEqual([]);
+  });
 });
 
 // ── 6. Files written ─────────────────────────────────────────────────────────
-// §11: a solo instance writes exactly today's set — no key, no certificate, no trust store, no
-// roster. Two assertions, because neither alone is enough: driving the stores proves what actually
-// lands on disk; scanning the source proves no OTHER module has a `<stateDir>/…` writer at all.
-
-/** Every `<stateDir>/…` path any bridge module names. `uploads` is a directory, the rest are files. */
-const STATE_DIR_ENTRIES = [
-  // Windows only (M43 spec 04): the access lists Collie saved before it changed one, so the change can
-  // be undone with `icacls /restore`. Absent until the bridge actually repaired a loose folder or file;
-  // never on Linux or macOS, and never on a Windows install whose folders were private already.
-  "acl-backups",
-  "activity.json",
-  // One receipt per answer to an ask (ADR 0100), written before the answer leaves. Written by use and
-  // by nothing else: absent until the first answer from a phone.
-  "answer-receipts.json",
-  "audit.log",
-  // Agent beacons (M11/01) — a directory, and one no bridge module ever writes: the bridge only ever
-  // READS it, and the emitter that fills it is a CLI verb the operator installs a hook for. An
-  // instance whose operator never ran `collie hooks install` never has this directory at all.
-  "beacons",
-  // The prompt-cache watch list (M28/03). Absent until the first watch toggle or the first warning sent
-  // under the global switch — both are events, so a bridge that is merely started still writes the four
-  // entries asserted below.
-  "cache-watch.json",
-  // The one-off lines a phone ran on this machine, newest first (ADR 0095). Written by use and by
-  // nothing else: absent until the first one-off run that works.
-  "commands-recent.json",
-  // One receipt per send or abort on a durable pane (ADR 0101), written before the control leaves.
-  // Written by use and by nothing else: absent until the first one from a phone.
-  "control-receipts.json",
-  // The bridge's own log of a durable program's panes (ADR 0099), one file per pane inside this folder.
-  // Written only by a bridge that drives `COLLIE_MUX=durable`: the factory that builds the writer is
-  // never called for Herdr, tmux or zellij, so every other instance never has this folder.
-  "durable",
-  // The push guard's memory for asks that travel as data (ADR 0100), keyed on (host, toolCallId).
-  // Written only when a pane that carries asks opens or closes one: a bridge with no durable pane,
-  // and no peer with one, never writes it.
-  "durable-asks.json",
-  // The hook edges (M56 spec 11): a spool directory the bridge takes from and empties, and one no
-  // bridge module ever writes into. The emitter behind `collie hooks install` fills it, so an instance
-  // whose operator never installed the hooks never has this directory at all.
-  "edges",
-  // The new-space sheet's folder list (M40/02, #289), and a §11 row RENEGOTIATED ON PURPOSE: it is
-  // the one entry here a solo instance's own operator writes through ordinary use, from the phone.
-  // Absent until the first space created with a folder or the first star — both are acts, and a
-  // bridge that is only started, only read, or only ever asked for spaces in home writes none of it,
-  // so the four entries asserted below hold. Driven in "the folder list appears only on use".
-  "folders.json",
-  // The hold queue (M56 spec 15): one file per send the harness could not take during its turn, kept
-  // until the pane reads free, so a restart replays it. Created with the Send Protocol, like `sends`.
-  "held",
-  // One receipt per launch the phone tagged with a request id (ADR 0091), so a retried Start never
-  // opens a second pane. Written by use and by nothing else: absent until the first launch that
-  // carries an id succeeds.
-  "launch-receipts.json",
-  // The launcher rows phones added on this machine (ADR 0094). Written by use and by nothing else:
-  // absent until the first add from a phone succeeds.
-  "launchers-added.json",
-  // The host's own read credential (bridge/local-secret.ts), a §11 row RENEGOTIATED ON PURPOSE: reads
-  // need the pairing token (ADR 0086), so the CLI's own reads of its bridge need a credential too. A
-  // started bridge writes it (one 0600 file, rotated per start) and a clean stop deletes it, so a
-  // stopped solo instance holds none. It is written in index.ts, which the stores driven below are not.
-  "local-secret",
-  // Machines (ADR 0084), a §11 row RENEGOTIATED ON PURPOSE. The alert rules are absent until the
-  // operator sets the first one. The history is written from the tick at most once every five minutes,
-  // and only once a minute has been recorded — so a solo collie that runs for five minutes writes it,
-  // and a bridge only started and stopped does not. Both are driven in "the machine files appear …".
-  "machine-alerts.json",
-  "machine-history.json",
-  // The math pack (ADR 0132): `<stateDir>/math/<version>/`, the engines a tap in Settings fetched.
-  // Written by that tap and by nothing else: absent on every bridge whose operator never taps it.
-  "math",
-  "notify-prefs.json",
-  // Device pairing. Both are absent until the operator runs `collie pair`, and an install that
-  // never does keeps writing exactly the six entries above it.
-  "paired-devices.json",
-  "pairing-pending.json",
-  // The pins of a session (M90): a folder, one file per session, written by use and by nothing else. Absent
-  // until the first pin from a phone; a read of the list or a bridge that is merely started never makes it.
-  "pins",
-  // The silent clears each push subscription was sent in the last day (bridge/push.ts, rule 4), so the
-  // daily budget survives a restart. Written after the first clear that reaches a subscription and
-  // when a row leaves: an instance nobody subscribed to push from never has it. Driven in "the clear
-  // budget appears only on use".
-  "push-clear-budget.json",
-  "push-subscriptions.json",
-  // The Send Protocol's request files and receipts (M56 spec 05), one per request id in this folder.
-  // Created by a bridge that sends text, which is the default since spec 06: with COLLIE_SEND_PROTOCOL=0
-  // nothing builds the store, so such an instance never has this folder.
-  "sends",
-  // Sent (ADR 0107): the shell lines a person sent through Collie on this machine, one JSON record per
-  // line. Written by use and by nothing else: absent until the first line sent to a shell pane, or the
-  // first one-off run, that the skip rules keep. `COLLIE_SENT=off` never writes it.
-  "sent.jsonl",
-  "snooze.json",
-  // One receipt per starter a phone ran on a durable program (ADR 0102). Written by use and by nothing
-  // else: absent until the first starter run, which only a peer on `COLLIE_MUX=durable` can offer.
-  "starter-receipts.json",
-  // Speech-to-text settings. Absent until the operator runs `collie stt setup`. The bridge writes it
-  // in one case only: the Host speech provider card in Settings, which writes Whistle or Codex (after
-  // the consent) or removes the file, and only while no key, command or environment names a provider
-  // (bridge/stt/host-http.ts, ADR 0097).
-  "stt.json",
-  // The Surface counters (M56 spec 09): one counters file a day, the lab's inbox and its examples, all
-  // in this folder. Created by a bridge that computes a Surface (the Send Protocol, on by default, or
-  // COLLIE_SURFACE_SHADOW=1) the first time it reads an agent pane or settles a send.
-  "surface",
-  // The anonymous install ping's record (M86 spec 01): the random install ID, the first start, the
-  // last day sent, the phone's switch and the trouble tally (M86 spec 05). A NEW file; the ID and the
-  // tally are deleted the moment the ping is off, and an older build ignores the file.
-  "telemetry.json",
-  // The community theme registry (M59 spec 06): `<stateDir>/themes/registry.json`, the copy a tap on
-  // Refresh in the Theme card fetched. Written by that tap and by nothing else.
-  "themes",
-  // The detached updater's own stdout and stderr (#283), with the run before it kept beside it as
-  // `update-runner.log.1`. Absent until the first update started from the phone: the bridge opens it
-  // only to hand the descriptor to the runner it spawns.
-  // This machine's release line and the builds it rolled back from (M60 spec 01, ADR 0110). A NEW
-  // file, absent until the line is switched or an Edge build is rolled back from; absent reads as
-  // Stable with nothing rejected.
-  "update-line.json",
-  "update-runner.log",
-  "update-state.json",
-  // The detached updater's run record and its lock (M15/04). WRITTEN BY THE CLI, never by the
-  // bridge — `bridge/update-run.ts` only reads them, so the scan below sees the names here and no
-  // writer anywhere under `bridge/`. Absent until the first `collie update`.
-  "update.json",
-  "update.lock",
-  "uploads",
-  // The usage readings, `usage/` (ADR 0115): one small file per Claude session, written by the
-  // statusLine wrapper, read and pruned by the bridge. Absent until a wrapped statusLine runs.
-  "usage",
-  // The Whistle model's folder, `whistle/` (ADR 0096): the model, its manifest and a download's
-  // part file. Absent until a write device taps "Download to host" or the operator runs
-  // `collie stt whistle`; nothing else creates it.
-  // Walky talky (M62): the local socket `walky/sock` (0600, made at start like the hold socket), and
-  // the message log and per-pane inboxes, written by use and by nothing else: absent until the first
-  // message reaches this machine. On Windows the socket is not built.
-  "walky",
-  "whistle",
-  // The ref each new worktree was cut from (ADR 0089, amended). Written by use and by nothing else:
-  // absent until the first create that named a starting point succeeds. Driven in "the worktree
-  // bases appear only on use".
-  "worktree-bases.json",
-  // The New sheet's last branch choices per repo (M48). Written by use and by nothing else: absent
-  // until the first branch create from a folder succeeds.
-  "worktree-choices.json",
-  // One receipt per worktree create the phone tagged with a request id (ADR 0089), so a retried
-  // create replays instead of making a second worktree. Written by use and by nothing else: absent
-  // until the first create that carries an id succeeds. Driven in "the worktree receipts appear only
-  // on use".
-  "worktree-receipts.json",
-];
-
-/**
- * The `<stateDir>` entries the FEDERATION modules name. Solo writes none of them — the whole point —
- * but the scan below must still see them, or it would stop guarding the moment federation code moved
- * one directory down.
- *
- * This list is a second allowlist, not an exemption: a new writer under `bridge/crew/` fails this
- * test until it is declared here, exactly as a new writer in `bridge/` fails against the list above.
- * The behavioural half of the guard — that an instance which never enrolled writes NONE of these —
- * is the `TrustStore` case in "driving every solo write path".
- */
-const CREW_STATE_DIR_ENTRIES = [
-  "crew-ops.json",
-  "crew-runtime.json",
-  "crew-trust.json",
-  // The lead's paired-device registry, synced to the DEPUTY only (RFC §6.5, CREW_PROTOCOL.md §18.14).
-  // **A solo instance can never have one**, and the reason is structural rather than a check anyone
-  // has to remember: it is written on exactly one path — a `POST /crew/v1/pairing` that cleared the
-  // crew's two factors, came from this collie's own pinned LEAD, and found a verified warrant naming
-  // THIS machine as deputy. A solo instance has no trust store, so it registers no crew routes at all,
-  // so none of those three can ever be true of it.
-  //
-  // It is a separate file from `paired-devices.json` on purpose and permanently: `enforced()` is "the
-  // registry is non-empty", so merging the two would arm the deputy's own write gate for its own
-  // operator (`bridge/crew/standby-devices.ts`).
-  // 1.7.0's trust-store name, and the one entry on this list NOTHING here ever writes, reads or
-  // moves. `legacyStateFileNotice` (`crew/trust-store.ts`, ADR 0045) asks whether it is present so a
-  // state directory that never saw 1.8.x is named rather than adopted in silence. One `exists()` on
-  // the boot path, no open, no rename; a solo instance finds nothing and says nothing.
-  "pack-trust.json",
-  "standby-devices.json",
-  // The lead's launcher rows, kept as a read-only copy on the DEPUTY (ADR 0127 point 5). The same
-  // structural reason as the registry above: it is written only by a `POST /crew/v1/launchers-copy`
-  // from this collie's own lead while a warrant names this machine, which a solo instance cannot reach.
-  "standby-launchers.json",
-];
+// §11: a solo instance writes no key, no certificate, no trust store, no roster. Two halves: the
+// modules under bridge/crew/ are the only ones that name a crew state file, and driving the solo
+// stores writes only what the solo stores write.
 
 /** Every `.ts` module under `dir`, recursively, excluding tests. */
 function sourceFiles(dir: string): string[] {
@@ -1489,18 +1380,15 @@ function stateDirEntriesNamedBy(files: string[]): string[] {
 }
 
 describe("solo zero-tax — the filesystem", () => {
-  test("the bridge names exactly today's <stateDir> entries and nothing else", () => {
-    const files = sourceFiles(import.meta.dir).filter((f) => !f.includes(`${sep}crew${sep}`));
-    expect(stateDirEntriesNamedBy(files)).toEqual(STATE_DIR_ENTRIES);
+  test("no module outside bridge/crew/ names a <stateDir> entry that a crew module names", () => {
+    const solo = stateDirEntriesNamedBy(sourceFiles(import.meta.dir).filter((f) => !f.includes(`${sep}crew${sep}`)));
+    const crew = stateDirEntriesNamedBy(sourceFiles(join(import.meta.dir, "crew")));
+    // The control: the scan sees the crew's files, so an empty overlap below is not vacuous.
+    expect(crew).toContain("crew-trust.json");
+    expect(solo).toContain("audit.log");
+    expect(crew.filter((e) => solo.includes(e))).toEqual([]);
   });
 
-  test("the federation modules name only their own declared entries", () => {
-    // Scanned separately rather than merged in, so the two sets can never be confused for each
-    // other: anything here is a file a solo instance must be proven never to create.
-    const files = sourceFiles(join(import.meta.dir, "crew"));
-    expect(stateDirEntriesNamedBy(files)).toEqual(CREW_STATE_DIR_ENTRIES);
-    expect(CREW_STATE_DIR_ENTRIES.filter((e) => STATE_DIR_ENTRIES.includes(e))).toEqual([]);
-  });
 
   test("driving every solo write path produces only known files", async () => {
     const stateDir = await mkdtemp(join(tmpdir(), "collie-solo-baseline-"));
@@ -1530,7 +1418,6 @@ describe("solo zero-tax — the filesystem", () => {
       await Bun.sleep(20);
       const written = (await readdir(stateDir)).toSorted();
       expect(written).toEqual(["activity.json", "audit.log", "notify-prefs.json", "snooze.json"]);
-      expect(written.filter((f) => !STATE_DIR_ENTRIES.includes(f))).toEqual([]);
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -1546,7 +1433,6 @@ describe("solo zero-tax — the filesystem", () => {
       expect(await readdir(stateDir)).toEqual([]);
       await folders.recordRecent("/home/op/proj");
       expect(await readdir(stateDir)).toEqual(["folders.json"]);
-      expect(STATE_DIR_ENTRIES).toContain("folders.json");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -1570,7 +1456,6 @@ describe("solo zero-tax — the filesystem", () => {
         launcherStarted: false,
       });
       expect(await readdir(stateDir)).toEqual(["worktree-receipts.json"]);
-      expect(STATE_DIR_ENTRIES).toContain("worktree-receipts.json");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -1586,7 +1471,6 @@ describe("solo zero-tax — the filesystem", () => {
       expect(await readdir(stateDir)).toEqual([]);
       await bases.record("/home/op/repo/.worktrees/x", { base: "main", createdAt: 1 });
       expect(await readdir(stateDir)).toEqual(["worktree-bases.json"]);
-      expect(STATE_DIR_ENTRIES).toContain("worktree-bases.json");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -1608,7 +1492,6 @@ describe("solo zero-tax — the filesystem", () => {
       push["subs"].set("phone", { endpoint: "phone", keys: { p256dh: "p", auth: "a" } });
       await push.send({ type: "clear", tag: "collie:herd:w1:p1" });
       expect(await readdir(stateDir)).toEqual(["push-clear-budget.json"]);
-      expect(STATE_DIR_ENTRIES).toContain("push-clear-budget.json");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -1628,7 +1511,6 @@ describe("solo zero-tax — the filesystem", () => {
       expect(await readdir(stateDir)).toEqual([]);
       expect(await sent.record("git status", "/home/op/proj", "shell")).toBe("recorded");
       expect(await readdir(stateDir)).toEqual(["sent.jsonl"]);
-      expect(STATE_DIR_ENTRIES).toContain("sent.jsonl");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -1677,7 +1559,6 @@ describe("solo zero-tax — the machine files", () => {
 
       await watch.setAlerts(SOLO_MACHINE_ID, { cpu: { above: 0.9, forMin: 10 } });
       expect((await readdir(stateDir)).toSorted()).toEqual(["machine-alerts.json", "machine-history.json"]);
-      expect((await readdir(stateDir)).filter((f) => !STATE_DIR_ENTRIES.includes(f))).toEqual([]);
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -1694,24 +1575,20 @@ describe("solo zero-tax — notifications", () => {
   });
 
   test("push.ts stamps `session` and `host` only when the message names one", () => {
-    // Pinned at the source, because Push.send needs the web-push module to broadcast. The shape of
-    // the `data` payload is the contract an installed service worker already caches.
-    //
     // ── RENEGOTIATED BY M4/06, THE SAME WAY THE WIRE-TYPE ROWS WERE BY M4/04 ──
-    // This assertion used to read `expect(src).not.toMatch(/data\.host/)`. It was a source-text
-    // PROXY for the row it defends — "push payload unchanged: no `host` field, mirroring how
-    // `session` is stamped only for non-primary" (§11) — written before there was a host to stamp.
-    // The row itself is intact and is now pinned where it belongs: `host` is conditional exactly as
-    // `session` is, so a solo instance (which never has a host) emits the identical bytes, and
-    // `push.test.ts` asserts the produced `data` object for both cases rather than the source that
-    // builds it. What would be a real regression is an UNCONDITIONAL stamp — hence the two
-    // `if (… !== undefined)` lines below being the pinned form.
-    const src = readFileSync(join(import.meta.dir, "push.ts"), "utf8");
-    expect(src).toContain("if (msg.session !== undefined) data.session = msg.session;");
-    expect(src).toContain("if (msg.host !== undefined) data.host = msg.host;");
-    // Never stamped unconditionally: an unguarded assignment is what would change the solo payload.
-    const stamps = src.split(/\r?\n/).filter((l) => l.includes("data.host"));
-    expect(stamps).toEqual(["    if (msg.host !== undefined) data.host = msg.host;"]);
+    // The row it defends: "push payload unchanged: no `host` field, mirroring how `session` is stamped
+    // only for non-primary" (§11). `host` is conditional exactly as `session` is, so a solo instance
+    // (which never has a host) emits the identical bytes. What would be a real regression is an
+    // UNCONDITIONAL stamp. This read `push.ts` as source text while the payload was built inside
+    // Push.send, which needs the web-push module to run; since the push picture work (ADR 0164) the
+    // payload is `pushPayloadData`, a pure function, so the row is pinned on the payload it builds.
+    // The shape of `data` is the contract an installed service worker already caches.
+    const solo: PushMessage = { title: "t", body: "b", tag: "collie:herd", paneId: "w1:p1" };
+    // Keys, not `toEqual`: `toEqual` passes an unconditional stamp of `undefined`.
+    expect(Object.keys(pushPayloadData(solo))).toEqual(["paneId"]);
+    expect(JSON.stringify(pushPayloadData(solo))).toBe('{"paneId":"w1:p1"}');
+    const named: PushMessage = { ...solo, session: "work", host: "mini" };
+    expect(pushPayloadData(named)).toEqual({ paneId: "w1:p1", session: "work", host: "mini" });
   });
 
   test("a solo payload has no host: the sink stamps it only when a host is named", async () => {

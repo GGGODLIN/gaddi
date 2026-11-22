@@ -15,8 +15,7 @@
 // Conservative: the whole shape has to match at the tail or the buffer is returned untouched (same
 // reference). Pure; no pane access, no network.
 
-import type { AnsiSegment } from "../../ansi";
-import type { StyledLine } from "../../blocks";
+import { sliceStyledLine, type StyledLine } from "../../blocks";
 import {
   composerInnerText,
   composerPromptText,
@@ -220,28 +219,6 @@ export function stripChrome(lines: StyledLine[]): StyledLine[] {
 }
 
 /**
- * Slice `line.segments` to the `[start, end)` range of the JOINED (rstripped) line text, keeping
- * each surviving piece's original SGR. Indices come from `composerStatusSpan`, which classifies the
- * same rstripped string locateComposer already walked.
- */
-function sliceStyledLine(line: StyledLine, start: number, end: number): StyledLine {
-  const out: AnsiSegment[] = [];
-  let i = 0;
-  for (const seg of line.segments) {
-    const segStart = i;
-    const segEnd = i + seg.text.length;
-    i = segEnd;
-    if (segEnd <= start || segStart >= end) continue;
-    const from = Math.max(0, start - segStart);
-    const to = Math.min(seg.text.length, end - segStart);
-    const text = seg.text.slice(from, to);
-    if (text.length === 0) continue;
-    out.push({ ...seg, text });
-  }
-  return { segments: out };
-}
-
-/**
  * Grok's statusline — display name, optional effort, optional permission mode — painted INTO the
  * bottom border. stripChrome peels that border off the mirror, so this re-surfaces it as app chrome.
  *
@@ -285,6 +262,10 @@ function draftLineText(line: StyledLine): string {
 // offered the hint back as a terminal draft to take over. Only that shape, in that grey, as the
 // row's last text, so the same words typed by the user (typed-text colour) stay in the draft.
 const ARG_HINT = /^(?:<[^<>]+>|\[[^[\]]+\])(?:\s+(?:<[^<>]+>|\[[^[\]]+\]))*$/;
+// Grok Build 1.0.77 paints the rest of the highlighted command right after a partly typed one in
+// the same grey (`/stat` typed, `usline` painted; harness lab 2026-11-16). Only a run of word
+// characters that starts at the typed text's last character, so a typed word stays in the draft.
+const GHOST_TAIL = /^[A-Za-z0-9_-]+$/;
 
 function withoutArgumentHint(line: StyledLine, text: string): string {
   let offset = 0;
@@ -293,7 +274,7 @@ function withoutArgumentHint(line: StyledLine, text: string): string {
     const body = segment.text.trim();
     if (body !== "" && body !== "│") {
       hint =
-        segment.style.color === "rgb(108,108,108)" && ARG_HINT.test(body)
+        segment.style.color === "rgb(108,108,108)" && (ARG_HINT.test(body) || (GHOST_TAIL.test(body) && segment.text.startsWith(body) && offset > 0 && !/\s/.test(text[offset - 1] ?? " ")))
           ? { at: offset + segment.text.indexOf(body), length: body.length }
           : null;
     }

@@ -1,6 +1,10 @@
 import {
+  accountPath,
+  changeLoginPath,
+  accountsAddPath,
   readPreviewAsked,
   ancestorsOf,
+  trickCardPath,
   changesCommitPath,
   filesFolders,
   filesParent,
@@ -9,12 +13,14 @@ import {
   decodedPath,
   isAncestor,
   machinePath,
+  hillPath,
   machinesPath,
   machineTabOf,
   newAddPath,
   newPath,
   pairLandingPath,
   panePath,
+  pathOnly,
   parentChain,
   readFrom,
   readNewAddKind,
@@ -25,12 +31,14 @@ import {
   resolveUpTo,
   resolveUpToExact,
   settingsPath,
+  settingsSectionPath,
   spaceChangesCommitPath,
   spaceFilesPath,
   treeUpLanding,
   updatesPath,
   upTarget,
   voicePagePath,
+  characterPath,
   installCountPath,
   telemetrySettingsPath,
 } from "./nav";
@@ -46,15 +54,15 @@ describe("the commit view's paths", () => {
 describe("the machines paths", () => {
   it("names the list and one machine, and carries the scope", () => {
     expect(machinesPath()).toBe("/machines");
-    expect(machinePath("bluefin")).toBe("/machines/bluefin");
+    expect(machinePath("lodge")).toBe("/machines/lodge");
     expect(machinePath("a b/c")).toBe("/machines/a%20b%2Fc");
     expect(machinesPath({ host: "badger", session: undefined })).toBe("/machines?h=badger");
   });
 
   it("names the Alerts view in the query, after the scope, and Status with no parameter", () => {
-    expect(machinePath("bluefin", undefined, "alerts")).toBe("/machines/bluefin?tab=alerts");
-    expect(machinePath("bluefin", undefined, "status")).toBe("/machines/bluefin");
-    expect(machinePath("bluefin", { host: "badger", session: undefined }, "alerts")).toBe("/machines/bluefin?h=badger&tab=alerts");
+    expect(machinePath("lodge", undefined, "alerts")).toBe("/machines/lodge?tab=alerts");
+    expect(machinePath("lodge", undefined, "status")).toBe("/machines/lodge");
+    expect(machinePath("lodge", { host: "badger", session: undefined }, "alerts")).toBe("/machines/lodge?h=badger&tab=alerts");
     expect(machineTabOf("?tab=alerts")).toBe("alerts");
     expect(machineTabOf("?h=badger&tab=alerts")).toBe("alerts");
     expect(machineTabOf("")).toBe("status");
@@ -62,29 +70,56 @@ describe("the machines paths", () => {
   });
 
   it("keeps both views one level: their parents are the same, so a switch is a side move", () => {
-    expect(ancestorsOf("/machines/bluefin")).toContain("/");
-    expect(isAncestor("/machines/bluefin?tab=alerts", "/machines/bluefin")).toBe(false);
+    expect(ancestorsOf("/machines/lodge")).toContain("/");
+    expect(isAncestor("/machines/lodge?tab=alerts", "/machines/lodge")).toBe(false);
+  });
+});
+
+describe("the hill path", () => {
+  it("names the hill and carries the scope, one level under the Dashboard", () => {
+    expect(hillPath()).toBe("/hill");
+    expect(hillPath({ host: "badger", session: undefined })).toBe("/hill?h=badger");
+    expect(ancestorsOf("/hill")).toEqual(["/"]);
+  });
+});
+
+describe("a trick's card (M96 spec 14)", () => {
+  it("carries the scope, and Back steps back to Settings, Tricks and the Hill or the Dashboard, whichever opened it", () => {
+    expect(trickCardPath("dc_abc123def456")).toBe("/trick-card/dc_abc123def456");
+    expect(trickCardPath("dc_abc123def456", { host: "badger", session: undefined })).toBe("/trick-card/dc_abc123def456?h=badger");
+    expect(ancestorsOf("/trick-card/dc_abc123def456")).toEqual(["/", "/settings/tricks"]);
+    expect(resolveUp("/trick-card/dc_abc123def456", "/settings/tricks", "/")).toEqual({ kind: "back" });
+    expect(resolveUp("/trick-card/dc_abc123def456", "/", "/")).toEqual({ kind: "back" });
+    // Opened from anywhere else (a bookmark): Back lands on the Dashboard.
+    expect(resolveUp("/trick-card/dc_abc123def456", "/hill", "/")).toEqual({ kind: "replace", to: "/" });
+    expect(parentChain("/trick-card/dc_abc123def456", "")).toEqual(["/"]);
+  });
+});
+
+describe("the approver's page", () => {
+  it("sits one level under the Dashboard (ADR 0139)", () => {
+    expect(ancestorsOf("/pair/approve")).toEqual(["/"]);
   });
 });
 
 describe("back from the machines pages", () => {
   it("goes up one level at a time: machine, Machines, Settings", () => {
-    expect(resolveUp("/machines/bluefin", "/machines", "/machines")).toEqual({ kind: "back" });
+    expect(resolveUp("/machines/lodge", "/machines", "/machines")).toEqual({ kind: "back" });
     expect(resolveUp("/machines", "/settings", "/settings")).toEqual({ kind: "back" });
   });
 
   it("replaces onto the structural parent on a cold entry, never pushes a parent", () => {
-    expect(resolveUp("/machines/bluefin", undefined, "/machines")).toEqual({ kind: "replace", to: "/machines" });
+    expect(resolveUp("/machines/lodge", undefined, "/machines")).toEqual({ kind: "replace", to: "/machines" });
   });
 
   it("steps back onto the dashboard from a machine the Crew tab opened (ADR 0085)", () => {
     // The dashboard stores its tab per device, so stepping back lands on the Crew tab again.
-    expect(resolveUp("/machines/bluefin", "/", "/machines")).toEqual({ kind: "back" });
-    expect(resolveUp("/machines/bluefin", "/?h=workshop", "/machines")).toEqual({ kind: "back" });
+    expect(resolveUp("/machines/lodge", "/", "/machines")).toEqual({ kind: "back" });
+    expect(resolveUp("/machines/lodge", "/?h=workshop", "/machines")).toEqual({ kind: "back" });
     // A cold link has nothing behind it, so it still goes up to the list.
-    expect(resolveUp("/machines/bluefin", "/", "/machines", false)).toEqual({ kind: "replace", to: "/machines" });
+    expect(resolveUp("/machines/lodge", "/", "/machines", false)).toEqual({ kind: "replace", to: "/machines" });
     expect(resolveUp("/machines", undefined, "/settings")).toEqual({ kind: "replace", to: "/settings" });
-    expect(resolveUp("/machines/bluefin", "/pane/w1%3Ap1", "/machines")).toEqual({ kind: "replace", to: "/machines" });
+    expect(resolveUp("/machines/lodge", "/pane/w1%3Ap1", "/machines")).toEqual({ kind: "replace", to: "/machines" });
   });
 });
 
@@ -220,19 +255,38 @@ describe("voicePagePath", () => {
 });
 
 describe("installCountPath", () => {
-  it("names the page below System, keeping the scope, and is where the dashboard notice opens", () => {
-    expect(installCountPath()).toBe("/settings/system/install-count");
-    expect(installCountPath({ host: "badger", session: "demo" })).toBe("/settings/system/install-count?h=badger&s=demo");
-    expect(telemetrySettingsPath()).toBe("/settings/system/install-count");
+  it("names the page below Privacy and data, keeping the scope, and is where the dashboard notice opens", () => {
+    expect(installCountPath()).toBe("/settings/privacy/install-count");
+    expect(installCountPath({ host: "badger", session: "demo" })).toBe("/settings/privacy/install-count?h=badger&s=demo");
+    expect(telemetrySettingsPath()).toBe("/settings/privacy/install-count");
+  });
+});
+
+describe("accountsAddPath and accountPath", () => {
+  it("name the pages below Accounts, keeping the scope, and encode the opaque id", () => {
+    expect(accountsAddPath()).toBe("/settings/accounts/add");
+    expect(accountsAddPath({ host: "badger", session: "demo" })).toBe("/settings/accounts/add?h=badger&s=demo");
+    expect(accountPath("acc-work")).toBe("/settings/accounts/acc-work");
+    expect(accountPath("claude:default", { host: "badger" })).toBe("/settings/accounts/claude%3Adefault?h=badger");
+    expect(settingsSectionPath("accounts")).toBe("/settings/accounts");
+    expect(changeLoginPath("claude:default")).toBe("/settings/accounts/claude%3Adefault/login");
+    expect(changeLoginPath("acc-work", { host: "badger" })).toBe("/settings/accounts/acc-work/login?h=badger");
+  });
+});
+
+describe("characterPath", () => {
+  it("names the page below Look and feel, keeping the scope", () => {
+    expect(characterPath()).toBe("/settings/look/character");
+    expect(characterPath({ host: "badger", session: "demo" })).toBe("/settings/look/character?h=badger&s=demo");
   });
 });
 
 describe("pairLandingPath", () => {
-  // The QR `collie pair` prints names `/settings?pair=<code>`. The form is on System now, so the
+  // The QR `collie pair` prints names `/settings?pair=<code>`. The form is on Devices and machines, so the
   // index forwards a code there with the whole query, scope included.
-  it("sends a pairing code to Settings → System with the query intact", () => {
-    expect(pairLandingPath("?pair=ABCD2345")).toBe("/settings/system?pair=ABCD2345");
-    expect(pairLandingPath("?h=badger&pair=ABCD2345")).toBe("/settings/system?h=badger&pair=ABCD2345");
+  it("sends a pairing code to Settings → Devices and machines with the query intact", () => {
+    expect(pairLandingPath("?pair=ABCD2345")).toBe("/settings/devices?pair=ABCD2345");
+    expect(pairLandingPath("?h=badger&pair=ABCD2345")).toBe("/settings/devices?h=badger&pair=ABCD2345");
   });
 
   it("leaves the index alone when there is no code", () => {
@@ -290,29 +344,50 @@ describe("ancestorsOf / isAncestor: the level tree", () => {
     ["/space/w1/changes/commit", "/space/w1/changes", false],
     ["/settings/voice", "/settings/voice/host", true],
     ["/settings", "/settings/voice/model", true],
-    ["/settings/system", "/settings/system/install-count", true],
-    ["/settings", "/settings/system/install-count", true],
-    ["/settings/system/install-count", "/settings/system", false],
+    ["/settings/privacy", "/settings/privacy/install-count", true],
+    ["/settings", "/settings/privacy/install-count", true],
+    ["/settings/privacy/install-count", "/settings/privacy", false],
+    ["/settings/look", "/settings/look/character", true],
+    ["/settings", "/settings/look/character", true],
+    ["/settings/look/character", "/settings/look", false],
+    ["/settings/notifications", "/settings/notifications/load/lodge", true],
+    ["/settings/notifications/load/lodge", "/settings/notifications", false],
+    ["/settings/accounts", "/settings/accounts/add", true],
+    ["/settings", "/settings/accounts/acc-work", true],
+    ["/settings/accounts/acc-work", "/settings/accounts", false],
+    // Change login sits below its account's page, and a session that opened it is a parent too.
+    ["/settings/accounts/acc-work", "/settings/accounts/acc-work/login", true],
+    ["/pane/w1%3Ap1", "/settings/accounts/acc-work/login", true],
+    ["/settings/accounts/other", "/settings/accounts/acc-work/login", false],
     ["/settings/voice/host", "/settings/voice", false],
     ["/settings/voice/host", "/settings/voice/model", false],
     ["/", "/settings", true],
-    ["/pane/w1%3Ap1", "/settings", false],
+    // Settings goes back to whichever screen opened it (ADR 0163).
+    ["/pane/w1%3Ap1", "/settings", true],
+    ["/space/w1?h=badger", "/settings", true],
+    ["/crew", "/settings", true],
+    ["/hill", "/settings", true],
+    ["/new", "/settings", true],
+    ["/conversations", "/settings", true],
+    ["/pane/w1%3Ap1/history", "/settings", false],
+    ["/settings/devices", "/settings", false],
+    ["/machines", "/settings", false],
     ["/settings", "/settings/updates", true],
     ["/", "/settings/updates", true],
     ["/", "/crew", true],
     ["/settings", "/crew", true],
-    // Machines: Settings above it, and a machine above that. The crew census and the System card
-    // open both, so each is a legitimate parent there too.
+    // Machines: Devices and machines above it, and Settings above that. The crew census opens a
+    // machine, so it is a legitimate parent there too.
     ["/settings", "/machines", true],
-    ["/settings/system", "/machines", true],
+    ["/settings/devices", "/machines", true],
     ["/", "/machines", true],
     ["/crew", "/machines", false],
-    ["/machines", "/machines/bluefin", true],
-    ["/machines?h=workshop", "/machines/bluefin", true],
-    ["/crew", "/machines/bluefin", true],
-    ["/settings", "/machines/bluefin", true],
-    ["/machines/workshop", "/machines/bluefin", false],
-    ["/pane/w1%3Ap1", "/machines/bluefin", false],
+    ["/machines", "/machines/lodge", true],
+    ["/machines?h=workshop", "/machines/lodge", true],
+    ["/crew", "/machines/lodge", true],
+    ["/settings", "/machines/lodge", true],
+    ["/machines/workshop", "/machines/lodge", false],
+    ["/pane/w1%3Ap1", "/machines/lodge", false],
     // The New page is opened from the dashboard, a space, or a pane's menu; nothing else is above it.
     ["/", "/new", true],
     ["/space/w1?h=badger", "/new", true],
@@ -326,6 +401,45 @@ describe("ancestorsOf / isAncestor: the level tree", () => {
   });
 });
 
+// ADR 0163: Settings' arrow returns to the page Settings was opened from.
+describe("Settings' back arrow", () => {
+  it.each([
+    ["the Dashboard", "/?h=badger"],
+    ["a space", "/space/w1?h=badger"],
+    ["a pane", "/pane/w1%3Ap1?h=badger"],
+    ["Crew", "/crew?h=badger"],
+    ["the Hill", "/hill?h=badger"],
+    ["the New page", "/new?pane=w1%3Ap1"],
+    ["Conversations", "/conversations?pane=w1%3Ap1"],
+  ])("steps back onto %s, where it was opened", (_name, from) => {
+    expect(resolveUp("/settings", from, "/?h=badger")).toEqual({ kind: "back" });
+    expect(upTarget("/settings", from, "/?h=badger")).toBe(pathOnly(from));
+  });
+
+  it("goes to the Dashboard on a cold open, with no entry behind", () => {
+    expect(resolveUp("/settings", undefined, "/?h=badger")).toEqual({ kind: "replace", to: "/?h=badger" });
+  });
+
+  it("goes to the Dashboard when the router sits on its first entry", () => {
+    expect(resolveUp("/settings", "/pane/w1%3Ap1", "/", false)).toEqual({ kind: "replace", to: "/" });
+  });
+
+  it("goes to the Dashboard, replacing, when the entry behind is not an opener", () => {
+    expect(resolveUp("/settings", "/pane/w1%3Ap1/history", "/")).toEqual({ kind: "replace", to: "/" });
+  });
+
+  it("keeps the opener across a section round trip", () => {
+    // Pane, Settings, a section: the section's arrow steps back onto Settings, whose own entry still
+    // holds the pane as its `from`, so Settings' arrow steps back onto the pane.
+    expect(resolveUp("/settings/devices", "/settings", "/settings")).toEqual({ kind: "back" });
+    expect(resolveUp("/settings", "/pane/w1%3Ap1", "/")).toEqual({ kind: "back" });
+    // A section reached with no Settings entry behind it (the update ribbon on a pane) is replaced by
+    // Settings, and `useNav` keeps the pane as its `from` because the pane is now a parent of Settings.
+    expect(resolveUp("/settings/updates", "/pane/w1%3Ap1", "/settings")).toEqual({ kind: "replace", to: "/settings" });
+    expect(isAncestor("/pane/w1%3Ap1", "/settings")).toBe(true);
+  });
+});
+
 describe("resolveUp: the back arrow", () => {
   it("steps back when the entry behind is a parent", () => {
     expect(resolveUp("/pane/p1", "/space/w1", "/")).toEqual({ kind: "back" });
@@ -333,8 +447,8 @@ describe("resolveUp: the back arrow", () => {
   });
 
   it("replaces onto the structural parent when the entry behind is not one", () => {
-    expect(resolveUp("/settings", "/pane/p1", "/")).toEqual({ kind: "replace", to: "/" });
     expect(resolveUp("/settings/updates", "/pane/p1", "/settings")).toEqual({ kind: "replace", to: "/settings" });
+    expect(resolveUp("/settings", "/settings/devices", "/")).toEqual({ kind: "replace", to: "/" });
   });
 
   it("replaces on a cold entry with no from", () => {
@@ -471,24 +585,39 @@ describe("parentChain: what a cold deep link gets behind it", () => {
     ["/settings", "", ["/"]],
     // Updates is the first row of the index, so a cold deep link gets the index behind it.
     ["/settings/updates", "", ["/", "/settings"]],
-    ["/settings/device", "", ["/", "/settings"]],
+    ["/settings/keys", "", ["/", "/settings"]],
     ["/settings/voice", "", ["/", "/settings"]],
     // The two pages below the Voice hub: the hub and the index behind them.
     ["/settings/voice/host", "", ["/", "/settings", "/settings/voice"]],
     ["/settings/voice/model", "?h=badger", ["/?h=badger", "/settings?h=badger", "/settings/voice?h=badger"]],
-    // The install count sits one level below System: the index and System behind it.
-    ["/settings/system/install-count", "", ["/", "/settings", "/settings/system"]],
-    ["/settings/system/install-count", "?h=badger", ["/?h=badger", "/settings?h=badger", "/settings/system?h=badger"]],
-    ["/crew", "", ["/", "/settings", "/settings/system"]],
-    // Machines sits under Settings, and one machine under Machines: a cold deep link gets both behind it.
-    ["/machines", "", ["/", "/settings"]],
-    ["/machines/bluefin", "", ["/", "/settings", "/machines"]],
-    ["/machines/bluefin", "?h=badger", ["/?h=badger", "/settings?h=badger", "/machines?h=badger"]],
+    // The install count sits one level below Privacy and data: the index and that page behind it.
+    ["/settings/privacy/install-count", "", ["/", "/settings", "/settings/privacy"]],
+    ["/settings/privacy/install-count", "?h=badger", ["/?h=badger", "/settings?h=badger", "/settings/privacy?h=badger"]],
+    // The Character page sits one level below Look and feel: the index and that page behind it.
+    ["/settings/look/character", "", ["/", "/settings", "/settings/look"]],
+    ["/settings/look/character", "?h=badger", ["/?h=badger", "/settings?h=badger", "/settings/look?h=badger"]],
+    // Accounts (M101): the Add form and one account's page sit below the list, and the index behind that.
+    ["/settings/accounts", "", ["/", "/settings"]],
+    ["/settings/accounts/add", "", ["/", "/settings", "/settings/accounts"]],
+    ["/settings/accounts/claude%3Adefault", "?h=badger", ["/?h=badger", "/settings?h=badger", "/settings/accounts?h=badger"]],
+    ["/settings/accounts/claude%3Adefault/login", "", ["/", "/settings", "/settings/accounts", "/settings/accounts/claude%3Adefault"]],
+    ["/crew", "", ["/", "/settings", "/settings/devices"]],
+    // Machines sits under Devices and machines, and one machine under Machines: a cold deep link gets them all behind it.
+    ["/machines", "", ["/", "/settings", "/settings/devices"]],
+    ["/machines/lodge", "", ["/", "/settings", "/settings/devices", "/machines"]],
+    ["/machines/lodge", "?h=badger", ["/?h=badger", "/settings?h=badger", "/settings/devices?h=badger", "/machines?h=badger"]],
+    // One machine's load alerts sit below Notifications (ADR 0170).
+    ["/settings/notifications/load/lodge", "", ["/", "/settings", "/settings/notifications"]],
     // The New page: the screen it names behind it. A pane's worktree gets the pane too.
     ["/new", "", ["/"]],
     ["/new", "?machine=mini", ["/?h=mini"]],
     ["/new", "?pane=w1%3Ap1", ["/", "/pane/w1%3Ap1"]],
     ["/new", "?machine=mini&pane=w1%3Ap1&s=demo", ["/?h=mini&s=demo", "/pane/w1%3Ap1?h=mini&s=demo"]],
+    // The hill sits under the Dashboard, its only way in (M96).
+    ["/hill", "", ["/"]],
+    ["/hill", "?h=badger", ["/?h=badger"]],
+    // The approver's page (ADR 0139) sits under the Dashboard; its request id is not a scope.
+    ["/pair/approve", "?r=abc", ["/"]],
     ["/nowhere", "", []],
   ])("%s%s → %j", (pathname, search, expected) => {
     expect(parentChain(pathname, search)).toEqual(expected);

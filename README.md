@@ -7,7 +7,7 @@
 <p align="center"><b>English</b> · <a href="./README.zh-TW.md">繁體中文</a></p>
 
 Gaddi puts the AI coding agents in your terminal on your phone. Claude Code, Codex and the rest keep
-running in Herdr, the experimental Herdr core (`herdr-core`), tmux or zellij on your computer,
+running in Herdr, the experimental Herdr core (`herdr-core`), tmux, zellij, tuios, Tern or Rex on your computer,
 and the phone shows which one is waiting on you.
 You answer with a tap, not a terminal keyboard.
 
@@ -252,7 +252,7 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | | |
 | --- | --- |
 | [**Sessions**](./docs/sessions.md) | What a session is, where sessions come from, a terminal or a durable agent, and what the phone shows for each |
-| [**Terminals**](./docs/multiplexers.md) | Pointing Collie at Herdr, the Herdr core (`herdr-core`), tmux, zellij, tuios or Tern, what each can answer, two Collies on one machine, and agent beacons. Experimental for the Herdr core, tmux, zellij, tuios and Tern; bug reports wanted |
+| [**Terminals**](./docs/multiplexers.md) | Pointing Collie at Herdr, the Herdr core (`herdr-core`), tmux, zellij, tuios, Tern or Rex, what each can answer, two Collies on one machine, and agent beacons. Experimental for the Herdr core, tmux, zellij, tuios, Tern and Rex; bug reports wanted |
 
 ### Durable agents
 
@@ -265,6 +265,15 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | [**The durable SDK (experimental)**](./docs/durable-sdk.md) | The npm package `@colliepwa/durable-sdk`, part by part: its entries and runtimes, `openCollie`, the pane methods, the four kinds of question and `requireApproval`, hooks, history, caps, the helpers, the Pi glue and the versions |
 | [**The durable wire (experimental)**](./docs/durable-wire.md) | What travels between Collie and a durable agent, for a builder: the routes, hello and the epoch, the life of an ask and the request ids, the socket and token transports, the limits and the version rule, with a link to `WIRE.md` for the exact rules |
 
+### Tricks and the Hill
+
+| | |
+| --- | --- |
+| [**Tricks**](./docs/tricks.md) | How tricks work: where a trick can show, the two kinds, the parts, three examples, where the thinking comes from, who is trusted with what, adding and switching a trick, tricks in a crew, and troubleshooting |
+| [**Write a trick**](./docs/tricks-authoring.md) | A short tutorial: the folder, one program trick, one agent view with its rules file, proposing a trick to the person, and several tricks in one repository |
+| [**Tricks reference**](./docs/tricks-reference.md) | Every place, part, manifest key, limit and command of a trick, complete and generated from the code |
+| [**The Hill**](./docs/hill.md) | Where agents and tricks ask you a question: what a Decision is, how an agent posts, how you answer, receipts, Clear, Here, Quiet and Away, a trick an agent proposes, and the Hill switch |
+
 ### Reference
 
 | | |
@@ -273,7 +282,9 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | [**Windows**](./docs/windows.md) | Windows 11 with Herdr: what is supported and what is still experimental, installing with `install.ps1`, the unsigned binary, updating, long paths, and what is not tested |
 | [**Security**](./docs/security.md) | What a Collie exposes, the defenses, and pairing a device, the credential for every request |
 | [**Configure**](./docs/configure.md) | The `.env`, your own slash commands, keys, quick replies, launchers and typefaces; appearance, Zen mode, language |
+| [**Keyboard shortcuts**](./docs/keyboard-shortcuts.md) | Driving Collie from a desktop keyboard: the prefix key, every action with its default keys, `shortcuts.toml`, the key grammar, and Herdr's names |
 | [**Themes**](./docs/themes.md) | The four looks Collie ships, picking one in Settings, importing a theme file after a preview, exporting one to edit, and writing your own: the 43 colour tokens, the shape and look words, the terminal palette, and what a theme cannot change |
+| [**Themes reference**](./docs/themes-reference.md) | Every key, colour token, shape word, ground pattern, terminal palette key, typeface, character and glyph set of a theme file, with its limits and defaults, complete and generated from the code |
 | [**Changes**](./docs/changes.md) | The Files screen: a workspace's folder with its changes marked, the changed files and their diffs, and the last commit, from the pane or the dashboard's Files tab. Read-only git, nested repos, and the two settings that decide how far it looks |
 | [**Deployment**](./docs/deployment.md) | Front doors other than the default: an identity-aware proxy, a reverse proxy with no Tailscale, an off-host ingress, several Collies on one host (one per user, or several instances for one user), and a crew's standby door |
 | [**Commands**](./docs/commands.md) | Every `collie` verb, the census verbs that show what a Collie knows (`status`, `mux list`, `sessions`, `crew status`), putting `collie` on your PATH, and the Herdr actions that mirror the verbs on a Herdr-managed install |
@@ -281,7 +292,7 @@ Gaddi, use [Install](#install) above. Everything after installing applies to bot
 | [**Voice input and Web Push**](./docs/voice-and-push.md) | The microphone in the composer, Whistle speech to text on your phone or your computer, and notifications when an agent is waiting on you |
 | [**Manage & update**](./docs/upgrading.md) | Update from the phone or the terminal, roll back, update a crew, cross a major, stop, uninstall, and upgrading a 0.x install to 1.0 |
 | [**Troubleshooting**](./docs/troubleshooting.md) | Symptoms in the words you would actually search for |
-| [**Terminology**](./docs/terminology.md) | Collie's words in plain words, beside the names other tools use: session, space, tab, pane, terminal, durable agent, harness, crew, lead, and more |
+| [**Terminology**](./docs/terminology.md) | Collie's words in plain words, beside the names other tools use: session, space, tab, pane, terminal, durable agent, harness, crew, lead, trick, Decision, and more |
 | **For an AI coding agent in your terminal** | `collie skill` prints a brief on how Collie works, and `collie docs` prints the pages above, both out of the binary and with no network |
 
 Root specifications: [`ARCHITECTURE.md`](./ARCHITECTURE.md),
@@ -369,13 +380,13 @@ multiplexer directly.
      │  one mux adapter, chosen per install
      ▼
   the multiplexer        owns the panes, agents and terminal state
-  Herdr · Herdr core · tmux · zellij
+  Herdr · Herdr core · tmux · zellij · tuios · Tern · Rex
 ```
 
 Under [Variant C](./docs/deployment.md#variant-c--reverse-proxy-as-the-only-front-door-no-tailscale),
 a standard reverse proxy replaces `tailscale serve`. The downstream components are unchanged.
 
-- **Only the adapter touches the multiplexer** (`bridge/mux/<name>/`: Herdr dials a Unix socket, tmux and zellij shell out to their CLIs); everything else speaks the bridge's HTTP API. What every adapter must answer is [`MUX_CONTRACT.md`](./MUX_CONTRACT.md).
+- **Only the adapter touches the multiplexer** (`bridge/mux/<name>/`: Herdr dials a Unix socket, tmux, zellij and Rex shell out to their CLIs); everything else speaks the bridge's HTTP API. What every adapter must answer is [`MUX_CONTRACT.md`](./MUX_CONTRACT.md).
 - **Polling is still the model.** The bridge takes one snapshot per tick from the adapter and the browser polls `/api/snapshot`; where the multiplexer offers an event stream (Herdr does) it only pokes the bridge's poll to go faster, it never replaces it. No resync logic.
 - **Actions are plain HTTP.** A reply or key `POST`s to `/api/pane/:id/{reply,keys}`, and the adapter types it into a real terminal (hence the security posture).
 - **The UI is a static PWA.** Vite builds `web/dist`, served from disk, so a rebuild is live with no restart.
@@ -409,22 +420,32 @@ the code.
 - **Pull requests:** send them to this fork's `dev` branch; `main` takes only releases and docs.
   [`CONTRIBUTING.md`](./CONTRIBUTING.md) covers CI checks and version bump requirements.
 
-### The states playground
+### The design reference
 
-A local test page renders UI components across mock states (boot, idle, dashboard, crew,
-settings) without active agents. The tab shows a red icon to identify it as test-only.
+A local page renders every final state of the UI (boot, idle, dashboard, crew, settings and the rest)
+from mock data, without active agents. The tab shows a red icon to mark it as test-only.
 
 ```
-cd web && COLLIE_DEV_HOSTS=bluefin,localhost bun run playground
+cd web && bun run design
 ```
 
-Open `http://<host>:5199/playground.html`. Port 5199 disables `/api` calls to ensure it never hits
-a live instance. `bun run playground:build` outputs the test assets to `web/dist-playground/`
-without touching `dist/`. The view shows one section at a time, tracked via the URL hash (`#pane`,
-`#pane/<card-handle>`, `#changes:one-file`). Add states by adding a `<Card>` to a `Group` in
-`web/src/playground/sections/` and mock entries to `web/src/playground/fixtures.ts`. Add sections
-by exporting `DEF` and a component from a new file, then register it in `SECTIONS` inside
-`web/src/playground/app.tsx`. Use `Round` (`web/src/playground/round.tsx`) to evaluate layout variants.
+It listens on `127.0.0.1` only. To open it from a phone, bind it to this machine's tailnet address
+and allow the machine name: `COLLIE_DEV_HOST=$(tailscale ip -4) COLLIE_DEV_HOSTS=bluefin bun run design`.
+Open `http://<host>:5199/design.html` (`bun run playground` is the same command, and the old address
+`playground.html` forwards to the new one). Port 5199 answers `/api` calls itself, so the page never
+hits a live instance. `bun run playground:build` writes the static pages to `web/dist-playground/`
+without touching `dist/`.
+
+The search field at the top finds an entry by its title, its id or its keywords (component names
+and feature words). The page shows one entry at a time. The address carries it: `#pane`,
+`#pane/<card-handle>` for one card, `#changes:one-file` for one group, `?q=walky` for a search.
+Add a state by adding a `<Card>` to a `Group` in `web/src/playground/sections/` and mock data to
+`web/src/playground/fixtures.ts`. Add an entry by exporting `DEF` and a component from a new file,
+then registering it in `ENTRIES` in `web/src/playground/registry.tsx` with an id, a title, a group
+and keywords.
+The reference holds only final states. A design round where an option is picked is declared as
+one file under `web/src/pick/rounds/` and one line in `web/src/pick/rounds.ts`, to the contract in
+`web/src/pick/types.ts`. `CLAUDE.md` has the rules.
 
 For Herdr adapter development, refer to upstream documentation for the plugin system:
 [authoring](https://herdr.dev/docs/plugins/) ·
@@ -434,9 +455,9 @@ integration is documented in [`HERDR_API.md`](./HERDR_API.md).
 
 ## Telemetry
 
-Upstream 1.27.0 adds an anonymous daily ping ([ADR 0129](./.adr/0129-an-anonymous-install-count-on-by-default.md)); in this fork (`GGGODLIN/gaddi`) it is **off by default** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)). Nothing is sent and no install ID is created unless you opt in on a machine in Settings, System, **Telemetry**, with `COLLIE_TELEMETRY=1`, or with `telemetry = true` in `config.toml`. When enabled, once a day each bridge (one instance with its own state folder) sends one small ping to `ping.colliepwa.dev`: a random ID made on your machine, the day, the version, the OS, the CPU, the install kind, the release line (Stable or Edge) and whether the bridge runs alone, leads a crew or is a member. When a trouble card showed ("Cannot read a dialog" or "Send not landing"), it also carries a count: which card, the agent program's name and version, the multiplexer and, from 1.27.4, for a dialog a short hash of its key-hint row. No IP address is stored. No usage, no content, nothing you type or read.
+Upstream 1.27.0 adds an anonymous daily ping ([ADR 0129](./.adr/0129-an-anonymous-install-count-on-by-default.md)); in this fork (`GGGODLIN/gaddi`) it is **off by default** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)). Nothing is sent and no install ID is created unless you opt in on a machine in Settings, Privacy and data, **Telemetry**, with `COLLIE_TELEMETRY=1`, or with `telemetry = true` in `config.toml`. When enabled, once a day each bridge (one instance with its own state folder) sends one small ping to `ping.colliepwa.dev`: a random ID made on your machine, the day, the version, the OS, the CPU, the install kind, the release line (Stable or Edge) and whether the bridge runs alone, leads a crew or is a member. When a trouble card showed ("Cannot read a dialog" or "Send not landing"), it also carries a count: which card, the agent program's name and version, the multiplexer and, from 1.27.4, for a dialog a short hash of its key-hint row. No IP address is stored. No usage, no content, nothing you type or read.
 
-Turn it on or off on each machine in Settings, System, **Telemetry**, with `COLLIE_TELEMETRY=0` (in the
+Turn it on or off on each machine in Settings, Privacy and data, **Telemetry**, with `COLLIE_TELEMETRY=0` (in the
 instance's `.env` for a service), `telemetry = false` in `config.toml` or `DO_NOT_TRACK=1`. Blocking
 the host in your firewall works too. The update check is a separate anonymous request to GitHub's
 public tags API. [Details](./docs/security.md#what-leaves-your-machine) ·

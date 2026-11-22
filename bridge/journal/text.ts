@@ -29,6 +29,26 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI_RE, "");
 }
 
+/**
+ * The text with each `open … close` stretch removed: an open character, then everything up to the
+ * first close after it (both are one character). What `text.replace(/\([^)]*\)/g, "")` does for `(`
+ * and `)`, in one pass:
+ * that regex read the rest of the text again from each open character with no close after it
+ * (quadratic, about 0.9 s at 64 KB of `(`).
+ */
+export function dropBracketed(text: string, open: string, close: string): string {
+  let out = "";
+  let copied = 0;
+  for (let at = text.indexOf(open); at !== -1; at = text.indexOf(open, copied)) {
+    const end = text.indexOf(close, at + 1);
+    // No close after this open means none after any later one either.
+    if (end === -1) break;
+    out += text.slice(copied, at);
+    copied = end + 1;
+  }
+  return out + text.slice(copied);
+}
+
 /** A capped string plus the flag that says so. Shared with `TranscriptPart`'s text/result shapes. */
 export type Clamped = { text: string; truncated?: boolean };
 
@@ -97,14 +117,24 @@ export function summarizeToolInput(input: JsonValue | undefined): string {
     (typeof asked === "string" && asked.trim() !== "" ? asked : undefined) ??
     pick(
       "file_path",
+      "TargetFile",
+      "AbsolutePath",
       "command",
+      "CommandLine",
       "pattern",
+      "Query",
       "query",
       "url",
       "path",
+      "Path",
+      "DirectoryPath",
+      "SearchPath",
       "description",
+      "toolSummary",
+      "Role",
       "task",
       "prompt",
+      "Prompt",
     ) ??
     firstListed("queries", "urls") ??
     // Unknown tool: first string value wins, so the line is never empty for no reason.

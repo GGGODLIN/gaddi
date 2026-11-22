@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { Icon } from "@/components/icons/icon";
 
 import { cn } from "@/lib/utils";
+import { FOCUS_RING } from "@/components/ui/button";
+import { HEADER_PILL_TAP_TARGET } from "@/components/ui/tap-target";
 import { useNav } from "@/hooks/use-nav";
 import { BottomSheet } from "@/components/ui/sheet";
 import { ListGroup } from "@/components/ui/list-group";
@@ -138,7 +140,11 @@ export function SessionSwitcher({ sessions, scope, viewAll }: SessionSwitcherPro
         // 1.31:1 (dark) smudge suddenly visible — a fill too weak to be a surface and too present to
         // be nothing. A component's edge is --border (1.16:1 light / 1.33:1 dark), which is the
         // treatment the sibling trigger already used.
-        className="flex min-w-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent active:scale-95"
+        className={cn(
+          "flex min-w-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent active:scale-95",
+          FOCUS_RING,
+          HEADER_PILL_TAP_TARGET,
+        )}
       >
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           <StatusDot status={currentState} label={currentStateText} />

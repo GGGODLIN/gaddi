@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 
 import { shownStatus } from "@/lib/triage";
 import type { PaneTreeRow } from "@/lib/pane-tree";
@@ -7,21 +8,27 @@ import { PaneTreeFoldButton, PaneTreeGuides } from "@/components/ui/pane-tree-ch
 import { UnseenMark } from "@/components/ui/unseen-mark";
 import { Card } from "@/components/ui/card";
 import { ShellBadge, StatusBadge, StatusDot } from "@/components/status-badge";
-import { AgentIcon } from "@/components/agent-icon";
+import { AgentTile } from "@/components/agent-tile";
 import { PaneMeta } from "@/components/pane-meta";
 import { PaneHint } from "@/components/pane-hint";
 import { PaneBadge } from "@/components/pane-badge";
 import { BranchLabel } from "@/components/ui/branch-label";
+import { MatchText } from "@/components/ui/match-text";
+import { viaLabelKey, type PaneMatch } from "@/lib/pane-filter";
 import { paneGitHead } from "@/lib/git-head";
 import { paneProgress, paneSubtitle } from "@/lib/pane-marks";
 import { Progress } from "@/components/ui/progress";
 import { t } from "@/lib/i18n";
+import { paneRowKey, paneSpaceKey, tabKey } from "@/lib/hosts";
 import { paneCwdLine, paneName, panePlaceParts, soleTabName } from "@/lib/pane-name";
 import { descriptionNow } from "@/lib/description-now";
 import { statusLabel, statusLabelPast } from "@/lib/types";
 import type { AgentView } from "@/lib/types";
 import { useLocale } from "@/hooks/use-locale";
 import { useLongPress } from "@/hooks/use-long-press";
+import { PRESS_REACH_ROW } from "@/components/ui/tap-target";
+import { useOpeningShown } from "@/lib/pane-opening";
+import { cancelPress, clearPress, markPressHeld, redirectClick, releasePress, rememberPress } from "@/lib/press-memory";
 import { Icon } from "@/components/icons/icon";
 
 interface AgentCardProps {
@@ -37,7 +44,7 @@ interface AgentCardProps {
   /** The finger landed on the row: the moment to start the pane's read (lib/pane-prefetch.ts). */
   onPress?: () => void;
   /**
-   * A hold on the row (450ms, or `contextmenu`: a right-click, the Menu key, Android's own long
+   * A hold on the row (500ms, or `contextmenu`: a right-click, the Menu key, Android's own long
    * press) opens the pane's actions sheet instead of the pane (ADR 0070). The click that ends the hold
    * is swallowed, so a hold never also opens the pane. Omit and the row has no hold at all.
    */
@@ -93,6 +100,13 @@ interface AgentCardProps {
   tree?: Pick<PaneTreeRow, "guides" | "childCount" | "childStatus" | "folded">;
   /** Fold or unfold this parent's sub-agents. Rendered as a sibling button when `tree.childCount > 0`. */
   onToggleFold?: () => void;
+  /**
+   * How the session filter's query matched this row (lib/pane-filter.ts, M97). Given, the matched letters
+   * of the name, branch, space and tab are marked (`MatchText`), and a row that matched only in a field it
+   * does not draw (its folder, its agent, its machine) says that field on line 2 in place of the place,
+   * in the same line box. Absent, with no query, the row is drawn exactly as it was.
+   */
+  match?: PaneMatch | undefined;
 }
 
 /** The row's text: line 1's name, and line 2's two runs. */
@@ -145,13 +159,29 @@ export function AgentCard({
   stale = false,
   tree,
   onToggleFold,
+  match,
 }: AgentCardProps) {
   useLocale();
+  // The read for this row's pane is out and has taken longer than the glide waits (lib/pane-opening.ts).
+  const opening = useOpeningShown(glideKey);
   // Inert when `onHold` is undefined: every handler returns at once, the native context menu stays,
   // and no click is swallowed, so a row with no hold behaves exactly as it did.
-  const hold = useLongPress(onHold);
+  // THE PRESS, REMEMBERED (lib/press-memory.ts). One symbol per mounted row: the click that ends a press
+  // is aimed at whatever stands under the finger when it lifts, and a list that moved in between aims it
+  // at a neighbour. The neighbour finds this row's press in memory and opens THIS row instead.
+  const [me] = useState(() => Symbol("agent-row"));
+  // A row that unmounts under the finger takes its press with it: nothing will lift on it.
+  useEffect(() => () => cancelPress(me), [me]);
+  const hold = useLongPress(
+    onHold &&
+      (() => {
+        markPressHeld(me);
+        onHold();
+      }),
+  );
   const isShell = agent.kind === "shell";
-  const blocked = agent.status === "blocked";
+  // A pane that stopped on an error loses the tint once seen, as its dot does (shownStatus).
+  const blocked = shownStatus(agent) === "blocked";
   const inTab = scope === "tab";
   // ── THE WORKSPACE-GROUPED ROW CARRIES ITS TAB, AT ONE HEIGHT ─────────────────
   // Under a WORKSPACE heading (lib/pane-groups.ts) line 2 has one fact left worth saying: the tab.
@@ -218,6 +248,19 @@ export function AgentCard({
       ? placed
       : { primary: paneName(agent), detailLead: null, detailTail: described, tailMono: false, tailPositional: false };
   const { primary, detailLead, detailTail } = lines;
+  // A RENAME FADES (ui/crossfade-text.tsx): the pane's name, its space and its tab. The tail is a tab's
+  // name only when the row draws the tab; a live title or a folder path is not a name someone gave.
+  const tailFade = nameIsTab || inTab ? undefined : tabKey(agent.host, agent.tabId);
+  // THE FILTER'S MARKS (M97). A range indexes the string `paneFields` read, which is the string drawn
+  // here, except the tab: a one-pane tab named for the pane draws the live title in its place, so no tab
+  // mark applies then. The tab of a `tab` scope row is the path, not a tab.
+  const marks = match?.hit.marks;
+  const tabMarks = nameIsTab || inTab ? undefined : marks?.tab;
+  const leadMarks = inTab ? undefined : marks?.space;
+  // A field the row does not draw (its folder, agent or machine) that is the reason for the match takes
+  // line 2, in the slot the line already has, so the reason is on the row and the row keeps its height.
+  const via = match?.hit.via ?? null;
+  const viaLabel = via === null ? null : viaLabelKey(via);
   // THE BRANCH LEADS LINE 2, in every scope: the one fact that tells two checkouts of one repo apart,
   // which neither the workspace nor the tab says. It sits in the 16px slot the line already has, so
   // the row keeps its stated 44px, and it is mono at 11px (ui/branch-label.tsx). It gives way less
@@ -236,7 +279,7 @@ export function AgentCard({
   // A workspace-grouped row whose tab has no name of its own reads its position instead — `tab 2` —
   // via `tabTitle` (`lib/pane-name.ts`) — or, when the raw label carries no digit at all, nothing:
   // the slot is then skipped outright, unless the branch or a description fills it.
-  const skipBlankSlot = inPlace && detailTail === null && described === undefined && head === null;
+  const skipBlankSlot = inPlace && detailTail === null && described === undefined && head === null && via === null;
   // The dot leads line 1, INLINE, ahead of the tile — not on the tile's corner. The corner was
   // right at `size-9`: a 10px badge on a 36px tile is a badge. On a 16px tile it is most of the
   // artwork, and shrinking it to fit kills the one glance cue the row has — the resting states are
@@ -253,18 +296,41 @@ export function AgentCard({
     <button
       id={id}
       type="button"
-      onClick={(e) => onClick(e.currentTarget)}
+      aria-busy={opening || undefined}
+      onClick={(e) => {
+        const route = redirectClick(me, e.detail > 0);
+        if (route === "own") onClick(e.currentTarget);
+        else if (route !== "swallow") route();
+      }}
       {...hold}
       // Both halves of a press: the pane's read starts on the finger landing, and the hold's timer
-      // arms on the same event.
+      // arms on the same event. The same event remembers the row, for the click that may land elsewhere.
       onPointerDown={(e) => {
+        const row = e.currentTarget;
+        // A right or middle button is no tap: it clears whatever press is in memory instead of starting one.
+        if (e.button === 0) rememberPress(me, () => onClick(row));
+        else clearPress();
         onPress?.();
         hold.onPointerDown(e);
+      }}
+      onPointerUp={(e) => {
+        hold.onPointerUp(e);
+        releasePress(me);
+      }}
+      onPointerCancel={(e) => {
+        hold.onPointerCancel(e);
+        cancelPress(me);
+      }}
+      // A mouse or pen dragged off the row ends the press: its lift lands elsewhere and is nobody's tap. Not for a
+      // touch, whose `pointerleave` comes AFTER `pointerup` and would end the press before its click.
+      onPointerLeave={(e) => {
+        if (e.pointerType !== "touch") cancelPress(me);
       }}
       data-glide-origin={glideKey === undefined ? undefined : "pane"}
       data-glide-key={glideKey}
       className={cn(
         hasFold ? "min-w-0 flex-1 text-left transition-transform active:scale-[0.99]" : "w-full text-left transition-transform active:scale-[0.99]",
+        PRESS_REACH_ROW,
         // A held row must not start iOS's selection loupe or touch callout: both end in a
         // `pointercancel` that kills the hold timer (hooks/use-long-press.ts).
         onHold && "select-none [-webkit-touch-callout:none]",
@@ -347,7 +413,7 @@ export function AgentCard({
                 <Icon name="shell-pane" className="size-2.5 text-muted-foreground" />
               </div>
             ) : (
-              <AgentIcon agent={agent.agent} className="size-4" glide="tile" />
+              <AgentTile pane={agent} className="size-4" surface={flat ? "ring-background" : "ring-card"} glide="tile" />
             )}
             {/* No longer `flex-1`: that let the name claim the whole line, which pushed the unseen
                 dot all the way to the far end, beside the meta, instead of beside the NAME. It now
@@ -355,7 +421,7 @@ export function AgentCard({
                 sits right after whatever survives the truncation. `PaneMeta`'s own `ml-auto` is what
                 claims the row's spare width now, so it still lands at the end. */}
             <span data-glide="name" className="min-w-0 truncate self-baseline font-medium">
-              {primary}
+              <MatchText text={primary} ranges={marks?.name} fade={paneRowKey(agent)} />
             </span>
             {/* A finished pane you haven't opened yet: the square (ui/unseen-mark.tsx). Right after
                 the name, never before it, and its slot is reserved on a flat row so the name
@@ -377,12 +443,20 @@ export function AgentCard({
               its own is a one-line row. A workspace-grouped row is the exception: its slot is
               always there, holding the tab's name or its position — UNLESS neither is available,
               which skips the slot outright and centres the name in the 44px row instead. */}
-          {subtitleInSlot && (
+          {subtitleInSlot && via === null && (
             <div data-slot="agent-row-detail" className="h-4 min-w-0 truncate text-xs leading-4 text-muted-foreground">
               {subtitle}
             </div>
           )}
-          {!subtitleInSlot && !skipBlankSlot && (inPlace || hasRest || head !== null) && (
+          {via !== null && match !== undefined && (
+            <div data-slot="agent-row-detail" className={cn("flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground", flat && "h-4 items-center")}>
+              {viaLabel !== null && <span className="shrink-0 text-muted-foreground/70">{t(viaLabel)}</span>}
+              <span data-slot="agent-row-via" className="min-w-0 flex-1 truncate">
+                <MatchText text={match.fields[via]} ranges={marks?.[via]} />
+              </span>
+            </div>
+          )}
+          {via === null && !subtitleInSlot && !skipBlankSlot && (inPlace || hasRest || head !== null) && (
             <div
               data-slot="agent-row-detail"
               className={cn(
@@ -394,7 +468,7 @@ export function AgentCard({
             >
               {head !== null && (
                 <>
-                  <BranchLabel head={head} className={cn("shrink", hasRest && "max-w-[78%]")} />
+                  <BranchLabel head={head} ranges={marks?.branch} className={cn("shrink", hasRest && "max-w-[78%]")} />
                   {hasRest && (
                     // Two facts side by side rather than one containing the other, so a middot, not
                     // the place's own crumb.
@@ -408,7 +482,7 @@ export function AgentCard({
                 // The unnamed tab's position, a shade lighter than an ordinary tab name so it never
                 // reads as one.
                 <span className="min-w-0 flex-1 truncate text-muted-foreground/70">
-                  {detailTail}
+                  <MatchText text={detailTail} ranges={tabMarks} fade={tailFade} />
                 </span>
               ) : (
                 <>
@@ -417,7 +491,9 @@ export function AgentCard({
                       space gives up width first; the tab takes the rest. A positional tail (`tab
                       2`) takes the same shade-lighter ink here as it does alone above. */}
                   {detailLead !== null && (
-                    <span className="min-w-0 shrink truncate">{detailLead}</span>
+                    <span className="min-w-0 shrink truncate">
+                      <MatchText text={detailLead} ranges={leadMarks} fade={paneSpaceKey(agent)} />
+                    </span>
                   )}
                   {detailLead !== null && detailTail !== null && (
                     // The place's own separator, the same glyph the joined form uses (PLACE_SEP): a
@@ -434,7 +510,7 @@ export function AgentCard({
                         lines.tailPositional && "text-muted-foreground/70",
                       )}
                     >
-                      {detailTail}
+                      <MatchText text={detailTail} ranges={tabMarks} fade={tailFade} />
                     </span>
                   )}
                 </>
@@ -470,6 +546,10 @@ export function AgentCard({
             className="pointer-events-none absolute inset-x-3.5 bottom-0 w-auto"
           />
         )}
+        {/* THE ROW IS OPENING: a 2px bar along its top, drawn over the row's own box (no size, no
+            position changes, DESIGN.md §2) while the pane's read is out past the glide's wait. It sits
+            at the top because the pane's progress hairline owns the bottom. */}
+        {opening && <span aria-hidden="true" className="row-opening pointer-events-none absolute inset-x-3.5 top-0" />}
       </Shell>
     </button>
   );

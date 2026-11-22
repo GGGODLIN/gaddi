@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, TRIGGER_OPEN } from "@/components/ui/button";
 import { Collapse } from "@/components/ui/collapse";
 import {
   DurableBar,
@@ -20,6 +20,7 @@ import { useLocale } from "@/hooks/use-locale";
 import { hasResizeObserver } from "@/lib/env";
 import { t as translate } from "@/lib/i18n";
 import type { OperatorCommand } from "@/lib/types";
+import { shortcutTarget } from "@/lib/shortcuts/target";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/icons/icon";
 import type { IconKey } from "@/components/icons/keys";
@@ -229,6 +230,7 @@ const SWITCH_PILL_INSET_SIX = 307;
 /** The first-frame fallback with all SEVEN pinned pills: the six above and the pins mark (see `pins`
  *  below). 307 + 32 (the pins mark) + 6 (its gap) = 345. */
 const SWITCH_PILL_INSET_SEVEN = 345;
+const SWITCH_PILL_INSET_EIGHT = 383;
 
 /** The seven constants above, indexed by how many pills the block holds, less one. */
 const SWITCH_PILL_INSETS = [
@@ -239,6 +241,7 @@ const SWITCH_PILL_INSETS = [
   SWITCH_PILL_INSET_FIVE,
   SWITCH_PILL_INSET_SIX,
   SWITCH_PILL_INSET_SEVEN,
+  SWITCH_PILL_INSET_EIGHT,
 ] as const;
 
 /**
@@ -319,6 +322,9 @@ const PINNED_MARK_BADGE = "pointer-events-none absolute top-0.5 right-0.5 rounde
 /** Extra air between the last scrolling pill and the pinned block at full scroll-right, added to the
  *  trailing spacer. Altan, from his phone, 2026-09-23: "add a wider margin right to the belt content". */
 const BELT_END_AIR = 16;
+
+/** The lead-in of the pinned block that fades the pills out before the hairline: its `pl-16` and its mask's `4rem`. */
+const PINNED_FADE = "4rem";
 
 /**
  * The pinned Switch block's own width, read off its DOM node — the trailing spacer's width must
@@ -402,6 +408,9 @@ export interface GeneralAction {
   /** Set for a control that toggles a mode — it becomes `aria-pressed`. */
   pressed?: boolean;
   disabled?: boolean;
+  /** Dimmed with `aria-disabled`, the tap kept (M102 spec 11): the handler says why it cannot act. A native
+   *  `disabled` takes the tap and says nothing. */
+  inert?: boolean;
   onSelect: () => void;
 }
 
@@ -463,14 +472,26 @@ export interface ActionsRowProps {
    */
   handle?: {
     /** {@link import("@/hooks/use-sheet-pull").useSheetPull}'s ref — the finger-tracked drag. It
-     *  lands on the BELT, not on the pill: the whole band is the drag surface. */
-    ref: (node: HTMLElement | null) => void;
-    /** The tap, on the SWITCH PILL. Opens the same switcher sheet the drag opens. */
+     *  lands on the BELT, not on the pill: the whole band is the drag surface. Absent on a large
+     *  screen's strip, where the button is drawn and the drag is not (the sidebar is the switcher,
+     *  and `touch-pan-x` with no listener behind it would forbid a vertical gesture for nothing). */
+    ref?: (node: HTMLElement | null) => void;
+    /** The tap, on the pinned button: the Actions palette. */
     onClick: () => void;
-    /** ALREADY TRANSLATED. The button's accessible name — "Switch pane". */
+    /** ALREADY TRANSLATED. The button's accessible name: "Actions". */
     label: string;
+    /** The thing the button opens is open now (the Actions palette): the pill says
+     *  `aria-expanded` and wears the shared open look (ui/button.tsx `TRIGGER_OPEN`). Fill and ink only, so the box
+     *  and the pinned block's measured width do not move. */
+    open?: boolean;
     /** Another pane needs you: a red dot on the mark's corner. The label says so in words. */
     alert?: boolean;
+  };
+  /** The Actions palette button beside the pane switcher. */
+  actions?: {
+    onClick: () => void;
+    label: string;
+    open: boolean;
   };
   /**
    * EXPERIMENT (operator, 2026-09-23): the Changes view's entry (ADR 0065), moved out of the pane
@@ -530,6 +551,8 @@ export interface ActionsRowProps {
      *  Not `disabled`: a disabled button takes no `mousedown`, so a tap on it would blur the field
      *  and drop the keyboard. */
     inert?: boolean;
+    /** The words for a tap on the inert X (M102 spec 11): it says why it did nothing. */
+    onInert?: () => void;
   };
   /**
    * THE AGENTS MARK (Altan, from the lane, 2026-10-19: "it should be subtle and show up next to files
@@ -582,9 +605,36 @@ export interface ActionsRowProps {
     /** The Pins sheet is open: `aria-expanded`. */
     expanded: boolean;
   };
+  /**
+   * The tricks' marks ({@link BeltMark}), in manifest order, as the LAST section of the scrolling strip:
+   * after Collie's own pills, before the trailing spacer. They scroll with the strip and never take room
+   * in the pinned block, which holds Collie's own marks only. Absent or empty: the belt is unchanged, to
+   * the pixel.
+   */
+  marks?: readonly BeltMark[];
 }
 
-export function ActionsRow({ general, agent, mine, onRun, disabled, durable, stop, hand = "right", handle, changes, zoom, clear, agents, jobs, pins }: ActionsRowProps) {
+/**
+ * A TRICK'S MARK AT THE END OF THE SCROLLING STRIP (M94 slice 03, moved out of the pinned block): after
+ * every pill Collie itself draws in the strip, in manifest order, so it scrolls and takes no fixed room.
+ * `face` is the whole control, drawn in its own frame (lib/tricks/mark.tsx): it is never a status
+ * mark and never a belt pill, so the row draws no button around it. Each mark comes and goes through
+ * `Collapse` on its x axis, like the agents mark; a trick that has no belt part leaves no gap.
+ */
+export interface BeltMark {
+  /** Stable, for React's key: the part key. Never shown. */
+  id: string;
+  face: ReactNode;
+  /** `false` lets the mark leave through its `Collapse`. Default `true`. */
+  open?: boolean;
+  /** The trick that added the mark, as `data-trick`. */
+  trick?: string;
+}
+
+/** One stable empty, so an omitted prop is one reference. */
+const NO_MARKS: readonly BeltMark[] = [];
+
+export function ActionsRow({ general, agent, mine, onRun, disabled, durable, stop, hand = "right", handle, actions, changes, zoom, clear, agents, jobs, pins, marks = NO_MARKS }: ActionsRowProps) {
   useLocale();
 
   const harnessItems = useHarnessBarItems(agent, mine);
@@ -592,7 +642,33 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
   // Anything pinned at the pinned end (right, or left under `hand="left"`): the composer's X, the agents mark, the jobs
   // mark, the pins mark, the Changes pill, the Zoom pill, the Switch mark, in any mix. The drag surface (`handle.ref`, `touch-pan-x`) stays
   // tied to `handle` alone.
-  const pinnedCount = (agents ? 1 : 0) + (jobs ? 1 : 0) + (pins ? 1 : 0) + (clear ? 1 : 0) + (changes ? 1 : 0) + (zoom ? 1 : 0) + (handle ? 1 : 0);
+  // The tricks' marks are not here: they scroll in the strip (see the marks prop), so they neither count
+  // as pinned nor widen the block.
+  // THE X LEAVES BY OPACITY AND KEEPS ITS ROOM (M104): when the box empties (a send at the tap, a delete), the X fades
+  // where it stands and its slot keeps its width until the next key press, so nothing beside it slides. That key
+  // press either brings the X back (a new character) or lets the slot close as it always did.
+  const clearMode = clear === undefined ? null : clear.mode;
+  const [seenClearMode, setSeenClearMode] = useState(clearMode);
+  const [ghostClear, setGhostClear] = useState<"clear" | "undo" | null>(null);
+  if (seenClearMode !== clearMode) {
+    setSeenClearMode(clearMode);
+    setGhostClear(clearMode === null ? seenClearMode : null);
+  }
+  useEffect(() => {
+    if (ghostClear === null) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    // After the key's own input has landed, so a new character finds the X back in its slot.
+    const release = () => {
+      if (timer === null) timer = setTimeout(() => setGhostClear(null), 0);
+    };
+    document.addEventListener("keydown", release, true);
+    return () => {
+      document.removeEventListener("keydown", release, true);
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [ghostClear]);
+  const clearSlot = clear !== undefined || ghostClear !== null;
+  const pinnedCount = (agents ? 1 : 0) + (jobs ? 1 : 0) + (pins ? 1 : 0) + (clearSlot ? 1 : 0) + (changes ? 1 : 0) + (zoom ? 1 : 0) + (actions ? 1 : 0) + (handle ? 1 : 0);
   const pinned = pinnedCount > 0;
   const switchBlock = useSwitchBlockWidth(pinned);
   const switchInset = switchBlock.width ?? switchPillInset(beltScale, pinnedCount);
@@ -654,7 +730,7 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
       }
       className={cn(
         "relative -mx-3 mb-1 flex items-center border-b border-border bg-foreground/6",
-        handle && "touch-pan-x",
+        handle?.ref && "touch-pan-x",
       )}
     >
       {/* OverflowEdges measures this scroller and fades only the end that still hides something.
@@ -700,10 +776,29 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
           SCALED since 2026-09-23: `py-1` is `py-(--belt-pad)` now, 4px at the default scale and 5px
           and 6px at the larger two, and the pills' `::before` reaches exactly that far again
           (`--belt-reach`, STRIP_ROW_PILL), so every pill answers the whole band. */}
-      <OverflowEdges edges={pinned ? (left ? "right" : "left") : "both"} cue="none">
+      {/* A mouse scrolls it three ways (ui/overflow-edges.tsx): the wheel, a drag, and an arrow over each edge that still
+          hides pills. The arrows stand in from the end the pinned block owns, by that block's own measured width. */}
+      <OverflowEdges
+        edges={pinned ? (left ? "right" : "left") : "both"}
+        cue="none"
+        wheel
+        drag
+        arrows={{
+          // The pinned block's own width runs under its fade (`pl-16`, 4rem: the lead-in that fades the pills out),
+          // and the scroller's visible edge is where that fade ends, at the hairline. The arrow stands there, so its
+          // side touches the edge and the fade lies under it; measured from the block's outer edge it floated 4rem
+          // (and 4px) inside the strip.
+          left: pinned && left ? `calc(${switchInset}px - ${PINNED_FADE})` : "0px",
+          right: pinned && !left ? `calc(${switchInset}px - ${PINNED_FADE})` : "0px",
+          leftLabel: translate("belt.scroll.left"),
+          rightLabel: translate("belt.scroll.right"),
+        }}
+      >
         {(scrollerRef) => (
           <div
             ref={scrollerRef}
+            // The large screen's columns drop the brand wash by this name (strip-column.tsx, `columnFrame`).
+            data-slot="belt-track"
             className={cn(
               STRIP_SCROLLER,
               "bg-primary/10 py-(--belt-pad) overflow-y-hidden",
@@ -746,11 +841,12 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                     variant="ghost"
                     size="sm"
                     disabled={action.disabled}
+                    aria-disabled={action.inert === true ? true : undefined}
                     aria-label={action.label}
                     aria-expanded={action.expanded}
                     aria-pressed={action.pressed}
                     onClick={action.onSelect}
-                    className={cn(`${STRIP_ROW_PILL} gap-1.5`, action.on === true ? ON : OFF, left && "[direction:ltr]")}
+                    className={cn(`${STRIP_ROW_PILL} gap-1.5`, action.on === true ? ON : OFF, action.inert === true && "opacity-50", left && "[direction:ltr]")}
                   >
                     <Icon name={action.icon} className={BELT_ICON} />
                     {action.word ?? action.label}
@@ -760,6 +856,36 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
             )}
             <HarnessBar agent={agent} mine={mine} onRun={onRun} disabled={disabled} hand={hand} />
             {durable !== undefined && <DurableBar items={durable.items} state={durable.state} disabled={disabled} hand={hand} />}
+            {/* THE TRICKS' MARKS (the `marks` prop, M94), THE LAST SECTION OF THE STRIP: after every pill
+                Collie itself puts here (Stop, the general run, the harness items, the durable items) and
+                directly before the trailing spacer. A trick never gets fixed room in the belt. The marks
+                were first drawn in the pinned block, and two word marks ("look 15", "triage 3") made that
+                block about 337px wide at 390px and left 43px of strip, most of it under the fade, so Stop
+                and the keys were out of reach. In the strip a mark scrolls like a pill, and the pinned block
+                stays Collie's own.
+                SPACING IS THE STRIP'S OWN GAP, and nothing else: no divider and no tint, the same `gap-1.5`
+                (6px) that stands between the general run and the harness section. Each mark keeps its own
+                frame and its 44px reach (lib/tricks/mark.tsx), and comes and goes through `Collapse` on its
+                x axis, so a trick that has no belt part leaves nothing behind. With no marks nothing is
+                rendered here at all, and the strip is the one it always was. The Collapse cancels one gap
+                with `-mr-1.5` and the slot pays it back as `pr-1.5`, the way the agents mark does in the
+                block. Under `hand="left"` the scroller is `[direction:rtl]`, so the same DOM order puts the
+                marks beside the block, and the box mirrors: the cancelled gap and the padding swap sides,
+                and the slot runs `ltr` again so a mark reads icon then word, as a pill does.
+                `shrink-0` on both boxes: a mark that could shrink would be squeezed to nothing. A sideways
+                drag that starts on a mark scrolls the strip, because the frame sets no `touch-action` of
+                its own and the belt's `touch-pan-x` (with a handle) leaves the horizontal pan to the scroller. */}
+            {marks.map((mark) => (
+              <Collapse key={mark.id} axis="x" appear open={mark.open ?? true} className={cn("shrink-0", left ? "-ml-1.5" : "-mr-1.5")}>
+                <span
+                  data-slot="belt-trick-mark"
+                  data-trick={mark.trick}
+                  className={cn("flex shrink-0 items-center", left ? "pl-1.5 [direction:ltr]" : "pr-1.5")}
+                >
+                  {mark.face}
+                </span>
+              </Collapse>
+            ))}
             {/* THE TRAILING SPACER — a real flex child, not padding. `paddingRight` on this
                 scroller was tried first and measured wrong in Chrome: the scroller is a `flex`
                 row and the harness section is itself a nested `flex` row (`BELT_SECTION`), so the
@@ -824,6 +950,11 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
               left
                 ? "[mask-image:linear-gradient(to_left,transparent,black_4rem)]"
                 : "[mask-image:linear-gradient(to_right,transparent,black_4rem)]",
+              // While a mouse's arrow stands on this end the fade is done by the arrow's far side (2.5rem), so the
+              // pills under the arrow are fully hidden and a label is never cut by its round edge.
+              left
+                ? "[[data-slot=composer-actions]:has([data-slot=scroll-arrow][data-side=left])_&]:[mask-image:linear-gradient(to_left,transparent,black_2.5rem)]"
+                : "[[data-slot=composer-actions]:has([data-slot=scroll-arrow][data-side=right])_&]:[mask-image:linear-gradient(to_right,transparent,black_2.5rem)]",
             )}
           >
             <span className="absolute inset-0 bg-chrome" />
@@ -864,27 +995,34 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                 The Collapse's `open` is PRESENCE only, so a swap between X and Undo is a new child
                 inside an open box and runs no transition. `appear`, because this block mounts only
                 once something is pinned, and the X may be what brings it. */}
-            <Collapse axis="x" appear open={clear !== undefined} className="-mr-1.5">
-              {clear && (
-                <span className="flex items-center pr-1.5">
+            <Collapse axis="x" appear open={clearSlot} className="-mr-1.5">
+              {clearSlot && (
+                <span
+                  data-belt-clear-slot={clear === undefined ? "held" : undefined}
+                  aria-hidden={clear === undefined ? true : undefined}
+                  inert={clear === undefined}
+                  className={cn("flex items-center pr-1.5 transition-opacity duration-150 motion-reduce:transition-none", clear === undefined && "pointer-events-none opacity-0")}
+                >
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     data-belt-clear=""
-                    aria-label={clear.label}
-                    aria-disabled={clear.inert === true ? true : undefined}
+                    aria-label={clear?.label}
+                    aria-disabled={clear?.inert === true ? true : undefined}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
-                      if (clear.inert !== true) clear.onClick();
+                      if (clear === undefined) return;
+                      if (clear.inert === true) clear.onInert?.();
+                      else clear.onClick();
                     }}
                     className={cn(
                       `${STRIP_ROW_PILL} ${PINNED_PILL}`,
-                      pinnedReach(true, !agents && !jobs && !pins && !changes && !zoom && !handle, hand),
-                      clear.inert === true && "opacity-50",
+                      pinnedReach(true, !agents && !jobs && !pins && !changes && !zoom && !actions && !handle, hand),
+                      clear?.inert === true && "opacity-50",
                     )}
                   >
-                    {clear.mode === "undo" ? (
+                    {(clear?.mode ?? ghostClear) === "undo" ? (
                       <Icon name="undo" className={cn(BELT_ICON, "text-primary")} />
                     ) : (
                       <Icon name="clear" className={cn(BELT_ICON, "text-primary")} />
@@ -915,7 +1053,7 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                     aria-label={agents.label}
                     aria-expanded={agents.expanded}
                     onClick={agents.onClick}
-                    className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear, !jobs && !pins && !changes && !zoom && !handle, hand))}
+                    className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear, !jobs && !pins && !changes && !zoom && !actions && !handle, hand))}
                   >
                     <Icon name="subagent" className={cn(BELT_ICON, "text-primary")} />
                     <span
@@ -946,7 +1084,7 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                     aria-label={jobs.label}
                     aria-expanded={jobs.expanded}
                     onClick={jobs.onClick}
-                    className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear && !agents, !pins && !changes && !zoom && !handle, hand))}
+                    className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear && !agents, !pins && !changes && !zoom && !actions && !handle, hand))}
                   >
                     <Icon name="jobs" className={cn(BELT_ICON, "text-primary")} />
                     {jobs.count > 0 && (
@@ -979,7 +1117,7 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                     aria-label={pins.label}
                     aria-expanded={pins.expanded}
                     onClick={pins.onClick}
-                    className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear && !agents && !jobs, !changes && !zoom && !handle, hand))}
+                    className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear && !agents && !jobs, !changes && !zoom && !actions && !handle, hand))}
                   >
                     <Icon name="pins-list" className={cn(BELT_ICON, "text-primary")} />
                     <span
@@ -1022,9 +1160,24 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                 size="sm"
                 aria-label={zoom.label}
                 onClick={zoom.onClick}
-                className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear && !agents && !jobs && !pins && !changes, !handle, hand))}
+                className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear && !agents && !jobs && !pins && !changes, !actions && !handle, hand))}
               >
                 <Icon name="zoom" className={cn(BELT_ICON, "text-primary")} />
+              </Button>
+            )}
+            {actions && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={actions.label}
+                aria-haspopup="dialog"
+                aria-expanded={actions.open}
+                onClick={actions.onClick}
+                {...shortcutTarget("open_actions")}
+                className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear && !agents && !jobs && !pins && !changes && !zoom, !handle, hand), TRIGGER_OPEN)}
+              >
+                <Icon name="open-actions" className={cn(BELT_ICON, actions.open ? "text-control-on-foreground" : "text-primary")} />
               </Button>
             )}
             {handle && (
@@ -1034,7 +1187,9 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                 size="sm"
                 aria-label={handle.label}
                 aria-haspopup="dialog"
+                aria-expanded={handle.open === true}
                 onClick={handle.onClick}
+                {...shortcutTarget("switch_pane")}
                 // No padding and no border: what is left of the pill is `STRIP_ROW_PILL`'s own box,
                 // narrowed on this one pill alone. `w-8 min-w-8` drops `min-w-11`'s 44px floor — the
                 // floor every OTHER pill on this belt still stands on — down to 32px, the operator's
@@ -1046,9 +1201,9 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                 // square with the pill's own scaled height, 37px at the default scale. Its hit box
                 // reaches 3px left (half the 6px gap to a pill beside it, 7px when it stands alone)
                 // and 7px right (into `pr-3`), 47px across.
-                className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!agents && !jobs && !pins && !clear && !changes && !zoom, true, hand))}
+                className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!agents && !jobs && !pins && !clear && !changes && !zoom && !actions, true, hand), TRIGGER_OPEN)}
               >
-                <Icon name="pane-switcher" className={cn(BELT_ICON, "text-primary")} />
+                <Icon name="pane-switcher" className={cn(BELT_ICON, handle.open === true ? "text-control-on-foreground" : "text-primary")} />
                 {/* The needs-you mark (the triangle), on the mark's top-right corner, absolutely placed
                     so it never moves the belt. The chrome-coloured disc and ring cut it out of the
                     glyph it overlaps. 10px since 2026-10-14: at 12px the triangle read as heavy as the

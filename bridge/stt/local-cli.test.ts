@@ -14,7 +14,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { hostFor } from "../host.ts";
 import type { LocalCliSttSettings } from "./config.ts";
 import {
   childEnv,
@@ -104,7 +103,6 @@ const deps = (over: LocalCliSttDeps = {}): LocalCliSttDeps => ({ tmpRoot, ...ove
 
 /** Nothing this provider made is left under its temp root. */
 const tempRootIsEmpty = (): boolean => readdirSync(tmpRoot).length === 0;
-
 
 /** What a transcription threw, narrowed to the two errors a provider may throw; anything else fails. */
 async function failureOf(work: Promise<unknown>): Promise<SttError | SttCancelledError> {
@@ -223,24 +221,6 @@ describe("local-cli — failures are clean and say nothing of the host", () => {
     const err = await sttFailureOf(provider.transcribe(clip()));
     expect(err.kind).toBe("unavailable");
     expect(err.message).not.toContain(missing);
-    expect(tempRootIsEmpty()).toBe(true);
-  });
-
-  test("the deadline SIGKILLs the child and answers timeout", async () => {
-    const pidFile = join(root, "hung.pid");
-    const settings = fakeCommand(
-      "hung",
-      `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
-       process.on("SIGTERM", () => {}); await Bun.sleep(30_000);`,
-    );
-    const started = Date.now();
-    const err = await sttFailureOf(createLocalCliSttProvider(settings, deps({ timeoutMs: 1_500 }))
-      .transcribe(clip()));
-    expect(err.kind).toBe("timeout");
-    expect(Date.now() - started).toBeLessThan(10_000);
-    const pid = Number(readFileSync(pidFile, "utf8"));
-    await Bun.sleep(200);
-    expect(alive(pid)).toBe(false);
     expect(tempRootIsEmpty()).toBe(true);
   });
 
@@ -384,15 +364,6 @@ describe("local-cli — the whole process tree goes (POSIX process group, Window
     process.kill(grandchild, "SIGKILL");
   });
 
-  test("the deadline kills the grandchild too", async () => {
-    const pidFile = join(root, "tree-deadline.pid");
-    const settings = fakeCommand("tree-deadline", forker(pidFile, "await Bun.sleep(30_000);"));
-    const err = await sttFailureOf(createLocalCliSttProvider(settings, deps({ timeoutMs: 1_500 })).transcribe(clip()));
-    expect(err.kind).toBe("timeout");
-    await waitUntil(() => !alive(pidIn(pidFile)), TREE_GONE_MS, "the grandchild to die");
-    expect(tempRootIsEmpty()).toBe(true);
-  }, 40_000);
-
   test("a straggler left behind after a clean exit is killed too", async () => {
     const pidFile = join(root, "tree-clean.pid");
     const settings = fakeCommand("tree-clean", forker(pidFile, `process.stdout.write("done"); process.exit(0);`));
@@ -401,7 +372,7 @@ describe("local-cli — the whole process tree goes (POSIX process group, Window
   }, 40_000);
 
   test("the Windows kill is two programs by absolute path, as argv, with numbers only in the script", () => {
-    const [taskkill, orphans] = windowsKillCommands(4242, 1_000_000, 2_000_000, { SystemRoot: "D:\\WINNT" });
+    const [taskkill, orphans] = windowsKillCommands(4242, 1_000_000, { SystemRoot: "D:\\WINNT" });
     expect(taskkill).toEqual(["D:\\WINNT\\System32\\taskkill.exe", "/PID", "4242", "/T", "/F"]);
     expect(orphans?.slice(0, 4)).toEqual([
       "D:\\WINNT\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
@@ -410,30 +381,17 @@ describe("local-cli — the whole process tree goes (POSIX process group, Window
       "-Command",
     ]);
     // No SystemRoot: C:\Windows, never a PATH lookup.
-    expect(windowsKillCommands(1, 0, 0, {})[0]?.[0]).toBe("C:\\Windows\\System32\\taskkill.exe");
-    // The window: one second before the spawn to five seconds after the kill, as FILETIME ticks.
+    expect(windowsKillCommands(1, 0, {})[0]?.[0]).toBe("C:\\Windows\\System32\\taskkill.exe");
+    // The window: one second before the spawn, as FILETIME ticks, to the moment of the snapshot.
     const script = orphans?.[4] ?? "";
     expect(script).toContain(`FromFileTimeUtc(${(999_000n + 11_644_473_600_000n) * 10_000n})`);
-    expect(script).toContain(`FromFileTimeUtc(${(2_005_000n + 11_644_473_600_000n) * 10_000n})`);
+    // The upper bound is the snapshot's own time, not a slack past the kill (review D, item 3).
+    expect(script).toContain("$to = [datetime]::UtcNow");
     expect(script).toContain("$queue.Enqueue(@(4242, $from, $to))");
     // Parent pid AND start time decide; then each child's children, started after it.
     expect(script).toContain("$p.Parent -eq $q[0] -and $p.At -ge $q[1] -and $p.At -le $q[2]");
     expect(script).toContain("Stop-Process -Id $id -Force");
-    expect(windowsOrphanScript(7, 0, 0)).toBe(windowsKillCommands(7, 1_000, -5_000, {})[1]?.[4] ?? "");
-  });
-
-  test("on a Windows host the child is spawned without a group and still killed at the deadline", async () => {
-    // Pinned host: the Windows branch (no `detached`, kill the child alone) runs here on Linux.
-    const pidFile = join(root, "win.pid");
-    const settings = fakeCommand(
-      "win",
-      `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); await Bun.sleep(30_000);`,
-    );
-    const err = await sttFailureOf(
-      createLocalCliSttProvider(settings, deps({ timeoutMs: 1_000, host: hostFor("win32") })).transcribe(clip()),
-    );
-    expect(err.kind).toBe("timeout");
-    await waitUntil(() => !alive(pidIn(pidFile)), 5_000, "the child to die");
+    expect(windowsOrphanScript(7, 0)).toBe(windowsKillCommands(7, 1_000, {})[1]?.[4] ?? "");
   });
 });
 

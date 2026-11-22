@@ -46,19 +46,25 @@ import {
   type RowReducer,
 } from "./reduce.ts";
 import { asRecord, asText, probeTail, tokenCount } from "./cache-probe.ts";
+import { newestOf, stringField } from "./name-probe.ts";
+import type { NameReading } from "../session-title.ts";
 import { choicesBeforeFirstTurn, claudeResets, effortChosenAfter, lastTwoTurns, modelChoiceAfter } from "./claude-resets.ts";
 // The shared guard on what an image block may become. It lives in pi's adapter because it also
 // resolves pi's `blob:sha256:` refs against pi's own store, and `bridge/server.ts` reaches for it
 // from there for the same reason. The rule it enforces is not pi's, though: a journal is an AGENT's
 // output, so an `http://` value in a block never becomes a fetch the phone makes.
 import { resolveImage } from "./pi.ts";
+import { liftedSpelling } from "../../web/src/lib/harness/claude/paste.ts";
 import {
   containedRealpath,
   exists,
+  existingNewestFirst,
+  firstContained,
   head,
   loadTail,
   readSinceFile,
-  rootList,
+  rootReader,
+  type RootSource,
   statFile,
   tailBytes,
 } from "./files.ts";
@@ -90,8 +96,14 @@ export function isAgentId(value: string): boolean {
 
 /** Inner text of the first `<tag>…</tag>`, trimmed; null when the tag isn't present. */
 function inner(tag: string, text: string): string | null {
-  const m = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(text);
-  return m ? (m[1] ?? "").trim() : null;
+  // `indexOf`, not `<tag>([\s\S]*?)</tag>`: on an open tag repeated with no close that regex read the
+  // rest of the text again from each one (quadratic, 2 s at 256 KB). The first open tag pairs with
+  // the first close after it, as the regex did.
+  const open = `<${tag}>`;
+  const start = text.indexOf(open);
+  if (start === -1) return null;
+  const end = text.indexOf(`</${tag}>`, start + open.length);
+  return end === -1 ? null : text.slice(start + open.length, end).trim();
 }
 
 /** True when the content IS this envelope (rather than merely mentioning the tag in prose). */
@@ -111,8 +123,66 @@ function isEnvelope(tag: string, text: string): boolean {
  * the operator said, not an edge case. The tags are Claude Code's own and the operator never typed
  * them; drawn as text they open the turn with markup, and in the queue row they took a tenth of its
  * 200 characters.
+ *
+ * The grammar, as the regex `(^|\n)<pasted_content id="([0-9a-f]+)">\n?([\s\S]*?)\n?<\/pasted_content(?:\s+id="\2")?>`
+ * had it: an open tag at the start or after a line break, a hex id, one optional line break, the
+ * pasted text up to the FIRST close that fits (an unlabelled `</pasted_content>` or one with the same
+ * id), one optional line break before that close. It is walked by hand now, because the text is
+ * whatever a person pasted: on open tags repeated with no close, that regex read the rest of the
+ * prompt again from each one (quadratic, 2.6 s at 256 KB, the bridge stopped meanwhile).
  */
-const PASTED_CONTENT = /(^|\n)<pasted_content id="([0-9a-f]+)">\n?([\s\S]*?)\n?<\/pasted_content(?:\s+id="\2")?>/g;
+const PASTE_OPEN = '<pasted_content id="';
+const PASTE_CLOSE = "</pasted_content";
+const PASTE_ID = /[0-9a-f]+/y;
+const PASTE_CLOSE_ID = /\s+id="([0-9a-f]+)">/y;
+
+/** One close tag: where it starts, where it ends, and the id it names (null: unlabelled). */
+interface PasteClose {
+  at: number;
+  end: number;
+  id: string | null;
+}
+
+/** Every close tag in `text`, in order. A `</pasted_content` of neither shape closes nothing. */
+function pasteCloses(text: string): PasteClose[] {
+  const closes: PasteClose[] = [];
+  for (let at = text.indexOf(PASTE_CLOSE); at !== -1; at = text.indexOf(PASTE_CLOSE, at + PASTE_CLOSE.length)) {
+    const after = at + PASTE_CLOSE.length;
+    if (text[after] === ">") {
+      closes.push({ at, end: after + 1, id: null });
+      continue;
+    }
+    PASTE_CLOSE_ID.lastIndex = after;
+    const m = PASTE_CLOSE_ID.exec(text);
+    if (m) closes.push({ at, end: PASTE_CLOSE_ID.lastIndex, id: m[1] ?? "" });
+  }
+  return closes;
+}
+
+/**
+ * The first close at or after `from` that fits an open tag with `id`. Each list is read once from its
+ * front, so the calls must come with `from` never moving back, as the walk in `unwrapPastes` does.
+ */
+function pasteCloseFinder(closes: readonly PasteClose[]): (id: string, from: number) => PasteClose | undefined {
+  const lists = new Map<string | null, { closes: PasteClose[]; next: number }>();
+  for (const close of closes) {
+    const list = lists.get(close.id);
+    if (list) list.closes.push(close);
+    else lists.set(close.id, { closes: [close], next: 0 });
+  }
+  const firstIn = (key: string | null, from: number): PasteClose | undefined => {
+    const list = lists.get(key);
+    if (!list) return undefined;
+    while (list.next < list.closes.length && list.closes[list.next]!.at < from) list.next++;
+    return list.closes[list.next];
+  };
+  return (id, from) => {
+    const plain = firstIn(null, from);
+    const named = firstIn(id, from);
+    if (!plain || !named) return plain ?? named;
+    return plain.at < named.at ? plain : named;
+  };
+}
 
 /** The text with each recorded paste replaced by what was pasted, trimmed at both ends. A tag with no
  *  matching close (same id) is left as it is.
@@ -123,7 +193,29 @@ const PASTED_CONTENT = /(^|\n)<pasted_content id="([0-9a-f]+)">\n?([\s\S]*?)\n?<
  *  a receipt. Change the two together when Claude Code changes the wrapper. */
 export function unwrapPastes(text: string): string {
   if (!text.includes("<pasted_content ")) return text;
-  return text.replace(PASTED_CONTENT, "$1$3").trim();
+  const firstClose = pasteCloseFinder(pasteCloses(text));
+  let out = "";
+  let copied = 0;
+  for (let at = text.indexOf(PASTE_OPEN); at !== -1; ) {
+    PASTE_ID.lastIndex = at + PASTE_OPEN.length;
+    const id = at === 0 || text[at - 1] === "\n" ? PASTE_ID.exec(text)?.[0] : undefined;
+    const idEnd = at + PASTE_OPEN.length + (id?.length ?? 0);
+    if (id === undefined || !text.startsWith('">', idEnd)) {
+      at = text.indexOf(PASTE_OPEN, at + 1);
+      continue;
+    }
+    const body = text[idEnd + 2] === "\n" ? idEnd + 3 : idEnd + 2;
+    const close = firstClose(id, body);
+    if (close === undefined) {
+      at = text.indexOf(PASTE_OPEN, at + 1);
+      continue;
+    }
+    const bodyEnd = close.at > body && text[close.at - 1] === "\n" ? close.at - 1 : close.at;
+    out += text.slice(copied, at) + text.slice(body, bodyEnd);
+    copied = close.end;
+    at = text.indexOf(PASTE_OPEN, copied);
+  }
+  return (out + text.slice(copied)).trim();
 }
 
 /**
@@ -1113,23 +1205,6 @@ export function handedOverTo(lines: readonly string[]): string | null {
   return null;
 }
 
-/**
- * Real filesystem source rooted at Claude's projects directory.
- *
- * Resolution is by UUID SCAN, not by reconstructing the mangled project-directory name from the
- * pane's cwd. The mangling is lossy (every non-alphanumeric becomes "-") and, worse, a pane's
- * reported cwd drifts as the agent works — a subdirectory cwd would derive a directory that doesn't
- * exist. Session uuids are globally unique, so scanning the project dirs for `<uuid>.jsonl` is both
- * correct and cheap (measured: ~14 ms across 306 logs, and the hit is then cached).
- *
- * MORE THAN ONE ROOT is normal here: `CLAUDE_CONFIG_DIR` gives each Claude profile its own projects
- * tree, and a herd can hold panes from several (issue #92). The roots are searched IN ORDER and the
- * first one holding the uuid wins — and that is not a heuristic, it is the same global uniqueness the
- * scan already relies on: two roots cannot disagree about who a uuid belongs to. No profile detection
- * exists or is needed. The root that produced a hit is remembered with it, because everything after
- * resolution (continuation-following, and the containment check that guards it) must stay inside THAT
- * root rather than whichever root happened to be configured first.
- */
 /** Bounds on the shared per-directory sibling metadata snapshot for continuation following. */
 const DIR_SCAN_MAX = 64;
 /** Matches CacheTracker's 5 s floor so N panes in one project folder share a single directory scan. */
@@ -1153,6 +1228,23 @@ export interface ClaudeTranscriptSourceDeps {
   readonly readdir?: (path: string) => Promise<readonly string[]>;
 }
 
+/**
+ * Real filesystem source rooted at Claude's projects directory.
+ *
+ * Resolution is by UUID SCAN, not by reconstructing the mangled project-directory name from the
+ * pane's cwd. The mangling is lossy (every non-alphanumeric becomes "-") and, worse, a pane's
+ * reported cwd drifts as the agent works — a subdirectory cwd would derive a directory that doesn't
+ * exist. Session uuids are globally unique, so scanning the project dirs for `<uuid>.jsonl` is both
+ * correct and cheap (measured: ~14 ms across 306 logs, and the hit is then cached).
+ *
+ * MORE THAN ONE ROOT is normal here: `CLAUDE_CONFIG_DIR` gives each Claude profile its own projects
+ * tree, and a herd can hold panes from several (issue #92). The roots are searched IN ORDER and the
+ * first one holding the uuid wins — and that is not a heuristic, it is the same global uniqueness the
+ * scan already relies on: two roots cannot disagree about who a uuid belongs to. No profile detection
+ * exists or is needed. The root that produced a hit is remembered with it, because everything after
+ * resolution (continuation-following, and the containment check that guards it) must stay inside THAT
+ * root rather than whichever root happened to be configured first.
+ */
 export class ClaudeTranscriptSource implements TranscriptSource {
   private readonly pathCache = new Map<string, { path: string; root: string }>();
 
@@ -1170,13 +1262,18 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   private readonly dirScans = new Map<string, DirScan>();
   private readonly inFlightDirScans = new Map<string, Promise<ReadonlyMap<string, DirFileMeta> | null>>();
 
-  private readonly roots: string[];
+  private readonly rootsNow: () => string[];
   private readonly now: () => number;
   private readonly statFs: (path: string) => Promise<DirFileMeta>;
   private readonly readdirFs: (path: string) => Promise<readonly string[]>;
 
-  constructor(roots: string | readonly string[], deps: ClaudeTranscriptSourceDeps = {}) {
-    this.roots = rootList(roots);
+  /** The roots now: fixed, or the live list an added account joins (M101). */
+  private get roots(): string[] {
+    return this.rootsNow();
+  }
+
+  constructor(roots: RootSource, deps: ClaudeTranscriptSourceDeps = {}) {
+    this.rootsNow = rootReader(roots);
     this.now = deps.now ?? Date.now;
     this.statFs = deps.stat ?? stat;
     this.readdirFs = deps.readdir ?? readdir;
@@ -1196,7 +1293,8 @@ export class ClaudeTranscriptSource implements TranscriptSource {
       // which never changes. Continuation-following must still run on every call, because the
       // conversation rotates into a new file WHILE the bridge is up: caching its result would pin the
       // answer to whatever was true at the first request and go stale minutes later.
-      const real = await containedRealpath(cached.path, cached.root);
+      // A root that left the config (an account removed) serves nothing more, cache or not.
+      const real = this.roots.includes(cached.root) ? await containedRealpath(cached.path, cached.root) : null;
       if (real !== null) return this.follow(real, cached.root);
       this.pathCache.delete(sessionId);
     }
@@ -1271,7 +1369,11 @@ export class ClaudeTranscriptSource implements TranscriptSource {
    * One root's projects directories, searched for `<sessionId>.jsonl`. The contained real path, or null.
    *
    * Null covers both "not here" and "here, but pointing out of this root": the caller moves on to the
-   * next root either way.
+   * next root either way. A log by this name that points out of this root is not this root's to serve,
+   * and it is never accepted under a sibling root either (files.ts header); the next project folder
+   * of the SAME root that holds the name is asked instead (#839, see {@link firstContained}), so a
+   * planted or dangling symlink in one project folder cannot blank the log that sits in another.
+   * The logs are tried newest modified first ({@link existingNewestFirst}): the folder names carry no time.
    */
   private async scanRoot(sessionId: string, root: string): Promise<string | null> {
     const file = `${sessionId}.jsonl`;
@@ -1281,16 +1383,7 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     } catch {
       return null; // this projects dir doesn't exist — a profile that isn't on this machine
     }
-    for (const dir of dirs) {
-      const candidate = join(root, dir, file);
-      if (!(await exists(candidate))) continue;
-      // A log by this name exists here but points out of this root, so it is not this root's to serve —
-      // and we do not go on to accept it under a sibling root either (files.ts header). Abandoning the
-      // root rather than the whole search is the only multi-root difference: a planted symlink in one
-      // profile can't blank the history of the others.
-      return containedRealpath(candidate, root);
-    }
-    return null;
+    return firstContained(await existingNewestFirst(root, dirs, file), root);
   }
 
   /**
@@ -1357,27 +1450,6 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   }
 
   /**
-   * Follow a rotated conversation to the log it actually continues in.
-   *
-   * The id Herdr reports can name a FROZEN PREFIX (see {@link conversationRoot}), so serving it
-   * verbatim silently drops everything since the rotation. We look for siblings sharing this log's
-   * root uuid and prefer the most recently written one.
-   *
-   * Two guards keep this from making things worse:
-   *  - a candidate must be at least as large as the log we already have, so following can never show
-   *    LESS history than not following;
-   *  - only the first line of each sibling is read (plus a stat), so the scan is a few milliseconds
-   *    over a directory of ~40 logs. That matters, because `resolve` runs on the cache tracker's
-   *    floor tick as well as on a History tap.
-   *
-   * A sibling whose own end records a hand-over is never picked: {@link handedOverTo} is Claude
-   * Code's statement that the conversation left it, and that outranks a guess from size and mtime.
-   *
-   * Known limit: a `/fork` of the same conversation shares the root too, so a fork being written more
-   * recently than the pane's own session would win. That needs a per-pane session id Herdr doesn't
-   * expose; showing the freshest branch of the right conversation beats showing a stale one.
-   */
-  /**
    * Return a shared short-TTL `(size, mtimeMs)` snapshot for `.jsonl` siblings in `dir`.
    * Re-scans immediately when `stat(dir).mtimeMs` changes (a new rotation file created or deleted)
    * or after {@link DIR_SCAN_TTL_MS} (so in-place writes to existing siblings and transient `stat`
@@ -1438,6 +1510,28 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     }
   }
 
+  /**
+   * Follow a rotated conversation to the log it actually continues in.
+   *
+   * The id Herdr reports can name a FROZEN PREFIX (see {@link conversationRoot}), so serving it
+   * verbatim silently drops everything since the rotation. We look for siblings sharing this log's
+   * root uuid and prefer the most recently written one.
+   *
+   * Two guards keep this from making things worse:
+   *  - a candidate must be at least as large as the log we already have, so following can never show
+   *    LESS history than not following;
+   *  - only the first line of each sibling is read, and the sibling sizes and times now come from the
+   *    shared snapshot of {@link dirEntries}, at most {@link DIR_SCAN_TTL_MS} old (the pane's own file is
+   *    still read fresh), so the scan is a few milliseconds over a directory of ~40 logs. That matters, because `resolve` runs on the cache tracker's
+   *    floor tick as well as on a History tap.
+   *
+   * A sibling whose own end records a hand-over is never picked: {@link handedOverTo} is Claude
+   * Code's statement that the conversation left it, and that outranks a guess from size and mtime.
+   *
+   * Known limit: a `/fork` of the same conversation shares the root too, so a fork being written more
+   * recently than the pane's own session would win. That needs a per-pane session id Herdr doesn't
+   * expose; showing the freshest branch of the right conversation beats showing a stale one.
+   */
   private async followContinuation(path: string, root: string): Promise<string> {
     const dir = dirname(path);
     const selfName = basename(path);
@@ -1500,7 +1594,7 @@ export class ClaudeTranscriptSource implements TranscriptSource {
  * `roots` is one projects directory or several (one per `CLAUDE_CONFIG_DIR` profile), searched in
  * order.
  */
-export function claudeJournal(roots: string | readonly string[]): JournalAdapter {
+export function claudeJournal(roots: RootSource): JournalAdapter {
   const source = new ClaudeTranscriptSource(roots);
   return {
     agent: "claude",
@@ -1509,6 +1603,7 @@ export function claudeJournal(roots: string | readonly string[]): JournalAdapter
     reducer: () => createClaudeReducer(),
     cacheProbe: (ref) => claudeCacheProbe(source, ref),
     choiceProbe: (ref) => claudeChoiceProbe(source, ref),
+    nameProbe: (ref) => claudeNameProbe(source, ref),
     // Proven 2026-10-07 on a throwaway pane under Herdr 0.9.3: with two messages queued behind a
     // running tool, `ctrl+Enter` through `POST /api/pane/:id/keys` made Claude Code write a `remove`
     // row for BOTH (`absorbed_mid_turn`) and the "ctrl+enter to send now" hint went away. NOT on tmux
@@ -1517,6 +1612,8 @@ export function claudeJournal(roots: string | readonly string[]): JournalAdapter
     sendQueuedNow: ["ctrl+Enter"],
     // The `queue-operation` rows are the queue (createQueueTracker): the cards come from them (ADR 0122).
     recordsQueue: true,
+    // A picture's path is written `[Image #N]` in the queue row and the prompt (the paste grammar's own rule).
+    spellsSend: liftedSpelling,
   };
 }
 
@@ -1583,6 +1680,35 @@ async function claudeChoiceProbe(source: ClaudeTranscriptSource, ref: AgentSessi
   }
   if (effort !== undefined) choices.effort = effort;
   return choices;
+}
+
+/**
+ * What Claude Code's log calls the session (JournalAdapter.nameProbe), off the cache probe's 128 KB tail.
+ *
+ * Three bookkeeping rows carry a name, and Claude Code writes them again every few turns, so the tail
+ * holds the newest of each (measured 2026-11-13 on 2.1.3xx: one set per turn in a 1,050-row log).
+ * `custom-title` (`customTitle`) is the `/rename` name and `agent-name` (`agentName`) repeats it: both are
+ * the person's. `ai-title` (`aiTitle`) is the title Claude Code wrote itself. An empty string clears
+ * one. A tail with neither row says nothing, and the tracker keeps the last name it knew.
+ */
+async function claudeNameProbe(source: ClaudeTranscriptSource, ref: AgentSessionRef): Promise<NameReading | null> {
+  const tail = await probeTail(source, ref);
+  if (tail === null) return null;
+  return claudeNamesOf(tail.lines);
+}
+
+/** The names in a window of Claude Code rows, newest wins (see {@link claudeNameProbe}). Pure. */
+export function claudeNamesOf(lines: readonly string[]): NameReading {
+  const reading: NameReading = {};
+  const person = newestOf(lines, (row) => {
+    if (row.type === "custom-title") return stringField(row, "customTitle");
+    if (row.type === "agent-name") return stringField(row, "agentName");
+    return undefined;
+  });
+  if (person !== undefined) reading.person = person.trim() === "" ? null : person;
+  const agent = newestOf(lines, (row) => (row.type === "ai-title" ? stringField(row, "aiTitle") : undefined));
+  if (agent !== undefined) reading.agent = agent.trim() === "" ? null : agent;
+  return reading;
 }
 
 /**

@@ -12,6 +12,7 @@ import { fetchHistory } from "@/lib/api";
 import { HISTORY_PAGE_SIZE, type HistoryData } from "@/lib/loaders";
 import { paneSessionLog, useMuxCapability } from "@/lib/mux-capability";
 import { panePath } from "@/lib/nav";
+import { givenName } from "@/lib/pane-name";
 import { setStatus } from "@/lib/status";
 import { matchingIndexed, searchIndex, step, userTurnIndices } from "@/lib/transcript-search";
 import type { TranscriptEntry } from "@/lib/types";
@@ -21,6 +22,7 @@ import { useLocale } from "@/hooks/use-locale";
 import { useNav } from "@/hooks/use-nav";
 import { mirrorFont, useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { cn } from "@/lib/utils";
+import { FOCUS_RING, HOVER_FILL } from "@/components/ui/button";
 
 // Pane history route — the agent's own transcript, which is the ONLY conversation history a Claude
 // pane can have. Its terminal runs on the alternate screen, so Herdr retains no scrollback ring at
@@ -218,7 +220,7 @@ export function HistoryRoute() {
     listRef.current?.scrollToBottom();
   }, []);
 
-  const title = agent?.paneLabel ?? agent?.sessionName ?? agent?.workspaceLabel ?? paneId;
+  const title = (agent === undefined ? null : givenName(agent)) ?? agent?.workspaceLabel ?? paneId;
   const matchCursor = matches.indexOf(cursor);
 
   const dismissDeliverable = useRef<(() => boolean) | null>(null);
@@ -260,7 +262,7 @@ export function HistoryRoute() {
               type="button"
               onClick={() => setFindOpen(true)}
               aria-label={t("history.findAria")}
-              className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors active:bg-muted/60"
+              className={cn("flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors active:bg-muted/60", FOCUS_RING, HOVER_FILL)}
             >
               <Icon name="find-in-pane" className="size-4" />
             </button>
@@ -279,7 +281,7 @@ export function HistoryRoute() {
             type="button"
             onClick={() => nav.up(panePath(paneId, scope))}
             aria-label={t("history.closeAria")}
-            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors active:bg-muted/60"
+            className={cn("flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors active:bg-muted/60", FOCUS_RING, HOVER_FILL)}
           >
             <Icon name="close" className="size-4" />
           </button>

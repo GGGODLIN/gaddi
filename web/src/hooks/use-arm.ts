@@ -1,0 +1,105 @@
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+
+import { ARM_DWELL_MS, ARM_MS } from "@/lib/arm";
+
+/** What one tap on an armable control came to. */
+export type ArmTap =
+  /** The first tap: the control is armed now, and nothing runs. */
+  | "armed"
+  /** The second tap, after the dwell and inside the window: run the act. The arm is spent. */
+  | "fire"
+  /** A tap inside the dwell: the same touch landing twice. Neither an act nor a disarm. */
+  | "dwell";
+
+/** An armable set of controls: the key armed now, the tap, and the way to drop the arm. */
+export interface Arm<K extends string> {
+  armed: K | null;
+  tap: (key: K) => ArmTap;
+  disarm: () => void;
+}
+
+/**
+ * ARM, THEN ACT (#339, M68): the second-tap confirm, shared by every control that must not fire by
+ * accident. The belt's Stop (`ScreenStop`, harness-bar.tsx) and the hill's Decision card read it, so
+ * the window and the dwell cannot drift apart between them.
+ *
+ * The first tap on a key ARMS it: the caller changes the words (never the size) and shows the armed
+ * tint. The arm lapses by itself after {@link ARM_MS}. A second tap on the same key counts only
+ * {@link ARM_DWELL_MS} or more after the arm, so a double tap, or a thumb that lands twice, is neither
+ * an act nor a disarm. ONE key is armed at a time: a tap on another key moves the arm there, so a card
+ * with several confirmable buttons never holds two of them armed.
+ *
+ * `windowMs` sets how long an arm lasts; it defaults to {@link ARM_MS}. Enter on a screen Collie cannot
+ * read passes `ENTER_ARM_MS`, the one length the unread card's Enter cap and the Keys pad's Enter share.
+ *
+ * The hook owns the timer and nothing else. The caller decides what a key is, what `fire` runs, and
+ * when an arm stops making sense (`disarm`): a button that goes dim, a pane that changes.
+ */
+export function useArm<K extends string>(windowMs: number = ARM_MS): Arm<K> {
+  const [armed, setArmed] = useState<K | null>(null);
+  const armedKey = useRef<K | null>(null);
+  const armedAt = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const disarm = useCallback(() => {
+    clearTimeout(timer.current);
+    armedKey.current = null;
+    setArmed(null);
+  }, []);
+
+  const tap = useCallback(
+    (key: K): ArmTap => {
+      if (armedKey.current !== key) {
+        armedKey.current = key;
+        armedAt.current = Date.now();
+        setArmed(key);
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => {
+          armedKey.current = null;
+          setArmed(null);
+        }, windowMs);
+        return "armed";
+      }
+      // Inside the dwell the tap is the same touch landing twice, not a second decision.
+      if (Date.now() - armedAt.current < ARM_DWELL_MS) return "dwell";
+      disarm();
+      return "fire";
+    },
+    [disarm, windowMs],
+  );
+
+  return { armed, tap, disarm };
+}
+
+/**
+ * Run `run` when `value` changes, never on mount. The only way an armed control drops its arm for a changed
+ * value (a count, a version, a pane, a switch position): an effect that calls `disarm()` on its dependencies
+ * also runs on mount, and React may flush that mount effect AFTER a first tap that landed in the same task as
+ * the control's first paint, so the effect undoes the arm that tap just set and the person sees no change.
+ * The previous value sits in a ref, set when the effect sees a difference; a re-render with the same value,
+ * and the mount, do nothing.
+ */
+export function useOnChange<V>(value: V, run: () => void): void {
+  const previous = useRef(value);
+  useEffect(() => {
+    if (Object.is(previous.current, value)) return;
+    previous.current = value;
+    run();
+  }, [value, run]);
+}
+
+/** {@link useOnChange} for the common case: drop the arm when `value` changes, not on mount. */
+export function useDisarmOn<V>(value: V, disarm: () => void): void {
+  useOnChange(value, disarm);
+}
+
+/**
+ * A button's keydown for an armable key (the M102 review 3): a hardware Enter held down on the focused button repeats
+ * its click, and the first repeat comes about 500 ms in, past {@link ARM_DWELL_MS}, so it would fire the arm the first
+ * press set. A repeated Enter makes no click; the first press and every new press still do.
+ */
+export function ignoreHeldEnter(event: KeyboardEvent<HTMLElement>): void {
+  if (event.repeat && event.key === "Enter") event.preventDefault();
+}

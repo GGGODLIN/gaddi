@@ -87,8 +87,8 @@ describe("the trouble signal from a streak (M86 spec 05)", () => {
     noteSend(key, "w9:p1", fail(4));
     noteSend(key, "w9:p1", fail(5));
     await new Promise((resolve) => setTimeout(resolve, 50));
+    // The lead's own pane rides as `pane`, only so the bridge can say whether it is linked.
     expect(posted).toEqual([{ kind: "send", harness: "codex", version: null, mux: "herdr-core" }]);
-    expect(JSON.stringify(posted)).not.toContain("w9:p1");
   });
 });
 
@@ -131,18 +131,18 @@ describe("the trouble signal's facts (1.27.4)", () => {
 
   it("a crew member's pane names the member's own multiplexer from the lead's config for that host", async () => {
     const { posted, configReads } = listen(null, { push: false, vapidPublicKey: "", mux: { name: "tmux", capabilities: {} } });
-    await signalTrouble({ kind: "dialog", paneId: "w2:p1", scope: { host: "minibuch" }, agent: "omp" });
-    expect(configReads).toEqual(["?host=minibuch"]);
+    await signalTrouble({ kind: "dialog", paneId: "w2:p1", scope: { host: "workshop" }, agent: "omp" });
+    expect(configReads).toEqual(["?host=workshop"]);
     // The member's version stays the receipts' rule: the report context is lead-only.
     expect(posted).toEqual([{ kind: "dialog", harness: "omp", version: null, mux: "tmux" }]);
   });
 
   it("a member whose config read fails, or names no multiplexer, says other", async () => {
     const failed = listen(null, null);
-    await signalTrouble({ kind: "dialog", paneId: "w2:p1", scope: { host: "minibuch" }, agent: "omp" });
+    await signalTrouble({ kind: "dialog", paneId: "w2:p1", scope: { host: "workshop" }, agent: "omp" });
     expect(failed.posted).toEqual([{ kind: "dialog", harness: "omp", version: null, mux: "other" }]);
     const bare = listen(null, { push: false, vapidPublicKey: "" });
-    await signalTrouble({ kind: "dialog", paneId: "w2:p2", scope: { host: "minibuch" }, agent: "omp" });
+    await signalTrouble({ kind: "dialog", paneId: "w2:p2", scope: { host: "workshop" }, agent: "omp" });
     expect(bare.posted).toEqual([{ kind: "dialog", harness: "omp", version: null, mux: "other" }]);
   });
 });

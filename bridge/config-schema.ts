@@ -15,8 +15,8 @@
 // with `COLLIE_`, and it declares the key it takes.
 //
 // **A config file adds no environment key** (CREW_PROTOCOL.md §11). Moving these literals here does
-// not change what any process reads; `bridge/solo-baseline.test.ts` pins the same 37 names it always
-// pinned, now read from {@link CONFIG_SETTINGS} instead of from `bridge/config.ts`'s source.
+// not change what any process reads; `bridge/solo-baseline.test.ts` reads {@link CONFIG_SETTINGS}
+// and holds that no env key a solo `loadConfig` names belongs to the crew.
 
 import { ACCOUNT_WINDOW_HARNESSES } from "./account-windows-setting.ts";
 import { DEFAULT_MUX } from "./mux/registry.ts";
@@ -103,7 +103,7 @@ interface ConfigSettingBase {
    * Absent for every setting resolved somewhere else — the crew budgets, the standby door, the
    * update lane, the front door and speech-to-text all read their own environment in their own
    * module. `bridge/solo-baseline.test.ts` reads this field: the rows that carry one are exactly the
-   * env keys a SOLO instance's `loadConfig` names, which is the list §11's zero-tax contract pins.
+   * env keys a SOLO instance's `loadConfig` names, and none of them may be a crew key (§11).
    */
   readonly configField?: string;
 }
@@ -232,7 +232,7 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     section: "bridge",
     kind: "bool",
     default: true,
-    doc: "Front every running session this collie discovers, not only the primary one.",
+    doc: "Front every running space this collie discovers, not only the primary one.",
     configField: "multiSession",
   },
   {
@@ -252,6 +252,15 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     default: true,
     doc: "Send from the phone through the bridge-side Send Protocol (probe, predicted-state check, key gate, receipt). Off turns sending text off; the keys still work.",
     configField: "sendProtocol",
+  },
+  {
+    key: "inside",
+    env: "COLLIE_INSIDE",
+    section: "bridge",
+    kind: "bool",
+    default: false,
+    doc: "Experimental (M99): the inside wire's switch. Unset, it is on while `collie harness link` has linked a harness on this machine, so a linked agent can take sends, asks and wake events as data. Off keeps the screen path for every session; on opens the socket with no link.",
+    configField: "inside",
   },
   {
     key: "walky",
@@ -384,7 +393,7 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     section: "mux",
     kind: "string",
     default: DEFAULT_MUX,
-    doc: "Which multiplexer this collie mirrors: herdr, tern, tmux, zellij, tuios or durable.",
+    doc: "Which multiplexer this collie mirrors: herdr, tern, tmux, zellij, tuios, rex or durable.",
     configField: "mux",
   },
   {
@@ -425,6 +434,15 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     configField: "ternBin",
   },
   {
+    key: "rex_bin",
+    env: "COLLIE_REX_BIN",
+    section: "mux",
+    kind: "string",
+    default: "",
+    doc: "Absolute path to the rex binary, when it sits somewhere unusual.",
+    configField: "rexBin",
+  },
+  {
     key: "zellij_bin",
     env: "COLLIE_ZELLIJ_BIN",
     section: "mux",
@@ -458,6 +476,15 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     kind: "string",
     default: "",
     doc: "The tern daemon socket to drive. Empty takes the socket tern itself uses.",
+    configField: "muxEndpoint",
+  },
+  {
+    key: "mux_endpoint_rex",
+    env: "COLLIE_MUX_ENDPOINT_REX",
+    section: "mux",
+    kind: "string",
+    default: "",
+    doc: "The rex server to drive, as rex -S takes it. Empty takes the server rex itself finds.",
     configField: "muxEndpoint",
   },
   {
@@ -585,6 +612,15 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     default: true,
     doc: "Mask known secret shapes in pane text before it reaches a phone or a push.",
     configField: "redact",
+  },
+  {
+    key: "project_files",
+    env: "COLLIE_PROJECT_FILES",
+    section: "access",
+    kind: "bool",
+    default: true,
+    doc: "Read a repository's collie.toml for its project picture; off reads none and shows the agent logos.",
+    configField: "projectFiles",
   },
   {
     key: "sent",
@@ -759,6 +795,15 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     doc: "Where OpenClaw keeps its state. Empty follows OPENCLAW_STATE_DIR, else ~/.openclaw.",
     configField: "journalRoots",
   },
+  {
+    key: "mcode_root",
+    env: "COLLIE_MCODE_ROOT",
+    section: "journal",
+    kind: "roots",
+    default: [],
+    doc: "Where MiniMax Code keeps its dated session folders. Empty follows MINIMAX_DATA_DIR, else ~/.minimax/v2/sessions.",
+    configField: "journalRoots",
+  },
 
   // ── crew ───────────────────────────────────────────────────────────────────
   {
@@ -794,6 +839,15 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     kind: "bool",
     default: false,
     doc: "Keep this peer's own browser front door up. Peer mode only.",
+  },
+  {
+    key: "crew_trick_reads",
+    env: "COLLIE_CREW_TRICK_READS",
+    section: "crew",
+    kind: "enum",
+    values: ["on", "off"],
+    default: "",
+    doc: "Whether the lead's tricks may read files from this member's agent sessions. Empty follows device_header: on while it is off.",
   },
 
   // ── standby ────────────────────────────────────────────────────────────────
@@ -888,6 +942,15 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     default: "",
     doc: "The path Collie is mounted under when a proxy gives it one, such as /collie. Empty means the root.",
     configField: "basePath",
+  },
+  {
+    key: "auth_return",
+    env: "COLLIE_AUTH_RETURN",
+    section: "serve",
+    kind: "bool",
+    default: false,
+    doc: "Send /auth/ back to the app. Set it when your front door signs in on every path and serves nothing at /auth/.",
+    configField: "authReturn",
   },
   {
     key: "serve_mode",

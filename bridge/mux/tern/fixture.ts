@@ -2,7 +2,7 @@
 
 import type { MuxConformanceFixture, MuxConformanceWorld, MuxWrite } from "../conformance.ts";
 import { TernMux } from "./adapter.ts";
-import type { TernExec, TernRunResult, TernStreamClient, TernStreamHandlers } from "./exec.ts";
+import { TIMED_OUT_CODE, timedOutMessage, type TernExec, type TernRunResult, type TernStreamClient, type TernStreamHandlers } from "./exec.ts";
 import type { TernBlock, TernLsResult, TernSession, TernTab } from "./protocol.ts";
 
 const GREEN = "\u001b[32m";
@@ -44,6 +44,11 @@ interface FakeListener {
 }
 
 export class FakeTern implements TernExec {
+  /** The next text write fails once (M100 spec 03): `stall` gets no answer in time, `refuse` is told no. */
+  nextWrite: "stall" | "refuse" | null = null;
+  /** The next key write fails once, the same two ways (M100 spec 03). */
+  nextKeys: "stall" | "refuse" | null = null;
+
   private sessions = new Map<number, FakeSession>();
   private tabs = new Map<number, FakeTab>();
   private panes = new Map<number, FakePane>();
@@ -77,8 +82,8 @@ export class FakeTern implements TernExec {
       id: 101,
       tabId: 11,
       sessionId: 1,
-      title: "π - denis",
-      cwd: "/home/denis",
+      title: "π - casey",
+      cwd: "/home/casey",
       program: "/bin/zsh",
       args: ["-l"],
       focused: true,
@@ -91,7 +96,7 @@ export class FakeTern implements TernExec {
       tabId: 11,
       sessionId: 1,
       title: "bash",
-      cwd: "/home/denis",
+      cwd: "/home/casey",
       program: "/bin/bash",
       args: [],
       focused: false,
@@ -104,7 +109,7 @@ export class FakeTern implements TernExec {
       tabId: 12,
       sessionId: 1,
       title: "vim",
-      cwd: "/home/denis/docs",
+      cwd: "/home/casey/docs",
       program: "vim",
       args: [],
       // Tern remembers a focused block PER TAB, so a hidden tab reports one too (measured on 0.4.5).
@@ -118,7 +123,7 @@ export class FakeTern implements TernExec {
       tabId: 21,
       sessionId: 2,
       title: "cargo build",
-      cwd: "/home/denis/work",
+      cwd: "/home/casey/work",
       program: "cargo",
       args: ["build"],
       focused: true,
@@ -149,6 +154,19 @@ export class FakeTern implements TernExec {
       return { code: 1, stdout: "", stderr: "the session daemon did not answer" };
     }
     const verb = args[0];
+    const keysFailing = this.nextKeys;
+    if (keysFailing !== null && verb === "send" && args[2] === "keys") {
+      this.nextKeys = null;
+      if (keysFailing === "stall") return { code: TIMED_OUT_CODE, stdout: "", stderr: timedOutMessage(args, 5000) };
+      return { code: 1, stdout: "", stderr: "tern send: the session daemon refused the keys" };
+    }
+    const failing = this.nextWrite;
+    if (failing !== null && verb === "send" && (args[2] === "text" || args[2] === "paste")) {
+      this.nextWrite = null;
+      // A stall is what SpawnTernExec reports when it kills a tern on its budget; a refusal is tern's own no.
+      if (failing === "stall") return { code: TIMED_OUT_CODE, stdout: "", stderr: timedOutMessage(args, 5000) };
+      return { code: 1, stdout: "", stderr: "tern send: the session daemon refused the input" };
+    }
 
     if (verb === "ls") {
       return { code: 0, stdout: JSON.stringify(this.buildLsResult()), stderr: "" };
@@ -262,7 +280,7 @@ export class FakeTern implements TernExec {
           paneIds: [paneId],
         };
         const cwdIdx = args.indexOf("--cwd");
-        const cwd = cwdIdx >= 0 && args[cwdIdx + 1] ? args[cwdIdx + 1] : "/home/denis";
+        const cwd = cwdIdx >= 0 && args[cwdIdx + 1] ? args[cwdIdx + 1] : "/home/casey";
 
         const newPane: FakePane = {
           id: paneId,
@@ -292,7 +310,7 @@ export class FakeTern implements TernExec {
         const paneId = this.nextId++;
 
         const cwdIdx = args.indexOf("--cwd");
-        const cwd = cwdIdx >= 0 && args[cwdIdx + 1] ? args[cwdIdx + 1] : "/home/denis";
+        const cwd = cwdIdx >= 0 && args[cwdIdx + 1] ? args[cwdIdx + 1] : "/home/casey";
 
         const newSession: FakeSession = {
           id: sessionId,
@@ -456,7 +474,7 @@ export class FakeTern implements TernExec {
       tabId,
       sessionId: s.id,
       title: "silent",
-      cwd: "/home/denis",
+      cwd: "/home/casey",
       program: "/bin/sh",
       args: [],
       focused: true,
@@ -504,6 +522,12 @@ export function ternWorld(fake: FakeTern): MuxConformanceWorld {
   return {
     adapter,
     writes: () => fake.writes(),
+    failNextWrite: (how: "stall" | "refuse") => {
+      fake.nextWrite = how;
+    },
+    failNextKeys: (how: "stall" | "refuse") => {
+      fake.nextKeys = how;
+    },
     reconnect: () => fake.reconnect(),
     restartMux: () => fake.restartMux(),
     renameOutOfBand: (paneId, label) => fake.renameOutOfBand(paneId, label),

@@ -1,5 +1,6 @@
+import { Navigate, useLocation } from "react-router";
+
 import { Icon } from "@/components/icons/icon";
-import type { IconKey } from "@/components/icons/keys";
 
 import { RouteHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
@@ -9,19 +10,20 @@ import { IslandBuildNotice } from "@/components/island-build-notice";
 import { SettingsNavRow } from "@/components/settings-nav-row";
 import { InstallControl } from "@/components/install-control";
 import { useUpdatesStatus } from "@/components/updates-settings-card";
-import { hasExperiments } from "@/lib/experiments";
+import { SettingsSearch } from "@/components/settings-search";
+import { STEADY_PAGES, useSettingsRows } from "@/hooks/use-settings-rows";
 import { useLocale } from "@/hooks/use-locale";
 import { useNav } from "@/hooks/use-nav";
-import { t, type MessageKey } from "@/lib/i18n";
-import { homePath, machinesPath, settingsSectionPath, updatesPath } from "@/lib/nav";
-import type { Scope } from "@/lib/scope";
+import { t } from "@/lib/i18n";
+import { homePath, updatesPath } from "@/lib/nav";
 import { useScope } from "@/lib/session";
+import { oldIndexTarget } from "@/routes/settings-redirect";
 import { BandMain } from "@/components/ui/strip-host";
 
 // ── THE SETTINGS INDEX ──────────────────────────────────────────────────────────────────────────
 //
-// Updates first, then five rows, each opening a section (routes/settings-sections.tsx, which explains the split), then
-// Machines (a page, not a section) and, while Experiments holds anything, Experiments.
+// The search, then Updates and about, then the registry's pages in their order (lib/settings/pages.ts, ADR 0170), each
+// row with its line of what the page holds.
 //
 // This page used to BE the settings: seventeen cards in one column, over a thousand pixels of
 // scroll on a phone, with no headings to skim by — the file argued for that, on the grounds that
@@ -40,98 +42,43 @@ import { BandMain } from "@/components/ui/strip-host";
 // before you go looking for anything else. It costs one line and it is also on the System page,
 // where it sits with the rest of the diagnostics.
 
-interface Row {
-  /** The row's own key, and for a section the word in its path. */
-  id: string;
-  /** Where the row opens. A section is `/settings/<section>`; Machines is a page of its own. */
-  to: (scope: Scope | undefined) => string;
-  icon: IconKey;
-  title: MessageKey;
-  blurb: MessageKey;
-}
+// The rows, their order and the reasons for it live in hooks/use-settings-rows.ts, which the large screen's section
+// list (components/settings-shell.tsx) reads too.
+export { LIST_HOLD_MS } from "@/hooks/use-settings-rows";
 
-// The order is the order of how standing a choice is. Appearance is changed most and changed first;
-// System is the page you open when something is wrong, which is rarely and deliberately. Voice sits
-// between Device and Alerts and, unlike Experiments, is never hidden: a host that offers no speech
-// gets a page that says so, because a row that comes and goes teaches nobody where dictation lives.
-//
-// Experiments trails all four, and it is the only row that can be absent: it renders while
-// `lib/experiments.ts` holds something, because a row that opens an empty page is noise. It is last
-// rather than beside Appearance because its members are not a subject, they are a CONTRACT — read
-// `routes/settings-sections.tsx` for the whole argument, including why Chat's switch is not a card
-// on Appearance.
-//
-// Machines sits between System and Experiments and is the one row that is not a section: it opens
-// `/machines`, a page with a list and a detail of its own, and it is always offered, solo included
-// (a solo collie is one machine with a load worth watching).
-const ROWS: Row[] = [
-  {
-    id: "appearance",
-    to: (scope) => settingsSectionPath("appearance", scope),
-    icon: "theme",
-    title: "settings.section.appearance.title",
-    blurb: "settings.section.appearance.blurb",
-  },
-  {
-    id: "harnesses",
-    to: (scope) => settingsSectionPath("harnesses", scope),
-    icon: "harnesses",
-    title: "settings.section.harnesses.title",
-    blurb: "settings.section.harnesses.blurb",
-  },
-  {
-    id: "device",
-    to: (scope) => settingsSectionPath("device", scope),
-    icon: "section-device",
-    title: "settings.section.device.title",
-    blurb: "settings.section.device.blurb",
-  },
-  {
-    id: "voice",
-    to: (scope) => settingsSectionPath("voice", scope),
-    icon: "mic",
-    title: "settings.section.voice.title",
-    blurb: "settings.section.voice.blurb",
-  },
-  {
-    id: "alerts",
-    to: (scope) => settingsSectionPath("alerts", scope),
-    icon: "notifications",
-    title: "settings.section.alerts.title",
-    blurb: "settings.section.alerts.blurb",
-  },
-  {
-    id: "system",
-    to: (scope) => settingsSectionPath("system", scope),
-    icon: "machine",
-    title: "settings.section.system.title",
-    blurb: "settings.section.system.blurb",
-  },
-  {
-    id: "machines",
-    to: (scope) => machinesPath(scope),
-    icon: "machine-activity",
-    title: "settings.section.machines.title",
-    blurb: "settings.section.machines.blurb",
-  },
-  ...(hasExperiments()
-    ? [
-        {
-          id: "experiments",
-          to: (scope) => settingsSectionPath("experiments", scope),
-          icon: "experiments",
-          title: "settings.section.experiments.title",
-          blurb: "settings.section.experiments.blurb",
-        } satisfies Row,
-      ]
-    : []),
-];
+/**
+ * The quiet stand-in for the list card, on a first visit with no remembered answer, until the two
+ * read has landed or {@link LIST_HOLD_MS} has passed. It is the card's own box with the rows that
+ * are always there, empty and of their exact height (the Updates row, `ROWS` and Tricks while it is on: 16px padding twice
+ * around the 24px title line and the 20px caption line, so `box-content h-11 p-4`), inside the same
+ * list group, so a theme's row edges and gaps come out as they will. No spinner and no words: a state
+ * with nothing to say keeps its slot (DESIGN.md §2). The row that may be added (Accounts)
+ * are not counted, so the card grows by it if it arrives late, which is the rare, accepted case.
+ */
+function ListHold() {
+  return (
+    <Card className="gap-0 py-0" data-slot="settings-list-hold" aria-hidden="true">
+      <div data-slot="list-group">
+        {/* A page line may wrap to a second line; the stand-in keeps one, and the list grows by the difference once. */}
+        {["updates", ...STEADY_PAGES.map((page) => page.id)].map((id) => (
+          <div key={id} className="box-content h-11 p-4" />
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 export function SettingsRoute() {
   const nav = useNav();
   const scope = useScope();
   const updates = useUpdatesStatus();
+  const { rows, hold: holdList } = useSettingsRows();
+  const { search, hash, state } = useLocation();
   useLocale();
+
+  // An old fragment on the index (`/settings#paired-devices`, `#changes`) opens the page that holds its row now.
+  const old = oldIndexTarget(search, hash);
+  if (old !== null) return <Navigate to={old} replace state={state} />;
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-screen-sm flex-1 flex-col">
@@ -159,47 +106,48 @@ export function SettingsRoute() {
       />
 
       <BandMain base={16} className="relative flex min-h-0 flex-1 flex-col space-y-4 overflow-y-auto p-4">
-        <InstallControl />
         <IslandBuildNotice dismissible={false} />
-
         {/* ONE card holding the rows, not one card per row. They are a single list of siblings, and
             separated cards would say they are unrelated subjects. The rows are a list group (M57 spec
             17): index.css draws the line between two rows, so the last has none, and a theme's
             `rows: cards` makes them cards inside this one card, like every other list. */}
-        <Card className="gap-0 py-0">
-          <div data-slot="list-group">
-            {/* FIRST, because it is the one row whose answer changes without you touching anything: a
-                release lands, a peer falls behind. The caption is the live status (the same words the
-                Updates page opens with); a release waiting leads it with a 6px dot in the primary
-                colour. The row is not in `ROWS`, whose captions are fixed strings. */}
-            <SettingsNavRow
-              icon="update-available"
-              title={t("updates.entry.title")}
-              caption={
-                <>
-                  {updates.available && (
-                    <span
-                      aria-hidden="true"
-                      data-slot="update-dot"
-                      className="mr-1.5 inline-block size-1.5 rounded-full bg-primary align-middle"
-                    />
-                  )}
-                  {updates.line}
-                </>
-              }
-              onOpen={() => nav.down(updatesPath(scope))}
-            />
-            {ROWS.map((row) => (
+        <SettingsSearch>
+        <>
+        <InstallControl />
+        {holdList ? (
+          <ListHold />
+        ) : (
+          <Card className="gap-0 py-0">
+            <div data-slot="list-group">
+              {/* FIRST, because it is the one row whose answer changes without you touching anything: a
+                  release lands, a peer falls behind. The caption is the live status (the same words the
+                  Updates page opens with); a release waiting leads it with a 6px dot in the primary
+                  colour. The row is not in `ROWS`, whose captions are fixed strings. */}
               <SettingsNavRow
-                key={row.id}
-                icon={row.icon}
-                title={t(row.title)}
-                caption={t(row.blurb)}
-                onOpen={() => nav.down(row.to(scope))}
+                icon="update-available"
+                title={t("settings.page.updates.title")}
+                caption={
+                  <>
+                    {updates.available && (
+                      <span
+                        aria-hidden="true"
+                        data-slot="update-dot"
+                        className="mr-1.5 inline-block size-1.5 rounded-full bg-primary align-middle"
+                      />
+                    )}
+                    {updates.line}
+                  </>
+                }
+                onOpen={() => nav.down(updatesPath(scope))}
               />
-            ))}
-          </div>
-        </Card>
+              {rows.map((row) => (
+                <SettingsNavRow key={row.id} icon={row.icon} title={row.title} caption={row.caption} wrap onOpen={() => nav.down(row.to)} />
+              ))}
+            </div>
+          </Card>
+        )}
+        </>
+        </SettingsSearch>
 
         {/* Pinned to the bottom with `mt-auto`, exactly where it was before the split. */}
         <div className="mt-auto flex flex-col gap-2 pt-4">

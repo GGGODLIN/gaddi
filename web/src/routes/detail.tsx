@@ -17,8 +17,11 @@ import { GLIDE_PAIRS, glideBack } from "@/lib/glide";
 import { canStepBack, homePath, panePath, readFrom, upTarget, zoomPath } from "@/lib/nav";
 import { readAgentLaunch } from "@/lib/agent-startup";
 import { paneScopeKey } from "@/lib/scope";
-import { findPane, paneScope } from "@/lib/hosts";
+import { findPane, paneRowKey, paneScope } from "@/lib/hosts";
+import { panePlaceParts } from "@/lib/pane-name";
 import { setStatus } from "@/lib/status";
+import { rememberTabPane } from "@/lib/tab-pane-memory";
+import { rememberRecentPane } from "@/lib/recent-panes";
 import { useMuxCapability } from "@/lib/mux-capability";
 import type { AgentView } from "@/lib/types";
 import { useRootData } from "@/lib/route-data";
@@ -95,6 +98,27 @@ export function DetailRoute() {
     (fresh && fresh.paneId === paneId && !seen ? fresh : undefined) ??
     (root.error ? pane.savedPane : undefined);
   const gone = !agent;
+
+  // This pane is now its tab's pane on this device: the tab strip opens a tab on the pane it was last
+  // open on (lib/tab-pane-memory.ts). Written when the pane is SHOWN, so a pane opened by a push, a
+  // link or a switcher row is remembered the same way as one opened from the strip.
+  const shownTabId = agent?.tabId;
+  const shownHost = agent?.host;
+  const shownSession = agent?.session;
+  useEffect(() => {
+    if (shownTabId === undefined) return;
+    rememberTabPane({ paneId, tabId: shownTabId, host: shownHost, session: shownSession });
+  }, [paneId, shownTabId, shownHost, shownSession]);
+  // …and it leads this device's recent panes, the Actions palette's Recent rows (lib/recent-panes.ts).
+  // Only a pane the live herd lists: a fresh or saved stand-in may carry a name that is not its own yet.
+  const recentAgent = inSnapshot ? agent : undefined;
+  const recentKey = recentAgent === undefined ? null : `${paneRowKey(recentAgent)}\u0000${panePlaceParts(recentAgent).space}`;
+  const recentRef = useRef(recentAgent);
+  recentRef.current = recentAgent;
+  useEffect(() => {
+    if (recentKey === null || recentRef.current === undefined) return;
+    rememberRecentPane(recentRef.current);
+  }, [recentKey]);
 
   // Recover from a closed pane: once a healthy snapshot no longer has it, go up a level instead of
   // leaving you on a dead "agent gone" view. Guarded on a connected, non-stale snapshot so a

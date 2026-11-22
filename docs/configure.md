@@ -99,7 +99,7 @@ The config file groups every setting under a `[section]`. The environment name o
 | `push` | the three Web Push (VAPID) values |
 | `uploads` | the attachment size cap and the extra text types accepted |
 | `journal` | where each harness keeps its own session log |
-| `crew` | the budgets a lead gives a member, and a peer's own browser |
+| `crew` | the budgets a lead gives a member, a peer's own browser, and whether the lead's tricks may read a member's files (`crew_trick_reads`) |
 | `standby` | the deputy's second door: port, bind address, arming |
 | `update` | where releases come from, how many versions stay, a GitHub token for the release check |
 | `serve` | whether Collie publishes the front door, on what, and under which path (`base_path`) |
@@ -151,7 +151,7 @@ Without this setting, the UI will load as an empty page. See
 ## Your own slash commands
 
 Put machine-specific commands, such as a Herdr plugin `/fork-in-herdr` or a custom `/deploy`, in
-`commands.toml`. This is one of seven config files that share the same reader and load pattern:
+`commands.toml`. This is one of eight config files that share the same reader and load pattern:
 
 | file | scope | confirm/danger flag | live reload |
 | --- | --- | --- | --- |
@@ -162,6 +162,7 @@ Put machine-specific commands, such as a Herdr plugin `/fork-in-herdr` or a cust
 | `launchers.toml` | none, matched by exact command instead; `[phone]` switches the rows a phone adds | none | yes, but an already-open tab re-reads the rows only on its next load |
 | `cache-rules.toml` | none, matched by exact rule id instead | none | yes, no restart needed |
 | `spaces.toml` | none, matched by exact registry name instead | none | yes, within a few seconds |
+| `shortcuts.toml` | none, one table for the whole app | none | yes, reload the page |
 
 These files are unchanged by the config file. They share the instance `config.toml`'s
 directory, they keep their own formats and their own live reload, and nothing merges them into it.
@@ -253,9 +254,16 @@ not `true` or `false` drops that one row, the same way a bad `confirm` does.
 The actions row sends while the agent is busy; the Agent palette only stages text in the composer.
 The checkmark appears only when the pane took the action-row command.
 
-A Switch button sits at the belt's right end and opens the pane switcher. It draws the layers mark
-alone, behind a hairline, and carries no word. A drag up, anywhere on the belt, opens the same
-switcher. A sideways drag scrolls the belt instead.
+An Actions button sits at the belt's right end and opens [Actions](sessions.md#actions). It draws
+its mark alone, behind a hairline, and carries no word. It takes the blue of an open dock while Actions
+is open. A drag up, anywhere on the belt, opens the pane switcher, the Switch pane sheet. A sideways
+drag scrolls the belt instead.
+
+A mouse scrolls the belt three ways. Over its scrolling part, a wheel turn, a sideways swipe or Shift
+with the wheel moves the pills while there is room, and at the end the page scrolls as before. A drag
+with the mouse moves them too, and the drag never taps the pill under it. An arrow button over each
+fade edge that still hides pills scrolls the belt by most of its width. A phone's touch scrolling
+does not change, and no arrow shows there.
 
 The agents mark left of the Files button counts the pane's running subagents. For omp and Gentle
 Shell it counts their background jobs only while the pane's Chat is open on a phone; the Screen view
@@ -281,33 +289,33 @@ block when it is loaded. After the last Unpin the sheet closes and the mark goes
 on the mark of another column focuses that pane and opens the sheet.
 
 While the text box holds text or an attachment, an X sits at the belt's right end too, left of the
-Switch button. One tap empties the box and its saved draft, and sends nothing to the pane. The X then
+Actions button. One tap empties the box and its saved draft, and sends nothing to the pane. The X then
 becomes Undo, which puts the text and the attachments back. Undo stays until your next act: a
 keystroke, an attachment, a send, a tap on another belt button, or leaving the pane. Scrolling the
 belt keeps it.
 
-A Zoom button, a magnifier with a plus, sits just left of the Switch button. It opens the pane's
+A Zoom button, a magnifier with a plus, sits just left of the Actions button. It opens the pane's
 output alone, over the whole screen. The text keeps updating while the view is open.
 
 Pinch with two fingers to make the text bigger, up to six times. Drag with one finger to move around
 it. Double-tap a line to zoom in on it, and double-tap again to return to the normal size. The minus
 and plus buttons at the top do the same in steps, and the number between them resets the zoom.
 
-The zoomed output never wraps, whatever **Wrap** says. Each terminal line stays one line, so a pinch
+The zoomed output never wraps, whatever **Wrap lines** says. Each terminal line stays one line, so a pinch
 only makes the text bigger and never reflows it. Drag sideways to read past the edge of the screen.
-The pane view keeps your Wrap setting.
+The pane view keeps your **Wrap lines** setting.
 
 The X at the top, the Back button at the bottom on a phone, and the phone's own back gesture all
 close the zoomed output. Zooming changes nothing on the computer. The pane keeps its size in the
 terminal.
 
-Left-handed? Set **Settings → Appearance → Hand** to **Left**. The belt turns round: the Switch, Zoom
+Left-handed? Set **Settings → Keys and touch → Hand** to **Left**. The belt turns round: the Switch, Zoom
 and X buttons move to its left end, still above Send, and Keys becomes the rightmost button, with the rest
 scrolling off toward the left. Send and Attach move to the left of the reply box. The setting is per
 device and applies the next time you open a pane.
 
 To verify, open a pane running Claude Code, Codex, pi or omp; the tinted segment sits at the right
-of the row above the keyboard. Turn that segment off per device in **Settings → Appearance → Harness shortcuts**;
+of the row above the keyboard. Turn that segment off per device in **Settings → Keys and touch → Harness shortcuts**;
 Collie's own controls stay.
 
 ### Stop a turn
@@ -319,12 +327,15 @@ turn starts or ends. A tap on the dimmed button does nothing and sends nothing. 
 stop key has no button. Stop does not type anything and does not send a message. It presses the
 agent's own stop key, once, and tells you what happened.
 
-A Stop needs two taps. The first tap arms the button: the word changes to **Stop?** and the button
-keeps its size. Tap it again within four seconds to stop the turn. A second tap that lands at once,
-within 0.4 seconds, counts as the same touch and is ignored. If you wait, the arm lapses and nothing
-is pressed. The arm also lapses when you open another pane, and the button goes dim when the turn
-ends. While the second tap is in flight the button takes no more taps, so a quick third tap cannot
-press a second Stop.
+To stop a turn, hold the button for two seconds. While you hold, the button fills from one edge to
+the other, and the turn stops when the fill is complete. If you lift your finger earlier, nothing is
+pressed, and the button says **Hold** for a moment. A sideways scroll of the belt also ends the hold.
+The button keeps its size all the time. The hold ends when you open another pane, and the button goes
+dim when the turn ends. While the Stop is in flight the button takes no more presses, so a second hold
+cannot press a second Stop.
+
+With a keyboard or a screen reader, Stop takes two presses, because neither can hold. The first press
+changes the word to **Stop?**. Press again within four seconds to stop the turn.
 
 Which key stops a turn is the harness's own choice, and the harness profile holds it. Most agents
 stop on Escape, some on Ctrl+C, and some need Escape twice. The profile decides, not this page.
@@ -467,6 +478,42 @@ fits a tmux running inside the pane. The Navigation preset has Home, End, PgUp a
 cannot send, so they are grey on a Herdr pane
 ([ADR 0092](../.adr/0092-the-keys-pad-is-a-board-you-arrange.md)).
 
+## Keyboard shortcuts
+
+On a desktop browser you can drive Collie from the keyboard, the way you drive Herdr: one prefix
+key, then one action key. You change the keys in `shortcuts.toml`, next to `keys.toml`:
+
+```bash
+cp shortcuts.toml.example ~/.config/collie/shortcuts.toml
+```
+
+```toml
+[keys]
+prefix = "ctrl+b"                    # the default
+new_tab = ["prefix+c", "ctrl+alt+c"] # several bindings for one action
+zen_mode = ""                        # unbind
+```
+
+The `[keys]` table is named like Herdr's, so you can copy a block from your Herdr file. Every
+value is a string or a list of strings. Your value replaces that action's default whole. `""` or `[]`
+unbinds the action. The example file lists every default as a commented line.
+
+- The prefix is `ctrl+b` by default. Press it twice to send `ctrl+b` to the pane.
+- A binding is `prefix+<key>`, or a direct chord such as `ctrl+alt+c`. A direct chord needs a
+  modifier.
+- The browser owns a few chords, such as `ctrl+w`, `ctrl+t`, `ctrl+n`, `ctrl+tab` and `ctrl+l`. A
+  direct binding on one of them is refused. The full list is in
+  [Keyboard shortcuts](keyboard-shortcuts.md#keys-the-browser-keeps).
+- A bad line is dropped and the rest of the file loads. The shortcut list names each dropped line and
+  the reason, in a note at its foot. `collie config check` and `collie doctor` name the dropped lines too.
+- A Herdr name that Collie spells differently, such as `new_workspace`, is dropped too. The list
+  says which Collie name to write.
+
+The bridge re-reads the file when it changes. Reload the page to pick it up. Open the
+[shortcut list](terminology.md#shortcut-list) with the prefix, then `?`, or from
+Settings, Keys and touch, Keyboard shortcuts. [Keyboard shortcuts](keyboard-shortcuts.md) has every action
+with its default keys, the key grammar and the Herdr names.
+
 ## Your own quick replies
 
 You can customize the Quick dock phrases in `quick-replies.toml`:
@@ -575,6 +622,8 @@ them. An agent that is not on the machine's login `PATH` stays in the list, disa
 installed". For another terminal agent, declare a row for it as above: it shows in the **Command**
 select under **Shell**, starts in a pane like any command, and Collie shows no status for it.
 
+MiniMax Code (`mcode`) is in the list as an experiment: it works where the multiplexer names an `mcode` pane, today the Herdr core.
+
 To verify, reload the dashboard and look under the herd. If a row fails to load,
 `journalctl --user -u collie -n 20` prints the error.
 
@@ -658,6 +707,166 @@ every add, rename and removal.
 > **Caution.** A row that skips permission prompts carries a "No prompts" badge. Each device asks
 > once before it first starts that row, and shows the command, the folder and the machine. Set
 > `adds = false` on the lead to turn off every phone-added row.
+
+### Profiles
+
+Keep a second login of one agent beside the first, and pick it when you start a session. Open
+**Settings**, then **Profiles**. With no profile added, nothing else changes.
+
+A profile is a named folder that holds one login at a time. Each agent has a **Default** profile: its
+normal folder, started with nothing set. Add a profile in one of two kinds:
+
+- **Shared** (Claude Code only): Collie makes a new folder, `~/.claude-<name>`, and links the default
+  folder's setup and history into it. Your sessions, `/resume`, skills, commands, plugins, hooks,
+  `settings.json`, `CLAUDE.md` and the prompt history stay one set. Only the login and the agent's
+  per-profile state are the profile's own.
+  The shared profile also reads the Default folder's `settings.json`. A key helper, an environment block
+  or a forced organisation in that file applies to the shared profile too. Use an own folder when the
+  two logins must not share settings or history.
+- **Own**: a folder you already use, taken as it is. Collie writes nothing into it. A folder that does
+  not exist yet is made empty.
+
+| Agent | What picks the folder | Kinds |
+| --- | --- | --- |
+| Claude Code | `CLAUDE_CONFIG_DIR` | Shared, Own |
+| Codex | `CODEX_HOME` | Own |
+| pi | `PI_CODING_AGENT_DIR` | Own |
+| Grok | `GROK_HOME` | Own |
+
+To sign in, start a session with the new profile. The agent shows its own sign-in in the pane:
+Claude Code asks for a theme and then the login method, Codex offers a browser sign-in or a device
+code, pi says to run `/login`, and Grok shows a code to approve in a browser. The first start of a new
+Claude Code profile asks for a text style before the sign-in. Open Keys and press Enter to keep the one
+it suggests. Some sign-ins need a browser on that machine. Claude Code and Grok also try to open that
+page in a browser on the machine that runs the bridge.
+
+A Claude Code profile shows who is signed in: the email under the profile's name in the list, and on
+its page the full address with the plan, for example "Max". The bridge asks Claude Code itself, with
+`claude auth status` run with the profile's folder, and reads only the sign-in flag, the email and the
+plan from its answer. It opens no login file for this. It asks only where Claude Code has run before,
+that is where its state file `.claude.json` exists. Any other profile reads "Not signed in" without
+asking, so the command creates no files in a profile Claude Code has never started in. The answer is
+kept in memory and shown on the phone only, and it is not written to disk or to the audit log. An
+answer older than a minute is shown at once and checked again in the background. **Sign in again** on a profile that is signed in starts
+`claude /login`, which opens the login menu. Codex, pi and Grok do not say which login they hold, so
+their profiles show no email.
+
+A sign-in session started from the Profiles page does not start in your home folder. It starts in an
+empty folder of Collie's own, `sign-in` in the instance's state folder (`~/.local/state/collie/sign-in`
+unless `COLLIE_STATE_DIR` moves it). The agent may still ask whether you trust that folder. Either
+answer is fine for a sign-in.
+
+The New page lets you pick the profile for an agent and for a row you built from its options. A row
+you wrote by hand starts as you wrote it. A Claude Code session started from a desktop terminal with
+the profile's line (shown on the profile's page) gets the profile's tag too, once its hooks report
+the folder.
+
+A shared Claude Code profile keeps three things per profile, because Claude Code keeps them in the
+profile's own `.claude.json`: project trust, MCP servers added with `claude mcp add`, and the theme.
+A link Collie could not make, because the profile folder already holds that name, is listed on the
+profile's page. Collie never replaces it.
+
+The history of an own folder is found with no restart and no `.env` line. An own Claude Code folder
+may have no Collie hooks yet; its page says so and shows the line that installs them.
+
+**Remove** forgets the profile's name only. The folder, its links and its login stay.
+
+#### Change the login of a profile
+
+When one login has run out of usage and another has some left, you can move a profile to the other
+login without a new session. Open the profile's page and tap **Change login**. In a session, tap the
+session's name and then **Change login**: it opens the same page for the profile that session runs
+under. The page shows who is signed in now and, for Claude Code, how many sessions of the profile run.
+
+**Change login** starts the agent's own sign-in for the profile's folder, in the same way as **Sign in
+again**. The phone shows the agent's sign-in screens as cards. Pick the login method, tap **Open
+sign-in page** to sign in with the other login in your browser, and paste the code into the
+**Sign-in code** field. The button opens only the agent's own sign-in address; any other address is
+shown as text to copy. Then go back to the Change login page and tap **Finish**. Collie closes the
+sign-in session, asks the agent who is signed in, and shows the result. When the list already shows a
+new email, the page finishes by itself.
+
+- **Claude Code**: running sessions of the profile continue on the new login from their next message.
+  Claude Code itself loads a changed login before each request, so no session needs a restart and each
+  keeps its conversation.
+- **Codex, pi and Grok**: the new login is used by sessions you start after the change. Start a new
+  session to use it.
+
+The old login stays until the new sign-in succeeds. If you cancel, enter a wrong code or leave the
+sign-in, the profile stays signed in as before, and the result says "Still signed in as" with the
+same email. The sign-in address and the code are not stored, logged or sent anywhere else. The
+agent writes the new login into the profile's folder; Collie does not open that file.
+
+On a crew member's session there is no **Change login** row, because profiles are per machine. Change
+the login on the member's own Collie.
+
+> **Note.** Profiles are per machine. A crew member's profiles are its own, and the New page reads
+> the profiles of the machine you start on. Windows offers no profiles yet.
+>
+> On tmux and zellij, the first start of a new Claude Code profile shows the terminal view, not the
+> sign-in card, until the agent has signed in. Type the code with the keys there. The phone treats that
+> text as an ordinary message.
+
+### Use several accounts of one agent
+
+Two Claude subscriptions, a work and a personal Codex, a second set of pi providers: give each
+account its own launcher row. Each row starts the agent with a different folder for its login and
+settings. Collie does not switch accounts. The agent keeps the login in the folder you name.
+
+```toml
+[[launchers]]
+command = "CLAUDE_CONFIG_DIR=~/.claude-work claude"
+label = "Claude Code, work"
+harness = "claude"
+
+[[launchers]]
+command = "CODEX_HOME=~/.codex-work codex"
+label = "Codex, work"
+harness = "codex"
+
+[[launchers]]
+command = "PI_CODING_AGENT_DIR=~/.pi-work pi"
+label = "pi, work"
+harness = "pi"
+
+[[launchers]]
+command = "omp --profile work"
+label = "omp, work"
+harness = "omp"
+```
+
+Collie types the `command` into a fresh shell, so a leading `VAR=value` sets the variable for that
+one program, as it does in bash, zsh and fish. The `harness` key lists the row under **Agent** with
+that agent's mark. Your plain **Claude Code** entry keeps the default account, so a personal login
+needs no row.
+
+| Agent | What separates the accounts | Sign in, once per folder |
+| --- | --- | --- |
+| Claude Code | `CLAUDE_CONFIG_DIR=<folder>`, the way Anthropic documents several accounts | `/login` in the pane |
+| Codex | `CODEX_HOME=<folder>` | `codex login` in a shell with `CODEX_HOME` set |
+| pi | `PI_CODING_AGENT_DIR=<folder>`, which moves settings, sessions and login | `/login` in the pane |
+| omp | `--profile <name>`, or `OMP_PROFILE=<name>` | `/login` in the pane, or `omp login` |
+
+To sign in, start the row once and run the sign-in in its pane. Each folder asks one time. After
+that, the row starts signed in. The sign-in is the agent's own flow, and some need a browser on that
+machine.
+
+A running session keeps its account. To use the other account, start a new session from the other
+row.
+
+Three more things need to know the folder, because the bridge reads its own environment and not a pane's:
+
+- **Chat history.** Collie finds a session's log under the default folder. For another folder, add
+  its logs to the bridge's `.env`, with absolute paths, then restart that Collie instance. For
+  Claude Code the setting is `COLLIE_TRANSCRIPT_ROOT=/home/you/.claude/projects,/home/you/.claude-work/projects`.
+  Codex takes `COLLIE_CODEX_ROOT` (`/home/you/.codex-work/sessions`). pi and omp take `COLLIE_PI_ROOT`
+  with the `sessions` folder of each home. Each setting replaces the default list, so name the
+  default folder too.
+- **Claude Code hooks.** Run `CLAUDE_CONFIG_DIR=/home/you/.claude-work collie hooks install claude`
+  once per folder ([Terminals](multiplexers.md#collie-writes-hooks-into-claudes-own-settings)).
+- **The 5-hour and 7-day windows** of a Claude Code pane read that pane's own login, once the hooks
+  in its folder report the folder. Collie only reads the file, and it sends the login nowhere but
+  Anthropic ([Usage windows](#usage-windows)).
 
 ### Reaching a durable agent (experimental)
 
@@ -807,7 +1016,7 @@ clipboard, an image or a file raises no strip; the clipboard button still opens 
 
 ## Your own typefaces
 
-The interface font is a per-device setting. Under **Settings → Appearance → Typeface**, you can choose between
+The interface font is a per-device setting. Under **Settings → Look and feel → Typeface**, you can choose between
 System, Space Grotesk, Aldrich, IBM Plex Sans, Geist, Atkinson Hyperlegible Next (the default) and Nunito. A
 [theme](themes.md) that names a face writes it here once, when you pick the theme. You can add custom fonts in
 `theme.toml`, the fourth configuration file:
@@ -826,7 +1035,7 @@ weight = "400 700"           # optional
 ```
 
 Custom fonts append to the built-in list rather than replacing it
-([ADR 0033](../.adr/0033-the-app-face-is-a-device-preference.md)), unlike the behavior in
+([ADR 0148](../.adr/0148-a-theme-names-words-never-drawings-and-the-device-choice-wins.md)), unlike the behavior in
 `commands.toml` and the other configuration files. Because fonts do not trigger actions, there is
 nothing to shadow.
 
@@ -843,6 +1052,59 @@ Three behaviors to note:
   transcript, and rendered markdown retain their own typography.
 - **Live on next reload.** Changes do not require a restart, taking effect on the next page reload.
   Invalid configurations log errors visible via `journalctl --user -u collie -n 20`.
+
+## A project's own picture
+
+A repository can name its own picture in a `collie.toml` at its root, and the phone shows it in
+place of the agent's logo for every session that works in that repository.
+
+```toml
+# collie.toml, in the repository root
+[project]
+icon = "assets/logo.png"
+```
+
+The picture replaces the logo on the session's row, on the dashboard, in the sidebar, open or
+closed, and beside the session's name at the top of the session. A small agent logo sits in its
+corner, so you still see which agent runs there. The Collie mark is never replaced.
+
+A push about that session shows the picture as its icon, the small square beside the title. A
+session with no picture keeps the Collie icon. Chrome on Android and desktop Chrome and Firefox
+show it. Safari always shows the site's own icon, so there the push stays as it was.
+
+> **Note.** The file can change what Collie shows and nothing else. It never adds a command, a
+> launcher, a key or a hook, and a table with such a name is ignored
+> ([ADR 0160](../.adr/0160-a-repository-file-changes-what-collie-shows-and-nothing-else.md)).
+
+| Rule | Value |
+| --- | --- |
+| Which file | The nearest `collie.toml`, from the session's folder up to the repository root |
+| Outside a repository | Only a `collie.toml` in the session's own folder |
+| Linked worktree | Its own tree first, then the main checkout |
+| Workspace of repositories | A repository with no file takes the enclosing repository's, up to 4 levels |
+| File size | At most 16 KB, UTF-8 TOML, a regular file (no link) |
+| `icon` | A relative path with `/`, inside the repository, no `..`, not under `.git`, no link |
+| Picture type | PNG, JPEG or WebP, read from the first bytes; no SVG, GIF or animation |
+| Picture size | At most 256 KB, each side 64 to 1024 pixels |
+
+A table or key Collie does not know is ignored, never an error. Run `collie doctor` in the
+repository to see which file speaks for that folder, what it ignored, and whether the picture
+passed. A repository that holds other repositories as folders, such as a workspace, can name one
+picture for all of them: a member with no `collie.toml` of its own takes the workspace's, and
+`collie doctor` says so. A member that wants no picture puts its own `collie.toml` with no `icon`:
+the nearest file wins and names none. A changed picture shows within a few seconds and fades in.
+
+`icon` stays a text path for good. A later release that lets the file say more adds a new key,
+and never changes what `icon` takes.
+
+To turn the pictures off on one phone, open **Settings → Look and feel → Project pictures**. To turn
+every repository's file off on a machine, set this in the instance's `.env` and restart Collie:
+
+```bash
+COLLIE_PROJECT_FILES=0
+```
+
+The config file takes the same switch as `project_files = false` under `[access]`.
 
 ## Your own cache rules
 
@@ -1074,7 +1336,7 @@ reaches your phone unmasked only when the lead and that member both set `COLLIE_
 ## Report a problem
 
 When three sends in a row on one pane fail for a reason that points at Collie, a card above the
-reply box offers to report it. **Settings → System → Offer a report when sending fails** turns the
+reply box offers to report it. **Settings → Updates and about → Offer a report when sending fails** turns the
 card off for that device (stored in the browser, on by default). The pane menu's **Report a problem**
 and the **Report a problem** button on the same card in Settings still open the sheet.
 
@@ -1084,7 +1346,7 @@ GitHub token. What the report holds, and how to read it before you send it, is i
 
 ## Multi-session
 
-By default, one Collie instance serves every Herdr session it finds.
+By default, one Collie instance serves every Herdr session it finds. The phone calls each one a space.
 
 `COLLIE_MULTI_SESSION=on` (the default) discovers and serves every named Herdr session under your
 config root, switchable from the header. Setting `COLLIE_MULTI_SESSION=off` serves only the primary
@@ -1103,7 +1365,7 @@ The phone calls a terminal grouping a space. Herdr calls the same thing a sessio
 names one by the folder its socket lives in, so `<config root>/sessions/project-yt/` shows as
 `project-yt`. In Collie's own words a session is one agent conversation, which is why the file is
 called `spaces.toml`. A label replaces the registry name in the space
-switcher, on its trigger, on the space tag of a row in **All sessions**, and on a durable agent's
+switcher, on its trigger, on the space tag of a row in **All spaces**, and on a durable agent's
 row. The switcher keeps the registry name under the label.
 
 ```toml
@@ -1147,7 +1409,7 @@ logged. A folder that is not on disk at launch time falls back to home.
 
 ## Usage windows
 
-The dots beside the model show your 5-hour and 7-day limits for Claude and Codex, with no setup.
+The figures beside the model show the limits the agent reports for Claude and Codex, usually the 5-hour and 7-day ones, with no setup. A plan that reports one limit shows one. A weekly limit for one model shows as `7d` and the model name (`7d Opus 30%`), and a row with more than three limits shows the first three and a count (`+1`). They read as a percentage of what is used (`7d 83%`) unless you choose dots in Settings, Chat and terminal, Context and limits.
 
 ```bash
 # turn every source off
@@ -1185,14 +1447,14 @@ Each source reads a different thing.
 
 `collie doctor` shows every source in its `account-windows` row: on or off, the file it reads and the host it asks. [Terminals](multiplexers.md#collie-writes-hooks-into-claudes-own-settings) has the statusLine road.
 
-The context dot needs no setting. For pi, OMP, Codex and OpenCode, Collie reads the tokens of the last turn from the session log. It reads the model's window from Codex's log, or from the harness's own model list on disk (pi's `models-store.json`, OMP's `models.db`, OpenCode's `~/.cache/opencode/models.json`). A model that list does not name gets no context dot; the model name still shows. The tag also shows the session's cost in dollars after the dots when the harness reports one: Claude Code through the wrapped status line, pi, OMP and OpenCode from their logs. Codex has none, so its tag shows no cost.
+The context figure needs no setting. For pi, OMP, Codex and OpenCode, Collie reads the tokens of the last turn from the session log. It reads the model's window from Codex's log, or from the harness's own model list on disk (pi's `models-store.json`, OMP's `models.db`, OpenCode's `~/.cache/opencode/models.json`). A model that list does not name shows the token count (`ctx 222k`) and no percentage, and the Dots view draws nothing for it; the model name still shows. The tag also shows the session's cost in dollars after the figures when the harness reports one: Claude Code through the wrapped status line, pi, OMP and OpenCode from their logs. Codex has none, so its tag shows no cost.
 
 ## Dark mode / light mode
 
 > **Note.** Collie follows your phone's appearance by default.
 
-To pin it, open **Settings → Appearance**, find the **Appearance** card under the **Theme** card, and pick
-**System**, **Light** or **Dark**. The [Theme](themes.md) card picks the colours; this card picks the light or
+To pin it, open **Settings → Look and feel**, find **Light or dark** under **Theme**, and pick
+**System**, **Light** or **Dark**. The [Theme](themes.md) setting picks the colours; this one picks the light or
 the dark half of them. The setting is
 stored **per device** in the browser rather than on the bridge. Your phone can remain on Dark while
 a laptop tracks the OS. The preference persists across reloads and PWA reinstalls on the same
@@ -1240,7 +1502,7 @@ shown under another, so the next Refresh fetches again. Leave it unset for norma
 Math is off by default. To draw LaTeX as equations, a write device downloads the math engines to
 the host once, then each device picks its engine.
 
-1. Open **Settings → Appearance → Math**.
+1. Open **Settings → Look and feel → Math**.
 2. Tap **Download the math engines (about 4 MB)**, or pick **KaTeX** or **MathJax** to download and choose in one tap.
 3. Wait for the progress bar to finish; the engine you picked becomes the choice.
 
@@ -1269,7 +1531,7 @@ What the engines draw, and how to write an equation, is in [Equations](changes.m
 
 > **Note.** Zen mode is off by default.
 
-Enable it in **Settings → Device → Zen mode** (stored per device in the browser). This adds a **Zen mode**
+Enable it in **Settings → Keys and touch → Zen mode** (stored per device in the browser). This adds a **Zen mode**
 option to the pane menu, under the ⋮ beside Find and History. Tapping it hides all Collie UI
 elements: the header, tab and pane strips, agent statusline, and composer docks. Only the terminal
 mirror remains visible. A floating button in the top-right corner or the Escape key restores the
@@ -1282,28 +1544,69 @@ The terminal mirror continues polling in Zen mode, and interactive buffer elemen
 functional. Prompt buttons, "Load older", and "Show entire history" controls stay available because
 they are part of the content stream rather than chrome.
 
+## Enter sends
+
+> **Note.** Enter stays a new line until you turn **Enter sends** on. Nothing changes by itself.
+
+To make Enter send the message, open **Settings → Keys and touch → Enter sends** and turn it on. The
+choice is stored per device and never leaves it.
+
+With the switch on, a physical keyboard's Enter sends the message and **Shift+Enter** adds a new
+line. The on-screen keyboard's Enter always adds a new line, so a tap on a phone never sends by
+mistake. Use the Send button there. **Ctrl+Enter** and **Cmd+Enter** send with the switch on or
+off, and they always did.
+
+The reply box of a durable agent follows the same switch. The full-screen editor, which opens from
+**Expand** for long text, keeps Ctrl+Enter and Cmd+Enter only, so Enter there is always a new line.
+
+Collie reads each Enter press to tell the two keyboards apart. A press counts as a physical
+keyboard's only when it names the Enter or numpad Enter key, no input method is composing text, the
+key is not held down, and the on-screen keyboard is not up. Any doubt leaves the new line.
+
+The first time Collie sees an Enter press from a real keyboard and you have not chosen, that Enter
+still adds its new line, and one line above the reply box says "Using a keyboard? Enter can send."
+**Turn on** switches it on. The close button switches it off. Either way the line does not come back
+on this device, and **Enter sends** in Settings still changes the choice.
+
 ## Large screens
 
-> **Note.** On a tablet or an open Fold the pane screen shows several panes side by side. A phone held upright and flat is not changed.
+> **Note.** On a tablet or an open Fold the pane screen shows several panes side by side, and from 900 pixels wide the dashboard shows its Spaces in columns. A phone held upright and flat is not changed.
 
 The layout turns on for the pane screen when the screen is at least 600 CSS pixels wide and at least
 480 pixels tall. A phone held sideways is under 480 pixels tall, so it keeps the phone layout.
-To switch it off, open **Settings → Appearance → Large-screen layout** and pick **Off**. **Auto**,
+To switch it off, open **Settings → Look and feel → Large-screen layout** and pick **Off**. **Auto**,
 the default, turns it on where the screen is big enough. The choice is stored per device.
+
+The dashboard follows the same switch, from 900 pixels wide. The Spaces stand side by side in
+columns 384 pixels wide, as many as fit (two at 900 pixels, three at 1280, four at 1920, six at most).
+The tab bar at the foot is gone. A header spans the window, at the height of a pane's top strip, and
+the views are a control in it: Crew when you have a crew, Dashboard, Files, and then your tricks'
+items. The Hill is a button beside Actions, and **New** is the last button of the row with the counts
+and the filters, a row that stays in view while you scroll. A band at the top repeats every session that
+needs you or finished unseen, as a card with its question. A session in the band also keeps its row
+in its Space, so nothing moves out of place. The band closes when nothing waits, and the
+**needs you** switch hides it, because the columns then show only those sessions. Narrower than 900
+pixels, and with **Off**, the dashboard is the one narrow list, with its tab bar at the foot. When
+there is nothing to show yet, for example before pairing or before the first agent, the screen is
+one centred block.
 
 The layout has three parts.
 
 - **The sidebar.** It lists your panes, the same list the pane switcher shows. The button in its top
   row folds it to a narrow rail of icons, and the choice is kept on this device. The ColliePWA mark
-  in the top row goes home. **New space** and **Settings** sit at its foot.
+  in the top row goes home. Under it, one block stays at the top while the list scrolls: the filter
+  field, and a row with the count of what needs you and the three list views. While you filter, the
+  field shows how many rows match, such as `3 of 14`. **New space** and **Settings** sit at its foot.
 - **The row of panes.** Each space keeps its own row, and the row scrolls sideways. Tap a pane in
   the sidebar to show it. Hold it (right-click with a mouse) for **Open here**, which replaces the
   pane you are in, or **Open beside**, which adds it next to that pane. You can also drag a pane
   into the row. **Remove from view** takes a pane out of the row. The agent keeps running.
-- **The space header.** It holds the space's name, its tabs and a **+** for a new tab. Hold a tab
+- **The space header.** It holds the space's name, its tabs and a **+** for a new tab. A long name
+  takes at most a third of the bar and ends in an ellipsis, and the tabs start a small gap after it;
+  point at it to read the whole name. Hold a tab
   (right-click with a mouse) to **Rename** it or **Close tab**, as on the phone. Closing the tab you
-  work in moves you to a pane of the tab beside it. Its two buttons, or a vertical swipe, move to the space
-  above or below.
+  work in moves you to a pane of the tab beside it. The Actions button opens [Actions](sessions.md#actions).
+  Two arrow buttons, or a vertical swipe, move to the space above or below.
 
 Each pane has a width: **1/2**, **4/5** or **Full** of the row. A pane is never narrower than 440
 pixels, so a width that would make it narrower is not offered. When the row cannot hold two panes at
@@ -1314,11 +1617,50 @@ with **Open here** (the pane becomes the last one in the row). It also offers **
 space**, which opens the New page on that pane's machine and folder and adds the agent as a new tab
 of this space, next to the pane you are in, and **New agent in a new space**.
 
+A tap on **1/2**, **4/5** or **Full**, or on the Narrower pane and Wider pane shortcuts, grows or
+shrinks the pane on a spring that starts fast and settles in about a third of a second. The panes
+beside it and the row's scroll move with it in the same motion, and a second tap during the motion
+carries it on. The pane ends at the same width and in the same place as with no motion. A device set
+to reduce motion, and a foldable held as a book, change at once.
+
 Every pane has its own belt, except when you hold a foldable like a laptop (see below). The pane you
 work in has a frame and the reply box. A tap on another pane's belt acts on that pane and moves you
 there. Tap the pane to move without acting.
 
+The sidebar and the tab strip sit one step darker than the page. A pane without focus stays on the
+page, and the pane you work in is the lightest surface, with a soft frame, also when it is the only
+pane. A theme may set the two grounds, `surface-recess` and `surface-paper`, and gets them from its
+own colours when it does not ([Themes](themes.md)). The phone looks as before.
+
 The layout is kept on this device only, and Back and shared links work as before.
+
+**Sheets.** From 900 pixels wide, with the screen flat, a sheet opens as a panel in the middle of the
+window with four round corners, not as a strip at the bottom edge. That holds for a session's menu,
+the Attachment view, the Rename box and every other sheet. Close one with Escape, its close button or a
+click beside it. There is no handle to pull. A picture opens as wide as it is, up to most of the
+window. A menu that opens from its button, the three dots of a session, a tab or a space, opens
+beside that button and does not darken the page. A phone, a small tablet, a folded foldable and
+**Off** keep the sheet from the bottom.
+
+**Settings.** From 900 pixels wide the eleven pages of Settings stand in a list at the left edge of
+the window, like the sidebar beside your panes, with the search above them, and the page you chose
+opens beside it. The list stays in view while you change a setting, and the arrow keys walk it. One
+header spans the window: Back leaves Settings for the page you opened it from, and on a page one
+level down or more the header names the path, such as Tricks / CI. Every address keeps working, and
+the browser's Back returns to the page before. Settings itself opens Updates and about while a
+release waits, and Look and feel otherwise. A phone, a tablet and **Off** keep Settings as one page
+with the index of its pages.
+
+**Search Settings.** The field at the top of Settings, on the index and above the list, finds a
+setting by its name. A setting on a page opens that page at the setting and marks it. A setting
+that lives in a pane, in the Files and Changes views or on the New page is found too, and the
+result says where it is, for example "In a pane: the ⋮ menu, then Pane settings". A setting that
+shows only in some states, such as the Hands-free voice switch, says what it waits for. Enter opens
+the first result, and Escape clears the field. With a keyboard, `/` puts the cursor in the field while no
+text field has the focus.
+
+**Keyboard.** A desktop browser can drive all of this from the keyboard, the way Herdr is driven:
+`Ctrl+B`, then one key ([Keyboard shortcuts](keyboard-shortcuts.md)).
 
 **Foldables.** On a foldable held half open, Chrome and Samsung Internet split the screen at the fold.
 Held like a laptop, the conversation stays above the fold, and the belt and a taller reply box sit
@@ -1333,7 +1675,7 @@ open in one half and the pane fills the other. Other browsers show the flat layo
 A gesture moves you between panes and spaces, on a phone and in the large-screen layout. Left and
 right go to the previous and next pane of the space, in the switcher's order. Up and down go to the
 previous and next space. At the first or last pane or space, a move stays put. Choose the method in
-**Settings → Appearance → Pane navigation**. A change shows the next time a pane opens.
+**Settings → Keys and touch → Pane navigation**. A change shows the next time a pane opens.
 
 | Method          | How it works                                                                                                                                                                                                                                                                        |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1381,7 +1723,7 @@ When Collie can no longer tell where a queued message went, the card says **Not 
 of disappearing. That happens when the agent sits idle with an empty box twice in a row, or after 30
 minutes without a running turn. Its **Discard** button removes the card and sends nothing.
 
-The display gear has a **Stretchtext replies** switch, off by default. With it on, Chat, the full reply card and History show a reply written with the cc-stretch plugin as its short form, and a tap on a phrase opens it. A `{{name}}` without a bar shows as `name`.
+The **Short form of long replies** switch, in the pane's Display sheet and in **Settings → Chat and terminal**, is off by default. With it on, Chat, the full reply card and History show a reply written with the cc-stretch plugin as its short form, and a tap on a phrase opens it. A `{{name}}` without a bar shows as `name`.
 
 **Pinned messages.** Tap a message, a reply, a thinking block or a tool card in Chat, then its **⋯**,
 **Message actions**, which shows at the block's top right. The **⋯** opens a sheet with **Pin** (or
@@ -1413,7 +1755,7 @@ cannot work this out.
 | Multiplexer | What reports the session | Chat works for |
 | --- | --- | --- |
 | Herdr | The matching Herdr integration for that agent, installed once with `herdr integration install <agent>` (for example `claude`, `codex`, `opencode`, `pi`, `omp`, `grok`, `hermes`), then restart the agent | Every agent that has an integration and a session log Collie reads |
-| tmux, zellij, Tern (experimental) | Collie's [beacon hooks](multiplexers.md#agent-beacons-optional-linux) | Claude Code only, after `collie hooks install claude` |
+| tmux, zellij, Tern, Rex (experimental) | Collie's [beacon hooks](multiplexers.md#agent-beacons-optional-linux) | Claude Code only, after `collie hooks install claude` |
 | tuios | The tuios daemon | The agents the daemon reports |
 
 OpenClaw needs no Herdr integration for Chat. Herdr does not pass an OpenClaw session on, so Collie
@@ -1430,15 +1772,24 @@ session has no Chat or History. Set `kiro_root` when Kiro keeps its sessions som
 dsh-tui needs no Herdr integration for Chat. It reports its state to Herdr itself, but Herdr does
 not pass its session on, so Collie asks the kernel which session lock (`session.lock`, held with
 `flock`) the pane's foreground dsh process holds, and reads that session's log under
-`$DSH_HOME/sessions`, or `~/.dsh/sessions`, compressed or plain. This works on Linux only, where
-`/proc/locks` lists every lock and who holds it; elsewhere a dsh-tui pane keeps its terminal view.
-Set `dsh_root` when dsh keeps its sessions somewhere else.
+`$DSH_HOME/sessions`, or `~/.dsh/sessions`, compressed or plain. This works on Linux, where
+`/proc/locks` lists every lock and who holds it, and on macOS, where Collie asks `lsof` which files
+the process holds open, and those of the processes in its group. On Windows, or on a Mac without
+`lsof`, a dsh-tui pane keeps its terminal view. Set `dsh_root` when dsh keeps its sessions somewhere
+else.
+
+Grok needs no Herdr integration for Chat either. Collie reads the list of live sessions Grok keeps
+(`active_sessions.json`, in `$GROK_HOME` or `~/.grok`) and takes the one its process holds. When the
+list does not name the process, Collie asks `lsof` which `chat_history.jsonl` the process holds open.
+That works on Linux and macOS, not on Windows. When two Grok panes sit in one folder, a pane that
+the list does not name yet keeps its terminal view rather than show the other pane's chat.
 
 Antigravity CLI (`agy`, which Herdr may also call `antigravity`) needs no Herdr integration for Chat
-either. Collie asks `lsof` which `presence/<uuid>.lock` file the pane's foreground agy process holds,
-and reads that conversation from `conversations/<uuid>.db` under `~/.gemini/antigravity-cli`,
+either. Collie asks which `presence/<uuid>.lock` file the pane's foreground agy process holds, and
+reads that conversation from `conversations/<uuid>.db` under `~/.gemini/antigravity-cli`,
 read-only, or from its `transcript.jsonl` when the database is empty. It never guesses the newest
-conversation in a folder. This needs `lsof` on the machine, so it works on Linux and macOS, not on
+conversation in a folder. On Linux, Collie reads `/proc/locks` without needing `lsof` or extra privileges;
+on macOS, it asks `lsof` which files the process holds open. This works on Linux and macOS, not on
 Windows; without it an agy pane keeps its terminal view. Set `agy_root`, or `COLLIE_AGY_ROOT`, when
 Antigravity keeps its home somewhere else.
 
@@ -1505,7 +1856,7 @@ Right after you return to the app, the first poll that gets no answer does not c
 Tailscale link can need a moment to come back, so the phone asks again half a second later, and
 shows the bar only when that poll gets no answer too.
 
-**Keep chat on this phone**, in **Settings → Device**, sets how long the Chat turns stay on the phone:
+**Keep chat on this phone**, in **Settings → Privacy and data**, sets how long the Chat turns stay on the phone:
 
 | Value | What it does |
 | --- | --- |
@@ -1523,7 +1874,7 @@ terminal view, the only offline copy is that terminal text.
 ## Changes
 
 The [Files screen](changes.md) shows what an agent changed in its workspace's git repos, under its
-**Changes** segment. Two per-device settings decide how far it looks for repos, in **Settings → Device → Changes**:
+**Changes** segment. Two per-device settings decide how far it looks for repos, in **Settings → Dashboard and projects → Changes**:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -1534,7 +1885,7 @@ See [Which folder, and which repos](changes.md#which-folder-and-which-repos) for
 
 ## Language
 
-Collie's interface is available in twelve languages. Configure this under **Settings → Appearance → Language**.
+Collie's interface is available in twelve languages. Configure this under **Settings → Look and feel → Language**.
 
 - English
 - Deutsch
