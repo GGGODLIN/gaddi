@@ -926,7 +926,9 @@ export function AgentList({
                 <SpaceGrid columns={columns}>
                   {run.items.map(({ group: g, rows }) => (
                     <WideSpace key={g.key} group={g} id={groupDomId(g.key)} trailing={headingNewTab(g)}>
-                      {nestPanes(rows, folded).map((entry) => row(entry.pane, workspaceGroupKey(entry.pane) === g.key ? "place" : "herd", entry))}
+                      {nestPanes(rows, hits === null ? folded : NO_FOLDED).map((entry) =>
+                        row(entry.pane, workspaceGroupKey(entry.pane) === g.key ? "place" : "herd", entry),
+                      )}
                     </WideSpace>
                   ))}
                 </SpaceGrid>
@@ -1072,7 +1074,7 @@ export function AgentList({
             }
           />
           <ListGroup>
-            {nestPanes(rows, folded).map((entry) =>
+            {nestPanes(rows, hits === null ? folded : NO_FOLDED).map((entry) =>
               row(entry.pane, workspaceGroupKey(entry.pane) === g.key ? "place" : "herd", entry),
             )}
           </ListGroup>

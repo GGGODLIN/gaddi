@@ -955,6 +955,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
    */
   /** The draft field's change, for the box's field and the fullscreen editor's alike: one draft. */
   function onDraftChange(e: ChangeEvent<HTMLTextAreaElement>) {
+    if (startHeld) return;
     const field = e.currentTarget;
     const nextCaret = field.selectionStart === field.selectionEnd ? field.selectionStart : null;
     const nextAt = findAtToken(field.value, nextCaret);
@@ -3424,7 +3425,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
    * here. Armed send confirms go too, because the draft they were about is gone.
    */
   function clearByHand() {
-    if (sending) return;
+    if (sending || startHeld) return;
     const field = inputRef.current;
     const held: ClearedDraft = {
       text: inputValueRef.current,
@@ -3509,6 +3510,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
    *  back as they were, through the same write-through as a keystroke. Under a recognised password
    *  prompt that write-through stores nothing (ADR 0017), so Undo stores nothing either. */
   function undoClear() {
+    if (startHeld) return;
     const held = clearedDraftRef.current;
     if (held === null) return;
     clearedDraftRef.current = null;
@@ -3550,6 +3552,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
    *  keyboard then, not a draft). Not gated on `locked`: the draft is this phone's own, so a
    *  read-only device or a gone pane may still empty its box, as Display is not gated either. */
   function clearSlot() {
+    if (startHeld) return undefined;
     if (clearedDraft !== null) {
       return {
         mode: "undo" as const,
@@ -3843,7 +3846,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       leaving.cancel();
     };
   }, [expandWanted, expandShown]);
-  const expandedOpen = expanded && !direct.active && !locked && expandArea !== undefined && expandArea !== null;
+  const expandedOpen = expanded && !direct.active && !locked && !startHeld && expandArea !== undefined && expandArea !== null;
   const atCaret = atCaretState.paneKey === reportKey ? atCaretState.caret : null;
   const canSuggestFiles =
     boxFocused && !isShell && !locked && !startHeld && !confirmingSend && !direct.active && !dialogCard && !expandedOpen;

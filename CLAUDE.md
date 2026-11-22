@@ -648,8 +648,8 @@ a single command; never export one.
 | `SKIP_CREW_WIRE_CHECK=1` | `git commit` (pre-commit hook) | the crew-wire decision guard |
 | `SKIP_FLAKE_LOCK_CHECK=1` | `git commit` (pre-commit hook) | the `flake.lock`-only-in-a-release guard |
 | `SKIP_TYPECHECK=1` | `bun run build` / `collie build`, `bun run gate`, `git push` | both typecheck steps |
-| `SKIP_LINT_CHECK=1` | `bun run gate`, `git push` (pre-push hook) | the lint step of the gate (also read by pre-commit, above) |
-| `SKIP_TESTS=1` | `bun run gate`, `git push` (pre-push hook) | the guard tests and the near tests |
+| `SKIP_LINT_CHECK=1` | `bun run gate` (also read by `pre-commit`, above) | the lint step of the gate |
+| `SKIP_TESTS=1` | `bun run gate`, `git push` (pre-push hook) | the guard/near tests in `gate`, or the bridge/ctl/changed-web suites in this fork's `pre-push` |
 | `SKIP_TAG_CHECK=1` | `git push` (pre-push hook) | the untagged-release warning |
 
 The pre-commit hook's four guards are **independent** — `SKIP_VERSION_CHECK=1` does not disarm the
@@ -769,7 +769,7 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   dock's shipped phrases on the panes they address, shell panes included when a row is scoped to
   them. It shares the reader and scope ladder without inheriting Claude's palette exception.
 - **`theme.toml` adds rather than shadows** — its `[[font]]` rows put extra UI typefaces UNDER the
-  shipped three in the Settings picker, and the bridge serves the files read-only from
+  shipped typefaces in the Settings picker, and the bridge serves the files read-only from
   `<config-dir>/fonts` at `GET /api/fonts/<basename>`. Same reader, same mtime liveness; a font cannot
   fire an action and so shadows nothing ([ADR 0148](./.adr/0148-the-app-face-the-theme-and-the-character-are-device-settings.md)).
 - **`launchers.toml` is the operator's fifth file, and the only one whose rows CREATE a pane** — its
