@@ -119,6 +119,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A problem report opened in the GitHub app no longer arrives empty.** The GitHub app opens the link of Report a problem with every field empty, so Open on GitHub now always puts the whole report on the clipboard too, to paste into the form.
 - **A trick's picture shows right after a quick replace, and stands on its edge on an iPhone.** A picture written again with a file of the same size within a moment of the last look now shows the new picture, which most often failed on Windows. A picture perched on the Belt, the status line or the composer no longer sits one pixel above that edge on an iPhone.
 - **The Belt scrolls with a mouse.** Over the Belt, a wheel turn, a sideways swipe or Shift with the wheel moves the pills while there is room, a drag with the mouse scrolls it without tapping a pill, and an arrow button over each fade edge that still hides pills scrolls it by most of its width. A phone's touch scrolling is unchanged, and no arrow shows there.
+- **Permission taps keep working during Claude Code's reworded unattended countdown.** Claude Code 2.1.330 changed its auto-deny timer from "automatically deny ... blocking progress" to "automatically block ... holding up", which made each ticking second look like a new dialog and refused Yes taps until one landed inside the same second. Both wordings are now held still when checking whether the permission changed.
 
 ### Docs
 
