@@ -763,7 +763,7 @@ export function AgentList({
         stale={stale}
         match={hitOf(a)}
         tree={tree}
-        onToggleFold={tree !== undefined && tree.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
+        onToggleFold={hits === null && tree !== undefined && tree.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
       />
     );
   };

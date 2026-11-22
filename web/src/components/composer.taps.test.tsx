@@ -474,7 +474,7 @@ describe("composer taps: paste of a file the box refuses (fix 9)", () => {
       paste([{ kind: "file", file: refused() }]);
       return Promise.resolve();
     });
-    expect(status()).toBe("Collie cannot attach this kind of file.");
+    expect(status()).toBe("Gaddi cannot attach this kind of file.");
   });
 
   it("no tap vanishes: a refused file with text on the clipboard stays a plain text paste, with no word", () => {
@@ -592,7 +592,7 @@ describe("composer taps: Stop when the turn is not running (fix 16)", () => {
     const stop = screen.getByRole("button", { name: "Stop the turn" });
     expect(stop).toHaveAttribute("aria-disabled", "true");
     await expectTapAnswers(() => user.click(stop));
-    expect(status()).toBe("Collie does not see a running turn, so Stop is off. If the agent is busy, press Esc on the Keys pad.");
+    expect(status()).toBe("Gaddi does not see a running turn, so Stop is off. If the agent is busy, press Esc on the Keys pad.");
   });
 });
 

@@ -54,7 +54,7 @@ const BOTH = "Cleared, but this device could not close its notifications or upda
 describe("ClearNotificationsControl", () => {
   test("says what it clears: this machine and this device", () => {
     const { card } = mount();
-    expect(card.getByText(/alerts of this machine, the Collie your phone talks to, and of this device/i)).toBeInTheDocument();
+    expect(card.getByText(/alerts of this machine, the Gaddi your phone talks to, and of this device/i)).toBeInTheDocument();
   });
 
   test("a solo install says nothing of crew members", () => {

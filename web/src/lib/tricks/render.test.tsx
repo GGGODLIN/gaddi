@@ -116,7 +116,7 @@ describe("the placeholder", () => {
     const { container } = draw(foreign('[{"kind":"hologram","text":"x"}]'));
     const box = nodeEl(container, "placeholder");
     expect(box.dataset.kind).toBe("hologram");
-    expect(box.textContent).toBe("This Collie cannot draw this part");
+    expect(box.textContent).toBe("This Gaddi cannot draw this part");
     expect(box.style.height).toBe("2.75rem");
     expect(reservedHeight(foreign('[{"kind":"hologram"}]')[0]!)).toEqual({ rem: 2.75, px: 0 });
   });

@@ -64,7 +64,7 @@ describe("KeyboardHintCard", () => {
     seeKeyboard();
     expect(card()).not.toBeNull();
     expect(screen.getByText("You have a keyboard")).toBeInTheDocument();
-    expect(card()?.textContent).toContain("Collie takes Herdr's keys. Press");
+    expect(card()?.textContent).toContain("Gaddi takes Herdr's keys. Press");
     expect(card()?.textContent).toContain("then ? to see them all.");
     expect(caps()).toEqual(["Ctrl", "B", "?"]);
   });
@@ -89,7 +89,7 @@ describe("KeyboardHintCard", () => {
     publish({ help: [] });
     mount();
     seeKeyboard();
-    expect(card()?.textContent).toContain("Collie takes Herdr's keys.");
+    expect(card()?.textContent).toContain("Gaddi takes Herdr's keys.");
     expect(card()?.textContent).not.toContain("to see them all");
     expect(caps()).toEqual([]);
   });

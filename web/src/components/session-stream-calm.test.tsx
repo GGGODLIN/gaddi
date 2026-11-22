@@ -146,14 +146,14 @@ describe("SessionStream — one move at the tap (M104)", () => {
     expect(room()).toBeNull();
   });
 
-  it("draws the rows near the tail at their own height: no content-visibility there, only far above", () => {
+  it("omits content-visibility and contain-intrinsic-size on every block (fork Safari scroll-anchor invariant)", () => {
     const many = Array.from({ length: 12 }, (_, i) => entry(`e${String(i)}`, i, `answer ${String(i)}`, { role: i % 2 === 0 ? "assistant" : "user" }));
     render(stream({ entries: many }));
     const blocks = Array.from(document.querySelectorAll("[data-block]"));
     expect(blocks.length).toBeGreaterThan(8);
-    const tail = blocks.slice(-8);
-    for (const block of tail) expect(block.className).not.toContain("content-visibility");
-    expect(blocks[0]!.className).toContain("[content-visibility:auto]");
-    for (const block of blocks) expect(block.className).toContain("[contain-intrinsic-size:auto_64px]");
+    for (const block of blocks) {
+      expect(block.className).not.toContain("content-visibility");
+      expect(block.className).not.toContain("contain-intrinsic-size");
+    }
   });
 });

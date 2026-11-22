@@ -127,7 +127,7 @@ describe("review 9 M1: a switch refused for a pane with no profile", () => {
     await act(async () => {
       failed = await result.current.setOn("morph", true);
     });
-    expect(failed).toBe("Not changed: Collie cannot read this session's program, so a view cannot send to it.");
+    expect(failed).toBe("Not changed: Gaddi cannot read this session's program, so a view cannot send to it.");
     expect(switched.noted).toEqual([]);
   });
 });

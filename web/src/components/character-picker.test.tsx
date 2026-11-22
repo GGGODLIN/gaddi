@@ -69,7 +69,7 @@ describe("CharacterPicker", () => {
     ]);
     for (const head of ["Still", "Loading", "Idle"]) expect(screen.getByText(head)).toBeInTheDocument();
     expect(screen.getByText("The character in the header, on this device.")).toBeInTheDocument();
-    expect(screen.getByText("The app icon, the splash and the push badge stay the Collie mark.")).toBeInTheDocument();
+    expect(screen.getByText("The app icon, the splash and the push badge stay the Gaddi mark.")).toBeInTheDocument();
   });
 
   it("checks From the theme on a device that never chose, and names the theme's character under it", () => {
@@ -131,7 +131,7 @@ describe("CharacterPicker", () => {
       // Directly under the list of characters: the list comes first, then the row, then the note.
       const list = within(card).getByRole("radiogroup");
       expect(list.compareDocumentPosition(moves()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      const note = screen.getByText("The app icon, the splash and the push badge stay the Collie mark.");
+      const note = screen.getByText("The app icon, the splash and the push badge stay the Gaddi mark.");
       expect(moves().compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 

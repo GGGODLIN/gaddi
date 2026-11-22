@@ -38,6 +38,8 @@ const NO_TOUCH: readonly string[] = [
 const KEPT = {
   ".env.example": "COLLIE_TAILSCALE_HOSTS example uses the CGNAT range 100.64/10, not a real address",
   "bridge/pair-audit.ts": "comment names the CGNAT range 100.64/10",
+  "bridge/port-probe.test.ts": "test names the CGNAT range 100.64/10",
+  "bridge/port-probe.ts": "comment names the CGNAT range 100.64/10",
   "bridge/stt/whistle-model.ts": "the private-range table holds the CGNAT block 100.64/10 (code, behaviour)",
   "bridge/surface/protocol.not-sure.test.ts": "reads the captured pane file the starship motd pane fixture by name",
   "bridge/surface/protocol.rig.ts": "names the captured pane file the starship motd pane fixture",

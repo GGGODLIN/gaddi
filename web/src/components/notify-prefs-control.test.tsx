@@ -48,7 +48,7 @@ describe("NotifyPrefsControl", () => {
     render(<NotifyPrefsControl />);
     const needs = await screen.findByRole("switch", { name: /needs you/i });
     const finished = await screen.findByRole("switch", { name: /finished/i });
-    const updates = await screen.findByRole("switch", { name: /a new collie version/i });
+    const updates = await screen.findByRole("switch", { name: /a new gaddi version/i });
     expect(needs).toBeChecked(); // blocked default on
     expect(finished).not.toBeChecked(); // done default off
     expect(updates).toBeChecked(); // updates default on
@@ -57,7 +57,7 @@ describe("NotifyPrefsControl", () => {
   test("toggling A new Collie version POSTs the single-key partial update", async () => {
     const user = userEvent.setup();
     render(<NotifyPrefsControl />);
-    const updates = await screen.findByRole("switch", { name: /a new collie version/i });
+    const updates = await screen.findByRole("switch", { name: /a new gaddi version/i });
 
     await user.click(updates); // on → off
 
@@ -129,7 +129,7 @@ describe("NotifyPrefsControl — the fourth switch and the panes it watches", ()
     expect(await screen.findByRole("switch", { name: /needs you/i })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /finished/i })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /one notification per agent/i })).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: /a new collie version/i })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /a new gaddi version/i })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /machine load stays high/i })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /cache about to go cold/i })).toBeInTheDocument();
     expect(screen.getAllByRole("switch").at(-1)).toHaveAccessibleName(/cache about to go cold/i);

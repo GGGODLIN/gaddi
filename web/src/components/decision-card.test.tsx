@@ -713,7 +713,7 @@ describe("after the tap", () => {
   ])("a %s card of Collie's own reads Collie tricks on the tricks glyph, whatever its sender label says", (type, title) => {
     const from: HillDecision["from"] = { kind: "collie", address: null, trickId: null, trickKey: null, memberId: "lodge", harness: null, label: "Collie", host: "lodge", trickHost: null, ref: { type, id: "legs", hash: "a".repeat(64) } };
     const { slot, container } = renderCard(hillDecision({ from, title, target: null }));
-    expect(slot("decision-meta")).toHaveTextContent("Collie tricks");
+    expect(slot("decision-meta")).toHaveTextContent("Gaddi tricks");
     expect(container.querySelector('[data-slot="decision-trick-mark"] [data-icon="tricks"]')).not.toBeNull();
     expect(container.querySelector('[data-slot="decision-collie-mark"]')).toBeNull();
   });

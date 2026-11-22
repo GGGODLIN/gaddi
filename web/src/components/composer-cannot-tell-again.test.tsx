@@ -94,7 +94,7 @@ describe("C: the card's Send again sends the send it is about", () => {
 });
 
 describe("E: the notice's Send again waits as the card does", () => {
-  const WAITING = "Collie is waiting for the agent's own word that it arrived. Send again turns on when the wait ends.";
+  const WAITING = "Gaddi is waiting for the agent's own word that it arrived. Send again turns on when the wait ends.";
 
   it("while the agent's own word may still come, the notice's Send again sends nothing and says why", async () => {
     const user = userEvent.setup();

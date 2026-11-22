@@ -49,14 +49,14 @@ describe("PairWithPhoneView, each state", () => {
 
   it("approved: says so while the page reloads", () => {
     view({ kind: "approved", label: "Chrome on Linux" });
-    expect(screen.getByRole("status")).toHaveTextContent("Paired as Chrome on Linux. Opening Collie.");
+    expect(screen.getByRole("status")).toHaveTextContent("Paired as Chrome on Linux. Opening Gaddi.");
   });
 
   it.each([
     [{ kind: "refused" } as const, "The phone did not let this device in.", "Show a new code"],
     [{ kind: "expired" } as const, "The code ran out.", "Show a new code"],
     [{ kind: "rate-limited", retryAfterSeconds: 312 } as const, "Too many codes. Try again in 5:12.", "Try again"],
-    [{ kind: "error" } as const, "Could not reach Collie. Try again.", "Try again"],
+    [{ kind: "error" } as const, "Could not reach Gaddi. Try again.", "Try again"],
   ])("%j: the sentence and the way on", (state, line, action) => {
     view(state);
     expect(screen.getByRole("status")).toHaveTextContent(line);
@@ -72,7 +72,7 @@ describe("PairWithPhoneView, each state", () => {
 
   it("refused before pairing: says a phone cannot fix it, and offers no button", () => {
     view({ kind: "refused-before" });
-    expect(screen.getByText("Collie refuses this browser before pairing. A phone cannot fix that.")).toBeInTheDocument();
+    expect(screen.getByText("Gaddi refuses this browser before pairing. A phone cannot fix that.")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -238,6 +238,6 @@ describe("PairWithPhone against a bridge", () => {
     render(<PairWithPhone onPaired={NOOP} />);
     await user.click(screen.getByRole("button", { name: "Pair with your phone" }));
     const status = await screen.findByRole("status");
-    expect(within(status).getByText("Could not reach Collie. Try again.")).toBeInTheDocument();
+    expect(within(status).getByText("Could not reach Gaddi. Try again.")).toBeInTheDocument();
   });
 });

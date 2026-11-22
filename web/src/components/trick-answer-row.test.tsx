@@ -101,7 +101,7 @@ describe("the answer to a trick approval draws as one row", () => {
     expect(drawn.dataset.message).toBe(MSG);
     // The look of the answered card's line: the glyph on its 16px tile, the label, the name and the result.
     expect(drawn.querySelector('[data-slot="decision-trick-mark"]')!.className).toContain("size-4");
-    expect(drawn).toHaveTextContent("Collie tricks");
+    expect(drawn).toHaveTextContent("Gaddi tricks");
     expect(drawn).toHaveTextContent(words);
     // Right side: the time and where it was signed, as the card said it.
     expect(drawn.querySelector('[data-slot="trick-answer-meta"]')).toHaveTextContent(clockTime(message.at));
@@ -120,7 +120,7 @@ describe("the answer to a trick approval draws as one row", () => {
     const open = vi.fn();
     await holds([decision]);
     chat([message], turn(message), open);
-    const button = screen.getByRole("button", { name: /Collie tricks/u });
+    const button = screen.getByRole("button", { name: /Gaddi tricks/u });
     expect(button).toBe(row());
     expect(button.className).toContain("min-h-11");
     await userEvent.click(button);
@@ -168,7 +168,7 @@ describe("the card's own line steps aside only for the row", () => {
     chat([message], turn(message));
     expect(row()).not.toBeNull();
     expect(line()).toBeNull();
-    expect(screen.getAllByText(/Collie tricks/u)).toHaveLength(1);
+    expect(screen.getAllByText(/Gaddi tricks/u)).toHaveLength(1);
   });
 
   it("is drawn again when the row leaves", async () => {

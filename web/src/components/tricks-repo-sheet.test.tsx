@@ -140,8 +140,8 @@ describe("RepoAddRow", () => {
     server.use(http.post("/api/tricks/repo/add", () => HttpResponse.json({ error: "refused", message: "its run line <b>reaches</b> outside" }, { status: 422 })));
     const user = await openAndRead(listing(THREE), addRepoTrick);
     await user.click(await screen.findByRole("button", { name: "Add Idle Watch" }));
-    const line = await screen.findByText(/Collie refused this trick:/u);
-    expect(line.textContent).toBe("Collie refused this trick: its run line <b>reaches</b> outside");
+    const line = await screen.findByText(/Gaddi refused this trick:/u);
+    expect(line.textContent).toBe("Gaddi refused this trick: its run line <b>reaches</b> outside");
     expect(line.querySelector("b")).toBeNull();
   });
 

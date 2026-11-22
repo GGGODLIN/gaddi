@@ -26,7 +26,7 @@ describe("localLink", () => {
       "https://localhost:5173/",
       "http://localhost:80/",
       "http://localhost/",
-      "http://bluefin:5173/",
+      "http://lodge:5173/",
       "http://100.101.86.18:5173/",
       "localhost:5173",
       "not a url",

@@ -292,6 +292,10 @@ export const NOT_SETTINGS: ReadonlyMap<string, string> = new Map([
   ["collie:last-snapshot:", "dropped at boot by an older build's cleanup"],
   ["collie:last-pane:", "dropped at boot by an older build's cleanup"],
   ["collie:send-again:", "dropped at boot by an older build's cleanup"],
+  ["collie:island-build-dismissed:v1", "fork iPhone app update banner dismissal state"],
+  ["collie:host-clipboard:v1", "fork host clipboard cached text"],
+  ["collie:last-viewed:v1", "fork last-viewed pane memory"],
+  ["collie:folded-parents:v1", "fork folded parent pane tree state"],
 ]);
 
 /**

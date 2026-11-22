@@ -73,7 +73,7 @@ describe("TrickDetail", () => {
   it("says under the text that the author wrote it and Collie did not check it, with an about or a description", () => {
     const { unmount } = open(FULL);
     const note = detail().querySelector('[data-line="author-note"]');
-    expect(note).toHaveTextContent("Written by the trick's author. Collie did not check it.");
+    expect(note).toHaveTextContent("Written by the trick's author. Gaddi did not check it.");
     expect(note?.className).toContain("text-muted-foreground");
     // It sits after the about paragraphs and before the bridge's own facts.
     expect(trustOrder()).toEqual(["description", "about", "author-note", "does", "from"]);
@@ -84,7 +84,7 @@ describe("TrickDetail", () => {
     unmount();
     // A description alone is the text: its line, then the note, and no "no description" line.
     open({ ...BASE, description: "Only a line." });
-    expect(screen.getByText("Written by the trick's author. Collie did not check it.")).toBeInTheDocument();
+    expect(screen.getByText("Written by the trick's author. Gaddi did not check it.")).toBeInTheDocument();
     expect(screen.queryByText("This trick has no description.")).toBeNull();
     expect(trustOrder()).toEqual(["description", "author-note", "does", "from"]);
   });
@@ -100,7 +100,7 @@ describe("TrickDetail", () => {
   it("says so in one muted line when the trick has no about, and draws no author note", () => {
     open(BASE);
     expect(screen.getByText("This trick has no description.")).toBeInTheDocument();
-    expect(screen.queryByText("Written by the trick's author. Collie did not check it.")).toBeNull();
+    expect(screen.queryByText("Written by the trick's author. Gaddi did not check it.")).toBeNull();
     expect(detail().querySelector('[data-line="description"]')).toBeNull();
   });
 
@@ -390,12 +390,12 @@ describe("the menu place's two lines (contract 2)", () => {
     const trick: WireTrickInfo = { host: "lodge", id: "ci", name: "CI", icon: "flask", on: true, state: "ok", places: ["menu"], provenance: { via: "folder" } };
     render(<TrickDetail trick={trick} />);
     const does = screen.getByRole("list", { name: "What it does" });
-    expect([...does.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["It shows in: rows in each session's settings.", MENU_WORDS, MENU_TAP_WORDS]);
+    expect([...does.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["It shows in: rows in each session's settings.", MENU_WORDS, MENU_TAP_WORDS.replace("Collie", "Gaddi")]);
     cleanup();
     const entry: WireOfficialTrick = { id: "ci", name: "CI", description: "Reruns CI.", repo: "https://example.com/tricks.git", repoName: "owner/tricks", commit: "a".repeat(40), state: "absent", addsMenu: true };
     render(<OfficialTrickDetail entry={entry} busy={false} canWrite onAdd={vi.fn()} />);
     const official = screen.getByRole("list", { name: "What it does" });
-    expect([...official.querySelectorAll("li")].map((li) => li.textContent)).toEqual([MENU_WORDS, MENU_TAP_WORDS]);
+    expect([...official.querySelectorAll("li")].map((li) => li.textContent)).toEqual([MENU_WORDS, MENU_TAP_WORDS.replace("Collie", "Gaddi")]);
     expect(readOfficialTricksReply(JSON.parse(JSON.stringify({ tricks: [entry] })))?.tricks[0]?.addsMenu).toBe(true);
   });
 });

@@ -30,7 +30,7 @@ describe("TrickBoundary", () => {
         </TrickBoundary>
       </div>,
     );
-    expect(container.querySelector('[data-trick-node="placeholder"]')?.textContent).toBe("This Collie cannot draw this part");
+    expect(container.querySelector('[data-trick-node="placeholder"]')?.textContent).toBe("This Gaddi cannot draw this part");
     expect(container.querySelectorAll('[data-testid="part"]')).toHaveLength(1);
   });
 

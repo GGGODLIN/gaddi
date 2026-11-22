@@ -64,7 +64,7 @@ describe("an answered trick approval collapses into one line", () => {
     // The glyph on its 16px tile, the label, the name and the outcome.
     expect(line.querySelector('[data-slot="decision-trick-mark"]')).not.toBeNull();
     expect(line.querySelector('[data-slot="decision-trick-mark"]')!.className).toContain("size-4");
-    expect(line).toHaveTextContent("Collie tricks");
+    expect(line).toHaveTextContent("Gaddi tricks");
     expect(line).toHaveTextContent(words);
     // It is a line: no card, no panel, no button, no hold.
     expect(container.querySelector('[data-slot="chat-approval"]')).toBeNull();

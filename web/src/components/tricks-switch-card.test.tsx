@@ -36,7 +36,7 @@ afterEach(() => clearStatus());
 describe("the tricks switch card", () => {
   it("says what tricks are, the experiment contract, and draws the switch on", () => {
     render(<TricksSwitchCard on disabled={false} onToggle={() => {}} />);
-    expect(screen.getByText("Tricks are small programs that add buttons, lines and pages to Collie. A trick's program runs as you on this machine.")).toBeInTheDocument();
+    expect(screen.getByText("Tricks are small programs that add buttons, lines and pages to Gaddi. A trick's program runs as you on this machine.")).toBeInTheDocument();
     expect(screen.getByText("Tricks are an experiment: they may change, lose settings, or be withdrawn in a patch release.")).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: LABEL })).toBeChecked();
     expect(document.querySelector('[data-slot="armed-slot"]')).toBeNull();

@@ -28,7 +28,7 @@ describe("the API number", () => {
     expect(currentStatus()).toBeNull();
     noteServerApiVersion(API_VERSION + 1);
     const first = currentStatus();
-    expect(first?.text).toBe("This page comes from another Collie version than this machine. It reloads when nothing unsent is open.");
+    expect(first?.text).toBe("This page comes from another Gaddi version than this machine. It reloads when nothing unsent is open.");
     expect(first?.tone).toBe("warn");
     vi.advanceTimersByTime(10_000);
     expect(currentStatus()).toBeNull();

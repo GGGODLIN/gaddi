@@ -35,7 +35,7 @@ beforeEach(() => {
 
 const UNREAD: Surface = { revision: 7, turn: "idle", modal: "unreadable", composer: "unknown" };
 const FREE: Surface = { revision: 7, turn: "idle", modal: "none", composer: "empty" };
-const CAPTION = "Collie cannot read this screen. You can.";
+const CAPTION = "Gaddi cannot read this screen. You can.";
 
 /** A screen Collie cannot read, under a spinner row whose timer and a clock row that tick. */
 function screenAt(seconds: number, clock: string): string {

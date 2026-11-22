@@ -419,7 +419,7 @@ describe("CollieHome — an agent starting", () => {
     const dead = render(<CollieHome trouble lost starting />);
     expect(markState(dead.container)).toBe("idle");
     expect(bead(dead.container, 1)).toBe("");
-    expect(dead.getByRole("button", { name: "Collie home, not connected" })).toBeInTheDocument();
+    expect(dead.getByRole("button", { name: "Gaddi home, not connected" })).toBeInTheDocument();
   });
 
   it("outranks the link coming back", () => {
