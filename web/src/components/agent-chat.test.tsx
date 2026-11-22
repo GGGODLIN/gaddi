@@ -152,7 +152,7 @@ async function openFind(user: User) {
 }
 
 
-// The Belt's pill opens Actions since ADR 0165; the pane list keeps its drag, its handle and its action.
+// The shortcut opens the same attention switcher as the Layers button and the upward drag.
 function openSwitcher(): void {
   act(() => {
     runShortcutAction("switch_pane");
@@ -1209,7 +1209,7 @@ describe("AgentChat — block-grammar scoping (an agent with no adapter)", () =>
     // above the whole chrome block.
     for (const text of [STATUS_TEXT, MENU_TEXT]) {
       const { container } = renderChat({ text });
-      const handle = screen.getByRole("button", { name: "Actions" });
+      const handle = screen.getByRole("button", { name: "Switch pane" });
       const belt = container.querySelector('[data-slot="composer-actions"]')!;
       // The composer's own box, reached through the actions belt inside it — the status band this
       // used to reach through is gone (composer.tsx says where it went).

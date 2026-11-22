@@ -475,7 +475,7 @@ describe("ActionsRow, the jobs mark", () => {
 
   it("a sixth pinned pill has its own first-frame inset", () => {
     // 269 + 32 + 6 = 307 at scale 1; 85 + 6 × 37 + 5 × 6 = 337 at the default scale. The pins mark makes seven (345).
-    expect([5, 6, 7].map((n) => switchPillInset(1, n))).toEqual([269, 307, 345]);
+    expect([5, 6, 7, 8].map((n) => switchPillInset(1, n))).toEqual([269, 307, 345, 383]);
     expect(switchPillInset(1.15, 6)).toBe(337);
   });
 });

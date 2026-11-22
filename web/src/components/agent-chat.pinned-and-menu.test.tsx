@@ -101,6 +101,21 @@ describe("AgentChat — the pane's three dots", () => {
 describe("AgentChat — the pinned Actions button says it is open", () => {
   const pinned = (container: HTMLElement, name: string) => within(container.querySelector<HTMLElement>('[data-slot="composer-actions"]')!).getByRole("button", { name });
 
+  it("opens the attention switcher from Layers and Actions from its adjacent button", async () => {
+    const user = userEvent.setup();
+    const { container } = renderChat();
+    const switcher = pinned(container, "Switch pane");
+    const actions = pinned(container, "Actions");
+    expect(actions.nextElementSibling).toBe(switcher);
+    await user.click(switcher);
+    expect(await screen.findByRole("dialog", { name: "Switch pane" })).toBeInTheDocument();
+    expect(isActionsPaletteOpen()).toBe(false);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Switch pane" })).toBeNull());
+    await user.click(actions);
+    expect(isActionsPaletteOpen()).toBe(true);
+  });
+
   it("is aria-expanded while the Actions palette is open, wears the shared open look, and keeps its box", () => {
     const { container } = renderChat();
     const button = pinned(container, "Actions");

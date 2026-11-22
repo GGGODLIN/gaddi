@@ -230,6 +230,7 @@ const SWITCH_PILL_INSET_SIX = 307;
 /** The first-frame fallback with all SEVEN pinned pills: the six above and the pins mark (see `pins`
  *  below). 307 + 32 (the pins mark) + 6 (its gap) = 345. */
 const SWITCH_PILL_INSET_SEVEN = 345;
+/** The scale-1 fallback for eight pinned pills, including Actions and the switcher. */
 const SWITCH_PILL_INSET_EIGHT = 383;
 
 /** The seven constants above, indexed by how many pills the block holds, less one. */
@@ -245,7 +246,7 @@ const SWITCH_PILL_INSETS = [
 ] as const;
 
 /**
- * The first-frame fallback AT A BELT SCALE, for a block holding `pills` pinned pills (1 to 7). The
+ * The first-frame fallback AT A BELT SCALE, for a block holding `pills` pinned pills (1 to 8). The
  * constants above are the scale-1 arithmetic; only the icon-only pills grow with `--belt-scale`
  * (the hairline, the gaps, `pr-3` and the 64px fade do not), so each 32 in them becomes
  * `--belt-pill`, the same `round(2rem * scale)` index.css uses. Default scale 1.15: 85 + 37 = 122
@@ -476,13 +477,11 @@ export interface ActionsRowProps {
      *  screen's strip, where the button is drawn and the drag is not (the sidebar is the switcher,
      *  and `touch-pan-x` with no listener behind it would forbid a vertical gesture for nothing). */
     ref?: (node: HTMLElement | null) => void;
-    /** The tap, on the pinned button: the Actions palette. */
+    /** The tap opens the attention switcher. */
     onClick: () => void;
-    /** ALREADY TRANSLATED. The button's accessible name: "Actions". */
+    /** ALREADY TRANSLATED. The button's accessible name. */
     label: string;
-    /** The thing the button opens is open now (the Actions palette): the pill says
-     *  `aria-expanded` and wears the shared open look (ui/button.tsx `TRIGGER_OPEN`). Fill and ink only, so the box
-     *  and the pinned block's measured width do not move. */
+    /** The switcher is open: the button wears the shared open look. */
     open?: boolean;
     /** Another pane needs you: a red dot on the mark's corner. The label says so in words. */
     alert?: boolean;
