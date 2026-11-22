@@ -3212,7 +3212,7 @@ export const ru: Dictionary = withEnglishFallback({
   "telemetry.row.off": "Выкл",
   "telemetry.row.reading": "Чтение…",
   "telemetry.row.failed": "Не удалось прочитать",
-  "telemetry.card.description": "Анонимно: один ping в день со счетчиком установок и сигналами о неполадках, под случайным ID. Ничего больше.",
+  "telemetry.card.description": "Анонимно: один пинг в день, под случайным ID, с числом установок, данными о том, какие агенты и мультиплексоры работали, включена ли необязательная связь данных, и сигналами о неполадках.",
   "telemetry.card.reading": "Чтение настройки с этой машины…",
   "telemetry.card.readFailed": "Не удалось прочитать настройку с этой машины.",
   "telemetry.card.saving": "Сохранение…",

@@ -713,4 +713,30 @@ describe("Composer @ file suggestions (#757)", () => {
     expect(within(freshList).queryByRole("button", { name: "@stale-before-reset.ts" })).toBeNull();
     expect(epochCalls).toBe(2);
   });
+
+  it("hides `@` file suggestions while the pane is starting (`startHeld`)", async () => {
+    let calls = 0;
+    server.use(
+      http.get(/\/api\/pane\/[^/]+\/files$/, () => {
+        calls += 1;
+        return HttpResponse.json(fixtureFilesDir(""));
+      }),
+    );
+
+    const { saveDraft } = await import("@/lib/drafts");
+    saveDraft(undefined, "w1:p1", "@re");
+    renderComposer({ starting: true });
+
+    const field = screen.getByRole<HTMLTextAreaElement>("textbox");
+    expect(field).toHaveValue("@re");
+    expect(field).toHaveAttribute("readonly");
+    fireEvent.focus(field);
+    field.setSelectionRange(3, 3);
+    fireEvent.select(field);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(screen.queryByRole("group", FILE_STRIP)).toBeNull();
+    expect(calls).toBe(0);
+    expect(field).toHaveValue("@re");
+  });
 });

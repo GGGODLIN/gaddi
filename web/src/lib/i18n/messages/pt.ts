@@ -3073,7 +3073,7 @@ export const pt: Dictionary = withEnglishFallback({
   "telemetry.row.off": "Desativado",
   "telemetry.row.reading": "Lendo…",
   "telemetry.row.failed": "Não foi possível ler",
-  "telemetry.card.description": "Anônimo: um ping por dia com a contagem de instalações e os sinais de problemas, sob um ID aleatório. Nada mais.",
+  "telemetry.card.description": "Anônimo: um ping por dia com a contagem de instalações, quais agentes e multiplexadores rodaram e se o link de dados opcional estava ativo, mais os sinais de problema, sob um ID aleatório.",
   "telemetry.card.reading": "Lendo a configuração desta máquina…",
   "telemetry.card.readFailed": "Não foi possível ler a configuração desta máquina.",
   "telemetry.card.saving": "Salvando…",

@@ -717,9 +717,18 @@ spot regressions and slow degradations after a release, and to steer what gets b
 1.26.x Collie sent nothing ([ADR 0129](../.adr/0129-an-anonymous-install-count-on-by-default.md)).
 
 When Collie shows one of its two trouble cards, the next ping also carries how often:
-which card, the name and version of the agent program, the multiplexer it ran on, a count and, from 1.27.4, a screen field on a dialog card. The screen field is a short hash of the dialog's key-hint
+which card, the name and version of the agent program, the multiplexer it ran on, whether the optional
+data link was on for that pane, a count and, from 1.27.4, a screen field on a dialog card. The screen field is a short hash of the dialog's key-hint
 row only, never a row with your text, never the screen or what you typed. It is absent unless that
 row is a short list of key hints, such as `enter select · esc back`.
+
+The ping also says which agents ran on which multiplexers since the last ping, about a day, one row per
+pair, for example `claude` on `tmux`. Each row has one more fact: whether the optional data link was on
+for at least one session of that pair (`collie harness link`). A row of the trouble count above carries
+the same fact for its own pane. The names come from fixed lists in Collie, and any other name reads
+`other`. It is never how many sessions ran, and never a name, folder, title, prompt or model. The bridge
+keeps only the pairs it has seen, in its state file, and the list goes with the install ID when the count
+is off. A crew member reports its own agents and pings for itself.
 
 The network paths you choose are separate from that: the phone reaches Collie through your front
 door (Tailscale by default), and Web Push, once you turn it on, goes through the phone's push

@@ -3226,7 +3226,7 @@ export const ko: Dictionary = withEnglishFallback({
   "telemetry.row.off": "꺼짐",
   "telemetry.row.reading": "읽는 중…",
   "telemetry.row.failed": "읽을 수 없음",
-  "telemetry.card.description": "익명: 무작위 ID로 설치 수와 문제 신호를 하루에 한 번 전송합니다. 그 외에는 전송하지 않습니다.",
+  "telemetry.card.description": "익명입니다. 하루 한 번 임의의 ID로 설치 수, 실행된 에이전트와 멀티플렉서, 선택 사항인 데이터 링크 사용 여부, 문제 신호를 보냅니다.",
   "telemetry.card.reading": "이 머신에서 설정을 읽는 중…",
   "telemetry.card.readFailed": "이 머신에서 설정을 읽지 못했습니다.",
   "telemetry.card.saving": "저장하는 중…",

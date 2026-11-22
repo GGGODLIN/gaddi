@@ -3518,7 +3518,8 @@ export const en = {
   "telemetry.row.off": "Off",
   "telemetry.row.reading": "Reading…",
   "telemetry.row.failed": "Could not be read",
-  "telemetry.card.description": "Anonymous: one ping a day with the install count and the trouble signals, under a random ID. Nothing else.",
+  "telemetry.card.description":
+    "Anonymous: one ping a day with the install count, which agents and multiplexers ran and whether the optional data link was on, and the trouble signals, under a random ID.",
   "telemetry.card.reading": "Reading the setting from this machine…",
   "telemetry.card.readFailed": "The setting could not be read from this machine.",
   "telemetry.card.saving": "Saving…",

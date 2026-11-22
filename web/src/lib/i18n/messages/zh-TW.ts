@@ -3207,7 +3207,7 @@ export const zhTW: Dictionary = withEnglishFallback({
   "telemetry.row.off": "關閉",
   "telemetry.row.reading": "讀取中…",
   "telemetry.row.failed": "無法讀取",
-  "telemetry.card.description": "匿名：每天一次 ping，附上安裝數量與問題訊號，使用隨機 ID。僅此而已。",
+  "telemetry.card.description": "匿名：每天一次 ping，附隨機 ID，內容包含安裝數量、執行過哪些代理與多工器、選用的資料連線是否開啟，以及問題訊號。",
   "telemetry.card.reading": "正在從此機器讀取設定…",
   "telemetry.card.readFailed": "無法從此機器讀取設定。",
   "telemetry.card.saving": "正在儲存…",

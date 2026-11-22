@@ -3843,7 +3843,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const expandedOpen = expanded && !direct.active && !locked && expandArea !== undefined && expandArea !== null;
   const atCaret = atCaretState.paneKey === reportKey ? atCaretState.caret : null;
   const canSuggestFiles =
-    boxFocused && !isShell && !locked && !confirmingSend && !direct.active && !dialogCard && !expandedOpen;
+    boxFocused && !isShell && !locked && !startHeld && !confirmingSend && !direct.active && !dialogCard && !expandedOpen;
   const activeAt = useMemo(
     () => (canSuggestFiles ? findAtToken(input, atCaret) : null),
     [canSuggestFiles, input, atCaret],
@@ -3855,7 +3855,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     drillingToken.start === activeAt.start &&
     fileSuggest.loading;
   function selectFileSuggestion(file: FileSuggestion) {
-    if (activeAt === null) return;
+    if (activeAt === null || startHeld) return;
     direct.deactivateSilently();
     const placed = applyFileSuggestion(inputValueRef.current, activeAt, file);
     // Return focus before React re-renders so a keyboard-focused chip unmounting during an uncached

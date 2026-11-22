@@ -3260,7 +3260,7 @@ export const es: Dictionary = withEnglishFallback({
   "telemetry.row.off": "Desactivado",
   "telemetry.row.reading": "Leyendo…",
   "telemetry.row.failed": "No se pudo leer",
-  "telemetry.card.description": "Anónimo: un ping al día con el recuento de instalaciones y las señales de problemas, bajo un ID aleatorio. Nada más.",
+  "telemetry.card.description": "Anónimo: un ping al día con el recuento de instalaciones, qué agentes y multiplexores se ejecutaron y si el enlace de datos opcional estaba activado, y las señales de problemas, bajo un ID aleatorio.",
   "telemetry.card.reading": "Leyendo el ajuste de esta máquina…",
   "telemetry.card.readFailed": "No se pudo leer el ajuste de esta máquina.",
   "telemetry.card.saving": "Guardando…",

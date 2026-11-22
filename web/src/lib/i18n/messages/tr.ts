@@ -3073,7 +3073,7 @@ export const tr: Dictionary = withEnglishFallback({
   "telemetry.row.off": "Kapalı",
   "telemetry.row.reading": "Okunuyor…",
   "telemetry.row.failed": "Okunamadı",
-  "telemetry.card.description": "Anonim: rastgele bir kimlik altında yükleme sayısı ve sorun sinyalleriyle günde bir ping. Başka hiçbir şey yok.",
+  "telemetry.card.description": "Anonim: rastgele bir kimlikle günde bir ping; kurulum sayısı, hangi ajanların ve çoğullayıcıların çalıştığı, isteğe bağlı veri bağlantısının açık olup olmadığı ve sorun sinyalleri.",
   "telemetry.card.reading": "Ayar bu makineden okunuyor…",
   "telemetry.card.readFailed": "Ayar bu makineden okunamadı.",
   "telemetry.card.saving": "Kaydediliyor…",

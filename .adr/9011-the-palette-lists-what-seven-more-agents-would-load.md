@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-15
-- **Shipped in:** pending
 - **Trail:** the operator asked that skill listing work "跟claude一樣做兩階段，照上游政策內建的可以直接列出，到時候可以貢獻上游，user自建的就留在我的fork" (2026-10-15) · `bridge/agent-skills.ts` · the same `GET /api/pane/<id>/claude-commands` route · `web/src/lib/agent-commands.ts` (`FOUND_AGENTS`, `withFound`) · amends the fork's [ADR 9009](./9009-the-palette-lists-what-claude-code-would-load.md), which said other harnesses keep [ADR 0018](./0018-operator-command-rows-replace-the-catalog.md) unchanged · fork-only by decision
 
 ## Context

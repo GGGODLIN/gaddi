@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-10
-- **Shipped in:** fork 2.0.0
 - **Relates to:** [ADR 0020](./0020-a-major-upgrade-is-consented-by-flag.md) (a major is crossed by
   consent), which makes the move to 2.0.0 a one-time tap. [ADR 0038](./0038-the-group-is-a-crew-the-wire-keeps-pack.md),
   whose 2.0 test clock this re-keys.
