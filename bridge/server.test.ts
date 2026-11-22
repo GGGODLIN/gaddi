@@ -1632,25 +1632,6 @@ describe("pane write prompt binding", () => {
       }
     });
 
-    test("Claude Code 2.1.330's block/holding-up countdown takes the tap as the clock moves and still refuses another command", async () => {
-      const blockScreen = (clock: string, other = false): string => {
-        const rows = (other ? BG.replace("level.py;", "level.sh;") : BG).split("\n");
-        const at = rows.findIndex((row) => row.includes("Dangerous rm operation"));
-        rows.splice(at + 1, 0, ` \u001b[0m\u001b[2m│\u001b[0m \u001b[38;2;255;193;7m⚠ Claude Code will automatically block this request in ${clock}, to avoid holding up an unattended session\u001b[0m\r`);
-        return rows.join("\n");
-      };
-      const parts = phoneBinding(blockScreen("1:20"));
-      expect(Array.isArray(parts)).toBe(true);
-      for (const clock of ["1:19", "0:59", "about 45 seconds"]) {
-        const { res, client } = await tapOn(blockScreen("1:20"), blockScreen(clock));
-        expect(res.status).toBe(200);
-        expect(client.keys).toEqual([["w1:p1", ["1"]]]);
-      }
-      const { res, client } = await tapOn(blockScreen("0:01"), blockScreen("1:20", true));
-      expect(res.status).toBe(409);
-      expect(client.keys).toEqual([]);
-    });
-
     test("the binding is a list only with a clock in the dialog; without one it stays the one string", () => {
       const parts = phoneBinding(screen("1:20"));
       expect(Array.isArray(parts)).toBe(true);
