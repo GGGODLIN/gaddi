@@ -770,6 +770,22 @@ describe("StateEngine — session name enrichment", () => {
     expect(agent("w1:p1").agentTitle).toBe("PR 積壓、紅燈與合併");
   });
 
+  test("a grid marked unstyled skips screen-name fallback even before a session ref arrives", async () => {
+    const herdr = new NameHerdr();
+    herdr.panes = [pane("w1:p1", "w1", "idle", "claude")];
+    herdr.texts.set("w1:p1", named("ultracode"));
+    const base = asMux(herdr);
+    const origReadGrid = base.readGrid.bind(base);
+    base.readGrid = async (id, req) => {
+      const res = await origReadGrid(id, req);
+      return res.ok ? { ok: true, value: { ...res.value, unstyled: true } } : res;
+    };
+    const engine = new StateEngine(base, 1500);
+    await engine["poll"]();
+    const view = engine.current().agents.find((a) => a.paneId === "w1:p1")!;
+    expect("sessionName" in view).toBe(false);
+  });
+
   test("a real /rename ultracode in the journal still becomes sessionName on an unstyled screen", async () => {
     const { herdr, poll, agent } = makeTitledEngine({ "w1:p1": { person: "ultracode", agent: "PR 積壓、紅燈與合併" } });
     const p = pane("w1:p1", "w1", "idle", "claude");

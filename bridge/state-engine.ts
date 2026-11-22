@@ -909,10 +909,10 @@ export class StateEngine {
             styling: "preserve",
           });
           if (!grid.ok) return;
-          if (this.titles !== undefined && a.agentSession !== undefined && !grid.value.text.includes(ESC)) {
+          if (grid.value.unstyled === true || (this.titles !== undefined && a.agentSession !== undefined && !grid.value.text.includes(ESC))) {
             // Without ANSI colour a mode badge in the input rule (such as `ultracode`) cannot be
-            // told from a `/rename` name. When the journal tracker already has a session id for
-            // this pane, rely on the journal instead of guessing from plain text.
+            // told from a `/rename` name. Skip plain-text guessing when the multiplexer declares
+            // unstyled grids or when the journal tracker already has a session id for this pane.
             this.sessionNames.delete(a.paneId);
             markRead(a);
             return;
