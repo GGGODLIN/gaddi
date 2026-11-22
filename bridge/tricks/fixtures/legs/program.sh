@@ -25,18 +25,25 @@ case "$from" in *[!A-Za-z0-9._:-]*) from="" ;; esac
 state=$(printf '%s' "$flat" | sed -n 's/.*"trick" *: *{[^}]*"state" *: *"\([^"]*\)".*/\1/p')
 
 now=${LEGS_NOW:-$(date +%s)}
-nowiso=$(date -u -d "@$now" +%Y-%m-%dT%H:%M:%SZ)
+nowiso=$(date -u -d "@$now" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$now" +%Y-%m-%dT%H:%M:%SZ)
 logdirs=${LEGS_LOG_DIR:-$HOME/.cache/collie-lab/leg-logs}
+
+mtime_of() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
+birth_of() { stat -c %W "$1" 2>/dev/null || stat -f %B "$1" 2>/dev/null || echo 0; }
 
 # The newest leg log: a file named leg-*.txt or browser-leg-*.log that holds Playwright case lines.
 log=""
 for dir in $(printf '%s' "$logdirs" | tr ':' ' '); do
   [ -d "$dir" ] || continue
-  for f in $(stat -c '%Y %n' "$dir"/leg-*.txt "$dir"/browser-leg-*.log 2>/dev/null | sort -rn | head -n 12 | cut -d' ' -f2-); do
+  for f in $(
+    for p in "$dir"/leg-*.txt "$dir"/browser-leg-*.log; do
+      [ -e "$p" ] && printf '%s %s\n' "$(mtime_of "$p")" "$p"
+    done | sort -rn | head -n 12 | cut -d' ' -f2-
+  ); do
     case "$f" in *[!A-Za-z0-9._/-]*) continue ;; esac
     [ -r "$f" ] || continue
     grep -q '\[phone\] ' "$f" 2>/dev/null || continue
-    if [ -z "$log" ] || [ "$(stat -c %Y "$f")" -gt "$(stat -c %Y "$log")" ]; then log=$f; fi
+    if [ -z "$log" ] || [ "$(mtime_of "$f")" -gt "$(mtime_of "$log")" ]; then log=$f; fi
     break
   done
 done
@@ -45,8 +52,8 @@ mtime=0
 birth=0
 running=0
 if [ -n "$log" ]; then
-  mtime=$(stat -c %Y "$log" 2>/dev/null || echo 0)
-  birth=$(stat -c %W "$log" 2>/dev/null || echo 0)
+  mtime=$(mtime_of "$log")
+  birth=$(birth_of "$log")
   case "$birth" in ''|*[!0-9]*) birth=0 ;; esac
   if [ -n "${LEGS_RUNNING:-}" ]; then
     running=$LEGS_RUNNING

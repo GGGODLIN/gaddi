@@ -138,38 +138,50 @@ describe("the strict reader", () => {
 // ── the fixture repository ───────────────────────────────────────────────────
 
 /** git for the fixture itself, with no config of the person running the tests. */
-function fixtureGit(cwd: string, args: string[], home: string): string {
-  const env = { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, GIT_CONFIG_NOSYSTEM: "1" };
-  const run = Bun.spawnSync(["git", "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "init.defaultBranch=main", "-c", "protocol.file.allow=always", ...args], { cwd, env, stdout: "pipe", stderr: "pipe" });
+function fixtureGit(cwd: string, args: string[], home: string, stdin?: string, extraEnv?: Record<string, string>): string {
+  const env = { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, GIT_CONFIG_NOSYSTEM: "1", ...extraEnv };
+  const run = Bun.spawnSync(["git", "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "init.defaultBranch=main", "-c", "protocol.file.allow=always", ...args], {
+    cwd,
+    env,
+    stdin: stdin === undefined ? undefined : new TextEncoder().encode(stdin),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   if (run.exitCode !== 0) throw new Error(`fixture git ${args.join(" ")}: ${run.stderr.toString()}`);
   return run.stdout.toString().trim();
 }
 
 type FixtureFile = { text: string; exec?: boolean } | { link: string };
 
-/** A bare repository holding one commit per tree. Answers its file URL and the commits. */
+/**
+ * A bare repository holding one commit per tree. Builds each commit directly through a temporary
+ * git index so paths that differ only in case or Unicode form survive on case-insensitive APFS/NTFS.
+ */
 async function fixtureRepo(commits: Record<string, FixtureFile>[]): Promise<{ url: string; shas: string[] }> {
   const root = await tempDir();
   const home = join(root, "fixture-home");
   await mkdir(home);
-  const work = join(root, "work");
   const bare = join(root, "repo.git");
   fixtureGit(root, ["init", "-q", "--bare", bare], home);
-  fixtureGit(root, ["init", "-q", work], home);
   const shas: string[] = [];
   for (const tree of commits) {
-    for (const name of await readdir(work)) if (name !== ".git") await rm(join(work, name), { recursive: true, force: true });
+    const indexFile = join(root, `idx-${String(shas.length)}`);
+    const lines: string[] = [];
     for (const [rel, file] of Object.entries(tree)) {
-      const path = join(work, rel);
-      await mkdir(dirname(path), { recursive: true });
-      if ("link" in file) await symlink(file.link, path);
-      else await writeFile(path, file.text, { mode: file.exec === true ? 0o755 : 0o644 });
+      const mode = "link" in file ? "120000" : file.exec === true ? "100755" : "100644";
+      const content = "link" in file ? file.link : file.text;
+      const blob = fixtureGit(bare, ["hash-object", "-w", "--stdin"], home, content);
+      lines.push(`${mode} ${blob}\t${rel}`);
     }
-    fixtureGit(work, ["add", "-A"], home);
-    fixtureGit(work, ["commit", "-q", "--allow-empty", "-m", `commit ${String(shas.length + 1)}`], home);
-    shas.push(fixtureGit(work, ["rev-parse", "HEAD"], home));
+    const indexEnv = { GIT_INDEX_FILE: indexFile };
+    if (lines.length > 0) fixtureGit(bare, ["update-index", "--index-info"], home, `${lines.join("\n")}\n`, indexEnv);
+    const treeSha = fixtureGit(bare, ["write-tree"], home, undefined, indexEnv);
+    const parent = shas.at(-1);
+    const commitArgs = parent === undefined ? ["commit-tree", treeSha, "-m", `commit ${String(shas.length + 1)}`] : ["commit-tree", treeSha, "-p", parent, "-m", `commit ${String(shas.length + 1)}`];
+    shas.push(fixtureGit(bare, commitArgs, home));
   }
-  fixtureGit(work, ["push", "-q", bare, "HEAD:refs/heads/main"], home);
+  const head = shas.at(-1);
+  if (head !== undefined) fixtureGit(bare, ["update-ref", "refs/heads/main", head], home);
   fixtureGit(bare, ["symbolic-ref", "HEAD", "refs/heads/main"], home);
   return { url: `file://${bare}`, shas };
 }

@@ -316,8 +316,8 @@ describe("the watch of a trick, in the runner", () => {
     reactions.sync([target("w", ["turn.end"], [file])]);
     bus.publish({ type: "turn.end", session: sessionOf("a:1") });
     await tick();
-    await writeFile(file, "b");
-    await tick(200);
+    await writeFile(file, "bb");
+    await until(() => reactions.counts().waiting === 2);
     expect(reactions.takeWaiting("w")).toEqual({ kind: "watch", path: file, count: 2 });
     reactions.close();
   });
@@ -454,7 +454,7 @@ describe("the wire: what a program receives in `trigger`", () => {
     await writeFile(file, "a");
     const r = await onRig([OK], watchManifest(file));
     await writeFile(file, "ab");
-    await tick(300);
+    await until(() => r.specs.length >= 2);
     expect(kinds(r)).toEqual(["start", "watch"]);
     const raw: { trigger: Record<string, string | number> } = JSON.parse(r.specs[1]?.stdin ?? "null");
     expect(Object.keys(raw.trigger).toSorted()).toEqual(["count", "kind", "path"]);
