@@ -179,8 +179,8 @@ test("SET-FACE/reload — Appearance offers the three shipped faces, Aldrich is 
   await app.open(DASHBOARD);
   await screen.getByRole("button", en["nav.settings.aria"]).tap();
   await expect(screen.getByRole("heading", en["settings.title"])).toBeVisible();
-  await screen.getByRole("button", /^Appearance\b/u).tap();
-  await expect(screen.getByRole("heading", en["settings.section.appearance.title"])).toBeVisible();
+  await screen.getByRole("button", /^Look and feel\b/u).tap();
+  await expect(screen.getByRole("heading", en["settings.page.look.title"])).toBeVisible();
   await expect(screen.getByText(en["settings.typeface.title"], { exact: true })).toBeVisible();
 
   const family = typefaceFamily(screen);
@@ -194,7 +194,7 @@ test("SET-FACE/reload — Appearance offers the three shipped faces, Aldrich is 
   expect(await designStore(browser)).toEqual({ ...typefaceGroteskStore });
 
   await page().reload();
-  await expect(screen.getByRole("heading", en["settings.section.appearance.title"])).toBeVisible();
+  await expect(screen.getByRole("heading", en["settings.page.look.title"])).toBeVisible();
   const reloaded = typefaceFamily(screen);
   await expect(reloaded).toHaveValue(typefaceGroteskValue);
   await expect(reloaded.getByRole("option")).toHaveText([...shippedTypefaceOptionLabels]);

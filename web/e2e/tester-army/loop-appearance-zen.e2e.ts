@@ -68,8 +68,8 @@ async function turnZenOn(app: Openable, screen: Screen): Promise<void> {
   await expect(footer(screen).getByRole("button", new RegExp(`^${en["home.tabs.dashboard"]}(?:\\s*,|$)`, "u"))).toBeVisible();
   await screen.getByRole("button", en["nav.settings.aria"]).tap();
   await expect(screen.getByRole("heading", en["settings.title"])).toBeVisible();
-  await screen.getByRole("button", /^Device\b/u).tap();
-  await expect(screen.getByRole("heading", en["settings.section.device.title"])).toBeVisible();
+  await screen.getByRole("button", /^Keys and touch\b/u).tap();
+  await expect(screen.getByRole("heading", en["settings.page.keys.title"])).toBeVisible();
   const zen = screen.getByRole("switch", en["settings.zen.title"]);
   await expect(zen).toHaveAttribute("aria-checked", "false");
   await zen.tap();
@@ -99,10 +99,10 @@ test("SET-THEME/reload — Appearance offers System, Light and Dark, and the cho
   await expect(footer(screen).getByRole("button", new RegExp(`^${en["home.tabs.dashboard"]}(?:\\s*,|$)`, "u"))).toBeVisible();
   await screen.getByRole("button", en["nav.settings.aria"]).tap();
   await expect(screen.getByRole("heading", en["settings.title"])).toBeVisible();
-  await screen.getByRole("button", /^Appearance\b/u).tap();
-  await expect(screen.getByRole("heading", en["settings.section.appearance.title"])).toBeVisible();
+  await screen.getByRole("button", /^Look and feel\b/u).tap();
+  await expect(screen.getByRole("heading", en["settings.page.look.title"])).toBeVisible();
 
-  const theme = screen.getByRole("radiogroup", en["settings.theme.title"]);
+  const theme = screen.getByRole("radiogroup", en["settings.lightDark.title"]);
   const system = theme.getByRole("radio", en["settings.theme.option.system"]);
   const light = theme.getByRole("radio", en["settings.theme.option.light"]);
   const dark = theme.getByRole("radio", en["settings.theme.option.dark"]);
@@ -116,7 +116,7 @@ test("SET-THEME/reload — Appearance offers System, Light and Dark, and the cho
 
   // Same page and context: a restarted browser would drop the API routes.
   await page().reload();
-  await expect(screen.getByRole("heading", en["settings.section.appearance.title"])).toBeVisible();
+  await expect(screen.getByRole("heading", en["settings.page.look.title"])).toBeVisible();
   await expect(light).toHaveAttribute("aria-checked", "true");
   await expect(system).toHaveAttribute("aria-checked", "false");
   await expect(dark).toHaveAttribute("aria-checked", "false");
