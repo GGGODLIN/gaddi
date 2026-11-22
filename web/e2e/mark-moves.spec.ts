@@ -18,7 +18,8 @@ async function seedDesign(page: Page, design: Readonly<Record<string, string | b
   await page.addInitScript(([key, blob]) => localStorage.setItem(key, blob), [DESIGN_KEY, JSON.stringify(design)] as const);
 }
 
-const header = (page: Page): Locator => page.getByRole("button", { name: en["nav.home.aria.default"] }).locator("svg[data-mark]");
+const header = (page: Page): Locator =>
+  page.getByRole("button", { name: en["nav.home.aria.default"].replace(/\bCollie\b/g, "Gaddi") }).locator("svg[data-mark]");
 
 function playStates(mark: Locator): Promise<string[]> {
   return mark.evaluate((svg) => svg.getAnimations({ subtree: true }).map((a) => a.playState));

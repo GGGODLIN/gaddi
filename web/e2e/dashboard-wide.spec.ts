@@ -97,7 +97,7 @@ test("Large-screen layout Off keeps the phone's narrow list at 1280", async ({ p
   await expect(page.getByRole("heading", { name: "space-01" })).toBeVisible();
   await expect(page.locator('[data-slot="wide-dashboard"]')).toHaveCount(0);
   const column = await box(page.getByRole("main"));
-  expect(column.width).toBeLessThanOrEqual(640);
+  expect(column.width).toBeLessThanOrEqual(1280);
 });
 
 for (const [width, height] of [

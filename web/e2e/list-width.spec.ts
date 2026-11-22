@@ -20,6 +20,7 @@ for (const size of SIZES) {
       test(`${route} shares one centred column with its header`, async ({ page }, testInfo) => {
         await installApiStub(page);
         await pinLocale(page, "en");
+        await page.addInitScript(() => window.localStorage.setItem("collie:wide-layout-mode:v1", "off"));
         await page.goto(route);
         const main = page.getByRole("main");
         const header = page.getByRole("banner");

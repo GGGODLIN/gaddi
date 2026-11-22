@@ -377,6 +377,7 @@ describe("the size limit: a far too large answer never bloats the lead", () => {
     expect(run.error).not.toBeNull();
     expect(run.bytes).toBeLessThanOrEqual(CREW_BODY_MAX);
     // Streamed through: the lead holds no copy of the 32 MB it passed on.
+    Bun.gc(true);
     expect(process.memoryUsage().rss / MB - before).toBeLessThan(64);
   }, 30_000);
 

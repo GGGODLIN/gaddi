@@ -33,7 +33,7 @@ async function cursorOf(page: Page, selector: string): Promise<string> {
 
 test("the real controls of the app show the hand", async ({ page }) => {
   await page.goto("/");
-  const home = page.getByRole("button", { name: en["nav.home.aria.default"] });
+  const home = page.getByRole("button", { name: en["nav.home.aria.default"].replace(/\bCollie\b/g, "Gaddi") });
   await expect(home).toBeVisible();
 
   // A header button, and a list row (a whole-row button on the dashboard).
@@ -59,7 +59,7 @@ test("the real controls of the app show the hand", async ({ page }) => {
 
 test("a disabled control, a text field and a component's own cursor keep theirs", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: en["nav.home.aria.default"] })).toBeVisible();
+  await expect(page.getByRole("button", { name: en["nav.home.aria.default"].replace(/\bCollie\b/g, "Gaddi") })).toBeVisible();
   // A probe of every selector in the rule, appended to the real page so the real stylesheet answers.
   await page.evaluate(() => {
     const host = document.createElement("div");

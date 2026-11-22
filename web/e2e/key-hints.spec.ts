@@ -186,7 +186,7 @@ test("the mark's cap sits on its top left corner and covers no letter of the wor
   desktopOnly(testInfo);
   await openPane(page, "w1:p1");
   await arm(page);
-  const word = (await page.locator('[data-slot="sidebar-word"] svg.wordmark').boundingBox())!;
+  const word = (await page.locator('[data-slot="sidebar-word"]').boundingBox())!;
   const all = await caps(page, "open_dashboard").evaluateAll((nodes) =>
     nodes.map((node) => {
       const r = node.getBoundingClientRect();

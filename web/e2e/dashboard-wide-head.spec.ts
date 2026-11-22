@@ -66,7 +66,7 @@ for (const [lines, mux] of [
     const identity = page.locator('[data-slot="header-identity"]');
     await expect(identity).toBeVisible();
     if (mux !== undefined) await expect(identity).toContainText(mux);
-    else await expect(identity).toHaveText("Collie");
+    else await expect(identity).toHaveText("GADDI");
     // The ink, not the box: the block's first and last text lines as the engine lays them out.
     const ink = await identity.evaluate((el) => {
       const range = document.createRange();

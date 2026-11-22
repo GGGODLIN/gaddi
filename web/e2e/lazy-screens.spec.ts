@@ -71,7 +71,7 @@ test("every lazy screen opens offline after one online load", async ({ page, con
   expect(LAZY_PATHS.length).toBeGreaterThan(20);
   await installApiStub(page);
   await page.goto("/");
-  await expect(page.getByRole("button", { name: en["nav.home.aria.default"] })).toBeVisible();
+  await expect(page.getByRole("button", { name: en["nav.home.aria.default"].replace(/\bCollie\b/g, "Gaddi") })).toBeVisible();
   await waitForPreload(page);
 
   // A reload would clear this mark; the page must stay the one that preloaded.
