@@ -3106,16 +3106,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // Insert a selected command into the composer and focus it. Appends to any draft already typed
   // (with a separating space) rather than clobbering it; an empty draft just gets set.
   function insertCommand(value: string) {
+    if (startHeld) return;
     direct.deactivateSilently();
     updateInputFrom((prev) => (prev.trim() ? `${prev.trimEnd()} ${value}` : value));
     focusInputEnd();
   }
   function selectSuggestion(command: AgentCommand) {
+    if (startHeld) return;
     direct.deactivateSilently();
     updateInput(`${command.command} `);
     focusInputEnd();
   }
   function insertQuote(quoted: string) {
+    if (startHeld) return;
     direct.deactivateSilently();
     updateInputFrom((prev) => appendQuote(prev, quoted));
     focusInputEnd();
@@ -4270,7 +4273,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                       id: "agent",
                       icon: "agent-commands",
                       label: translate("composer.controls.agent"),
-                      disabled: locked,
+                      disabled: locked || startHeld,
                       onSelect: () => requestDrawer("cmd"),
                     },
                   ] satisfies GeneralAction[]
@@ -4896,7 +4899,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     "col-start-2 row-start-1 min-w-0 min-h-9 pl-2 pr-1 py-1.5"
                 : "min-w-0 flex-1 min-h-9 pl-2 py-1.5",
               // The expanded field has no minimum height; a fixed placeholder line would enlarge it.
-              (staleWords || steerWords) && (boxOpen ? "placeholder:text-xs" : "placeholder:text-xs placeholder:leading-6"),
+              (staleWords || steerWords) && (boxOpen ? "placeholder:text-xs" : "leading-[1.5em] placeholder:text-xs placeholder:leading-[inherit]"),
               startHeld && "cursor-not-allowed opacity-50",
               // Mirrored, the field's right side stands against the box's border, so it takes the
               // inset the left used to take from Attach.

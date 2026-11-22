@@ -588,7 +588,7 @@ describe("the header — the stacked identity", () => {
       // What gives way is the right cluster, and inside it the chip NAMES.
       expect(right?.className).toMatch(/(^|\s)min-w-0(\s|$)/);
       // The session chip leads with its state dot (fork), so the name is found by its own text.
-      for (const [chip, label] of [[host, "bluefin"], [session, "default"]] as const) {
+      for (const [chip, label] of [[host, "lodge"], [session, "default"]] as const) {
         expect(chip.className).toMatch(/(^|\s)min-w-0(\s|$)/);
         expect(chip.className).not.toMatch(/(^|\s)shrink-0(\s|$)/);
         const name = Array.from(chip.querySelectorAll("span")).find((el) => el.textContent === label);

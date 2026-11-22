@@ -45,11 +45,22 @@ describe("manual send into a question's nested answer editor", () => {
     expect(first.receipt).toMatchObject({ outcome: "refused", reason: "unconfirmed", keys: [] });
     expect(first.surface).toMatchObject({ modal: "unreadable", composer: "unknown" });
     expect(pane.calls).toEqual([]);
-    const second = await send("my custom answer", { rowsHash: first.rowsHash! });
+    const second = await send("my custom answer", { rowsHash: first.rowsHash!, override: true });
     expect(second.receipt).toMatchObject({ outcome: "sent", keys: ["probe", "Backspace", "Enter"] });
     expect(pane.calls).toEqual([`type:${PROBE}`, "paste:my custom answer"]);
     expect(pane.transcript.at(-1)).toBe("> my custom answer");
     neverEscape(pane);
+  });
+
+  test("Type here without override flag still submits the answer", async () => {
+    const pane = answerPane();
+    pane.afterInput = (p, what) => {
+      if (what === "keys:Enter") p.render = () => readFileSync(join(import.meta.dir, "../../web/src/fixtures/panes/pi--v0871-idle.txt"), "utf8");
+    };
+    const { send } = rig({ pane, harness: "pi", version: "1.3.0" });
+    const first = await send("my custom answer");
+    const second = await send("my custom answer", { rowsHash: first.rowsHash! });
+    expect(second.receipt).toMatchObject({ outcome: "sent", keys: ["probe", "Backspace", "Enter"] });
   });
 
   test.each(["Press Enter to select the second option", "I will press Escape to cancel afterwards", "Enter submit • Esc back to options"])("answer text cannot replace the real footer: %s", async (text) => {

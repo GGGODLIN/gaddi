@@ -170,15 +170,16 @@ upstream install, say), the clone stops there and nothing is built over it; move
 `tailscale serve` for you and prints the HTTPS address.
 
 Without `COLLIE_MUX`, `collie start` detects Herdr, tmux and zellij and prompts for your choice.
-It offers the experimental Herdr core only on a machine without the Herdr TUI.
+It offers the experimental Herdr core only on a machine without the Herdr TUI; tuios, Tern and Rex
+are chosen explicitly with `COLLIE_MUX`.
 
 Then put it on the phone. The commands below run in `~/.local/share/collie`; `bin/collie link`
 puts `collie` on your PATH if you want the short form.
 
 1. Run `bin/collie url` and open the address it prints in Safari on the iPhone.
 2. Tap **Share**, then **Add to Home Screen**, then open Gaddi from the new icon.
-3. Run `bin/collie pair` and type its 8-character code in Gaddi under Settings → System → Paired
-   devices.
+3. Run `bin/collie pair` and type its 8-character code in Gaddi under Settings → Devices and machines →
+   Paired devices.
 
 ![Put Gaddi on the home screen: iPhone and Android steps.](docs/images/install/pwa-install.svg)
 
@@ -346,8 +347,9 @@ Windows 11 x64 running Herdr is maintained and tested directly upstream. The pla
 experimental until an update between two real releases is proven on it. Linux and macOS are unaffected. See
 [**docs/windows.md**](./docs/windows.md) for installation, updates, and limitations. Summary:
 
-- **Checks.** The `windows.yml` workflow runs the bridge, cli and scripts tests on pull requests
-  and pushes to `main`. This fork permanently waives only the Windows 11 VM rehearsal; install,
+- **Checks.** The `windows.yml` workflow runs the bridge, cli and scripts tests on pull requests,
+  pushes to `main` and `release-*`, nightly schedule, and manual `dev` dispatches. This fork
+  permanently waives only the Windows 11 VM rehearsal; install,
   update and rollback remain unverified. ([ADR 0075](./.adr/0075-windows-is-a-supported-host.md))
 - **Installed without a toolchain.** Releases provide `collie-<version>-windows-x64.zip`,
   installed via `scripts/install.ps1`. The binary is unsigned and may trigger Smart App Control.
@@ -455,7 +457,7 @@ integration is documented in [`HERDR_API.md`](./HERDR_API.md).
 
 ## Telemetry
 
-Upstream 1.27.0 adds an anonymous daily ping ([ADR 0129](./.adr/0129-an-anonymous-install-count-on-by-default.md)); in this fork (`GGGODLIN/gaddi`) it is **off by default** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)). Nothing is sent and no install ID is created unless you opt in on a machine in Settings, Privacy and data, **Telemetry**, with `COLLIE_TELEMETRY=1`, or with `telemetry = true` in `config.toml`. When enabled, once a day each bridge (one instance with its own state folder) sends one small ping to `ping.colliepwa.dev`: a random ID made on your machine, the day, the version, the OS, the CPU, the install kind, the release line (Stable or Edge) and whether the bridge runs alone, leads a crew or is a member. When a trouble card showed ("Cannot read a dialog" or "Send not landing"), it also carries a count: which card, the agent program's name and version, the multiplexer and, from 1.27.4, for a dialog a short hash of its key-hint row. No IP address is stored. No usage, no content, nothing you type or read.
+Upstream 1.27.0 adds an anonymous daily ping ([ADR 0129](./.adr/0129-an-anonymous-install-count-on-by-default.md)); in this fork (`GGGODLIN/gaddi`) it is **off by default** ([ADR 9013](./.adr/9013-the-anonymous-install-count-is-off-by-default.md)). Nothing is sent and no install ID is created unless you opt in on a machine in Settings, Privacy and data, **Telemetry**, with `COLLIE_TELEMETRY=1`, or with `telemetry = true` in `config.toml`. When enabled, once a day each bridge (one instance with its own state folder) sends one small ping to `ping.colliepwa.dev`: a random ID made on your machine, the day, the version, the OS, the CPU, the install kind, the release line (Stable or Edge), whether the bridge runs alone, leads a crew or is a member, and (ping v3) which agent programs ran on which multiplexers and whether the optional data link was on. When a trouble card showed ("Cannot read a dialog" or "Send not landing"), it also carries a count: which card, the agent program's name and version, the multiplexer, whether that pane was linked and, from 1.27.4, for a dialog a short hash of its key-hint row. No IP address, session count, name, folder, prompt or content is stored or sent.
 
 Turn it on or off on each machine in Settings, Privacy and data, **Telemetry**, with `COLLIE_TELEMETRY=0` (in the
 instance's `.env` for a service), `telemetry = false` in `config.toml` or `DO_NOT_TRACK=1`. Blocking

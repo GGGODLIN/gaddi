@@ -250,12 +250,13 @@ export function AgentCard({
   const { primary, detailLead, detailTail } = lines;
   // A RENAME FADES (ui/crossfade-text.tsx): the pane's name, its space and its tab. The tail is a tab's
   // name only when the row draws the tab; a live title or a folder path is not a name someone gave.
-  const tailFade = nameIsTab || inTab ? undefined : tabKey(agent.host, agent.tabId);
+  const tailFade = described !== undefined || nameIsTab || inTab ? undefined : tabKey(agent.host, agent.tabId);
   // THE FILTER'S MARKS (M97). A range indexes the string `paneFields` read, which is the string drawn
   // here, except the tab: a one-pane tab named for the pane draws the live title in its place, so no tab
-  // mark applies then. The tab of a `tab` scope row is the path, not a tab.
+  // mark applies then. The tab of a `tab` scope row is the path, not a tab. A described row replaces
+  // line 2 with the description, so tab mark indices do not apply there either.
   const marks = match?.hit.marks;
-  const tabMarks = nameIsTab || inTab ? undefined : marks?.tab;
+  const tabMarks = described !== undefined || nameIsTab || inTab ? undefined : marks?.tab;
   const leadMarks = inTab ? undefined : marks?.space;
   // A field the row does not draw (its folder, agent or machine) that is the reason for the match takes
   // line 2, in the slot the line already has, so the reason is on the row and the row keeps its height.

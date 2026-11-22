@@ -6274,6 +6274,7 @@ describe("Composer — known launch startup send-lock", () => {
   it("keeps a draft typed before the start, sends nothing during it, and gives the box back editable", async () => {
     const user = userEvent.setup();
     const typed = vi.fn();
+    const onSent = vi.fn();
     server.use(...replyHandler(typed));
     let start = (_on: boolean) => {};
     function View() {
@@ -6282,7 +6283,7 @@ describe("Composer — known launch startup send-lock", () => {
       return <Composer paneId="start:p1" agent="kiro" isShell={false} gone={false} readOnly={false} surface={FREE} starting={starting}
         text="pane output" terminalDraft={null} rawTerminalDraft={null}
         prefs={{ wrap: true, fontSize: 11, draftFontSize: 14, chatFontSize: 14, fontFamily: "system", rawTerminal: false, tapToFocus: true, expandClippedReply: true, stretchText: false }}
-        display={{ open: false, onToggle: vi.fn() }} onSent={vi.fn()} />;
+        display={{ open: false, onToggle: vi.fn() }} onSent={onSent} />;
     }
     const router = createMemoryRouter([{ path: "/", element: <View /> }]);
     render(<RouterProvider router={router} />);
@@ -6313,8 +6314,12 @@ describe("Composer — known launch startup send-lock", () => {
     expect(box).toHaveValue("keep this draft");
     expect(box).toHaveFocus();
     await user.click(screen.getByRole("button", { name: /^Send$/ }));
+    await user.click(screen.getByRole("button", { name: "Quick" }));
+    await user.click(screen.getByRole("button", { name: "continue" }));
     expect(typed).not.toHaveBeenCalled();
+    expect(onSent).not.toHaveBeenCalled();
     expect(loadDraft(undefined, "start:p1")).toBe("keep this draft");
+    box.focus();
     act(() => start(false));
     expect(box).not.toBeDisabled();
     expect(box).not.toHaveAttribute("readonly");
@@ -6625,7 +6630,7 @@ describe("the unread card (M102 spec 03)", () => {
     await waitFor(() => expect(recordedSends()).toHaveLength(1));
     await user.type(screen.getByRole("textbox"), "yes please");
     await user.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')?.textContent).toMatch(/Collie pressed no Enter\. Check the screen, then press Enter on the Keys pad/u));
+    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')?.textContent).toMatch(/Gaddi pressed no Enter\. Check the screen, then press Enter on the Keys pad/u));
     expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
     expect(screen.getByRole("button", { name: "Keys" })).toHaveAttribute("aria-expanded", "true");
     expect(recordedSends()).toHaveLength(2);
@@ -6645,7 +6650,7 @@ describe("the unread card (M102 spec 03)", () => {
     await waitFor(() => expect(recordedSends()).toHaveLength(1));
     await user.type(screen.getByRole("textbox"), "yes please");
     await user.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')?.textContent).toMatch(/after words that were already there\. Collie pressed no Enter/u));
+    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')?.textContent).toMatch(/after words that were already there\. Gaddi pressed no Enter/u));
   });
 
   it("unread card: an override whose text was already in the box says nothing was typed again, and opens the pad", async () => {
@@ -6681,7 +6686,7 @@ describe("the unread card (M102 spec 03)", () => {
     const { handle } = renderUnread(null, { surface: shown });
     await user.type(screen.getByRole("textbox"), "carry on");
     await user.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')?.textContent).toMatch(/Collie cannot read this screen\. Check the pane, then tap Send anyway\.$/u));
+    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')?.textContent).toMatch(/Gaddi cannot read this screen\. Check the pane, then tap Send anyway\.$/u));
     expect(screen.getByRole("button", { name: "Send anyway" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^(Type here|Send here)$/u })).toBeNull();
     expect(document.body.textContent).not.toMatch(/presses Enter|no Enter/u);
@@ -6718,7 +6723,7 @@ describe("the unread card (M102 spec 03)", () => {
     await user.click(commit);
     await waitFor(() => expect(recordedSends()).toHaveLength(2));
     expect(recordedSends()[1]).toMatchObject({ text: "carry on", rowsHash: "0aaa11", override: true });
-    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')?.textContent).toMatch(/Collie pressed no Enter\. Check the screen, then press Enter on the Keys pad\./u));
+    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')?.textContent).toMatch(/Gaddi pressed no Enter\. Check the screen, then press Enter on the Keys pad\./u));
     expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
     expect(screen.getByRole("button", { name: "Keys" })).toHaveAttribute("aria-expanded", "true");
   });
@@ -6785,10 +6790,10 @@ describe("the unread card (M102 spec 03)", () => {
 });
 
 describe("the cannot tell card (M102 spec 04)", () => {
-  const SENTENCE = "Collie cannot tell if this arrived. Look at the screen.";
-  const WAITING = "Collie is waiting for the agent's own word that it arrived. Send again turns on when the wait ends.";
-  const FAILED = "Collie could not record that. Try again, or clear the draft yourself.";
-  const SETTLED = "Collie already knows how this send ended, so there is nothing to record. Look at the screen.";
+  const SENTENCE = "Gaddi cannot tell if this arrived. Look at the screen.";
+  const WAITING = "Gaddi is waiting for the agent's own word that it arrived. Send again turns on when the wait ends.";
+  const FAILED = "Gaddi could not record that. Try again, or clear the draft yourself.";
+  const SETTLED = "Gaddi already knows how this send ended, so there is nothing to record. Look at the screen.";
   const UNKNOWN_HERE = "This machine cannot record that. Look at the screen to see whether it arrived.";
   const SCREEN = splitLines(parseAnsi("  I found three notes in the sample list.\n\n  Working on it. One moment."));
   const SIGN_IN: Surface = { revision: 3, turn: "idle", modal: "none", composer: "empty", field: "secret" };
@@ -6876,7 +6881,7 @@ describe("the cannot tell card (M102 spec 04)", () => {
   async function sendUnknown(user: ReturnType<typeof userEvent.setup>, draft = "run the sample check") {
     await user.type(screen.getByRole("textbox"), draft);
     await user.click(screen.getByRole("button", { name: "Send" }));
-    await screen.findByRole("group", { name: /Collie (cannot tell|is waiting)/u });
+    await screen.findByRole("group", { name: /Gaddi (cannot tell|is waiting)/u });
   }
 
   const card = () => document.querySelector('[data-slot="cannot-tell-card"]');
@@ -6907,7 +6912,7 @@ describe("the cannot tell card (M102 spec 04)", () => {
     renderCannotTell();
     await user.type(screen.getByRole("textbox"), "run the sample check");
     await user.click(screen.getByRole("button", { name: "Send" }));
-    const words = "Collie stopped while it typed this. Your text may be in the box without Enter. Look at the screen.";
+    const words = "Gaddi stopped while it typed this. Your text may be in the box without Enter. Look at the screen.";
     expect(await screen.findByRole("group", { name: words })).toBeInTheDocument();
     expect(card()?.querySelector('[role="status"]')?.textContent).toBe(words);
     expect(noticeShown()).toBe(false);
@@ -6919,7 +6924,7 @@ describe("the cannot tell card (M102 spec 04)", () => {
     renderCannotTell();
     await sendUnknown(user);
     const live = card()?.querySelector('[role="status"]');
-    expect(live?.textContent).toBe("Collie cannot tell if this arrived. Look at the screen.");
+    expect(live?.textContent).toBe("Gaddi cannot tell if this arrived. Look at the screen.");
   });
 
   it("cannot tell: a host with no card keeps today's notice and its second-tap question", async () => {
@@ -7214,7 +7219,7 @@ describe("Send it now on a row held for two minutes (M102 spec 02)", () => {
     const user = userEvent.setup();
     renderHeld();
     await user.click(screen.getByRole("button", { name: SEND_NOW }));
-    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')).toHaveTextContent("Collie could not read the screen again. Send, then tap Send anyway."));
+    await waitFor(() => expect(document.querySelector('[data-slot="composer-refusal"]')).toHaveTextContent("Gaddi could not read the screen again. Send, then tap Send anyway."));
     expect(cancels).toEqual([]);
     expect(recordedSends()).toHaveLength(1);
     // The row stays held, with its button.

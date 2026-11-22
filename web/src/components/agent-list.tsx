@@ -55,6 +55,8 @@ import { Icon } from "@/components/icons/icon";
 import { PairWithPhone } from "@/components/pair-with-phone";
 import { Card } from "@/components/ui/card";
 
+const NO_FOLDED: ReadonlySet<string> = new Set();
+
 interface AgentListProps {
   agents: AgentView[];
   /**
@@ -619,7 +621,13 @@ export function AgentList({
   const drawnShown =
     hits === null ? drawn : drawn.map((d) => ({ ...d, rows: d.rows.filter(keep) })).filter((d) => d.rows.length > 0);
   const bestRows = hits !== null && filterOrder === "best" ? byScore(baseRows, hits) : null;
-  const shownRows = bestRows ?? [...pinnedShown, ...(ranked ? rankedShown : drawnShown.flatMap((d) => d.rows))];
+  const shownRows =
+    bestRows ?? [
+      ...pinnedShown,
+      ...(ranked
+        ? rankedShown
+        : drawnShown.flatMap((d) => nestPanes(d.rows, hits === null ? folded : NO_FOLDED).map((entry) => entry.pane))),
+    ];
   const hitOf = (p: AgentView): PaneMatch | undefined => hits?.get(paneRowKey(p));
   // Enter, or the Go key: open the first row shown, through the row's own navigation (its element is the
   // glide's origin). Only with a query, so a Go on an empty field never opens a pane by accident.

@@ -161,6 +161,9 @@ export function AttentionSwitcher({
           )}
         </>
       )}
+      {total === 0 && (
+        <div className="px-4 py-6 text-center text-sm text-muted-foreground">{t("home.empty.noAgents")}</div>
+      )}
       {hits !== null && shown.length === 0 && <SessionFilterEmpty query={activeQuery.trim()} onClear={() => setQuery("")} />}
       {hits === null && showLaunch && (
         <Section roomy={roomy} id="switch-launch" label="Launch" count={launchers.length} dot="bg-status-unknown" {...(onLaunchOpenChange ? { open: launchOpen, onToggle: onLaunchOpenChange } : {})}>

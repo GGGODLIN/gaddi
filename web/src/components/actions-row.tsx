@@ -491,6 +491,8 @@ export interface ActionsRowProps {
     onClick: () => void;
     label: string;
     open: boolean;
+    /** Another pane needs you when Actions is the only pinned door (desktop strip). */
+    alert?: boolean;
   };
   /**
    * EXPERIMENT (operator, 2026-09-23): the Changes view's entry (ADR 0065), moved out of the pane
@@ -1177,6 +1179,12 @@ export function ActionsRow({ general, agent, mine, onRun, disabled, durable, sto
                 className={cn(`${STRIP_ROW_PILL} ${PINNED_PILL}`, pinnedReach(!clear && !agents && !jobs && !pins && !changes && !zoom, !handle, hand), TRIGGER_OPEN)}
               >
                 <Icon name="open-actions" className={cn(BELT_ICON, actions.open ? "text-control-on-foreground" : "text-primary")} />
+                {actions.alert === true && (
+                  <StatusDot
+                    status="blocked"
+                    className={cn(PINNED_MARK_BADGE, "size-2.5")}
+                  />
+                )}
               </Button>
             )}
             {handle && (

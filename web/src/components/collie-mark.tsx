@@ -1,3 +1,4 @@
+// generated: sha256=d9223f8603d1fa18d72c62bb4a31ae1466c1889cae5d4febe4e182031a615813 from=gaddi-mark-art.ts
 // The Gaddi mark: the pixel-art head of a Gaddi dog. Fork-only (FORK.md, "Gaddi brand"): upstream's
 // generated orbit mark is ColliePWA's logo, which its TRADEMARKS.md keeps out of a fork.
 //
@@ -47,9 +48,15 @@ const SPEC: Omit<MarkSpec, "id"> = {
 export type CollieMarkProps = MarkProps;
 
 // Theme IDs remain compatible with upstream themes. Every variant draws the fork's own art.
-export function collieFamilyMark(id: string, outline: string): ComponentType<CollieMarkProps> {
+function variantOpacity(id: string): string {
+  if (id === "collie-collar") return "0.82";
+  if (id === "collie-blaze") return "0.65";
+  return "1";
+}
+
+export function collieFamilyMark(id: string, _head: string): ComponentType<CollieMarkProps> {
   const spec: MarkSpec = { ...SPEC, id };
-  const markup = MARKUP.replace('<g class="cm-line">', `<g class="cm-line" opacity="${outline}">`);
+  const markup = MARKUP.replace('<g class="cm-line">', `<g class="cm-line" opacity="${variantOpacity(id)}">`);
   return function GaddiFamilyMark(props: CollieMarkProps) {
     const m = useMark(spec, props);
     const body = useMemo(() => ({ __html: markup }), []);
@@ -62,4 +69,4 @@ export function collieFamilyMark(id: string, outline: string): ComponentType<Col
   };
 }
 
-export const CollieMark = collieFamilyMark("collie", "1");
+export const CollieMark = collieFamilyMark("collie", "");

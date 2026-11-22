@@ -187,7 +187,7 @@ describe("MachineAlertsControl", () => {
   it("says the push reaches every subscribed device, and links to Settings, Notifications", async () => {
     const user = userEvent.setup();
     const onOpenAlerts = vi.fn();
-    render(<MachineAlertsControl machineId="bluefin" alerts={{}} onOpenAlerts={onOpenAlerts} />);
+    render(<MachineAlertsControl machineId="lodge" alerts={{}} onOpenAlerts={onOpenAlerts} />);
     expect(screen.getByText("The push goes to every device subscribed to this Gaddi.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Settings, Notifications" }));
     expect(onOpenAlerts).toHaveBeenCalledOnce();

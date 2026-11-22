@@ -5770,7 +5770,12 @@ export class SendProtocol {
     if (!overrideAsked(state.request) || isFree(s0.surface)) return;
     if (state.secretField === true || askOf(s0.surface.modal) !== null) return;
     if (!this.rowsSeen(state, s0)) throw overrideRefusal("stale_surface", s0, OVERRIDE_MOVED);
-    if (menuSignOf(s0) !== null) throw overrideRefusal("menu_open", s0, MENU_OPEN);
+    // A pi question's nested answer editor keeps its `❯ Write my own answer…` row above the editor,
+    // which trips `menuSignOf` even though its footer explicitly prints `Enter submit` (fork manual
+    // answer path, protocol.manual-answer.test.ts). Keep every other dialog refused as `menu_open`.
+    const piNestedAnswerEditor =
+      state.match?.profile.id === "pi" && s0.frame === null && s0.surface.modal === "unreadable" && submitHintTail(s0) !== null;
+    if (!piNestedAnswerEditor && menuSignOf(s0) !== null) throw overrideRefusal("menu_open", s0, MENU_OPEN);
     // A match by the loose compare alone (a ticking clock or spinner moved, or a digit) presses no key: the
     // manual Send's commit would press Enter, so the text goes in on the override road instead.
     if (!this.reaches(state, s0) && !this.looseOnly(state, s0)) return;

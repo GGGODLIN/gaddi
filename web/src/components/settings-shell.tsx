@@ -6,6 +6,7 @@ import { BuildStamp } from "@/components/build-stamp";
 import { Icon } from "@/components/icons/icon";
 import type { IconKey } from "@/components/icons/keys";
 import { InstallRow } from "@/components/install-control";
+import { IslandBuildNotice } from "@/components/island-build-notice";
 import { StatusLive } from "@/components/status-area";
 import { NAV_EDGE, RECESS_ACCENT } from "@/components/ui/nav-edge";
 import { Button, FOCUS_RING, HOVER_FILL } from "@/components/ui/button";
@@ -242,7 +243,8 @@ function WideSettings() {
           </>
           </SettingsSearch>
           {/* "What am I running", as at the foot of the phone's index. */}
-          <div className="mt-auto px-2 pt-4">
+          <div className="mt-auto flex flex-col gap-2 px-2 pt-4">
+            <IslandBuildNotice dismissible={false} />
             <BuildStamp />
           </div>
         </aside>

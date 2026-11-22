@@ -346,8 +346,9 @@ exists to stop repeating. Their commits are superseded by the betas that followe
 today would claim a release nobody ever tested.
 
 **Update notice (user-facing).** The app's in-app update banner links to the newest release's GitHub
-page and shows the command to run. Pushing a `v*` tag auto-creates that GitHub Release (with the
-commands) via `.github/workflows/release.yml`. **On a Herdr-managed install, always express
+page and shows the command to run. Pushing a `v*` tag auto-creates that GitHub Release via
+`.github/workflows/release.yml` (the Update command stays in the app banner; the release page
+carries what changed, the changelog link and verification recipe). **On a Herdr-managed install, always express
 user-facing update/restart instructions as Herdr plugin actions** — `herdr plugin action invoke
 update --plugin herdr.collie` (or `restart`) — never `bin/collie …` / `systemctl … collie`, which
 depend on the caller's cwd and the unit name; the Herdr action runs from anywhere. A **binary
@@ -433,11 +434,13 @@ page to be skimmed.
   (host, mux-name, import, storage-key and similar rules, the list is `GUARD_*` in
   `scripts/test-sets.ts`) and the tests near your change: for bun, the test files named after a
   changed source file, for `web/`, `vitest --changed` against the merge base with `origin/main`. It
-  takes about three minutes or less on an idle machine. The **pre-push hook**
-  (`scripts/git-hooks/pre-push`) runs it, with escape hatches `SKIP_TYPECHECK=1`,
-  `SKIP_LINT_CHECK=1` and `SKIP_TESTS=1` (see *Linting* → escape hatches). **The full suites run in
+  takes about three minutes or less on an idle machine. In this fork, the **pre-push hook**
+  (`scripts/git-hooks/pre-push`) skips local typechecks and suites on ordinary pushes when
+  `collie.prepush=ci` is set, and runs the fork's Mac-safe typecheck + bridge + ctl + changed-web
+  suite on `chore(release):` pushes (or when `collie.prepush` is unset), with escape hatches
+  `SKIP_TYPECHECK=1` and `SKIP_TESTS=1` (see *Linting* → escape hatches). **The full suites run in
   CI on every push, and once more on the release head**; a worker does not run them locally. Run
-  `bun run gate --full` if you want them here. A new rule test that scans source joins the guard
+  `bun run gate` (or `bun run gate --full`) by hand when you want the gate here. A new rule test that scans source joins the guard
   list in the commit that adds it.
   Three file names carry a meaning. `*.quarantine.test.*` is a flaky test: no run includes it, and
   the non-blocking `quarantine` job in `ci.yml` runs only those files; fix it and give it its old
@@ -601,8 +604,9 @@ is evidence for a person, not a comparison. And never point Tier 2 at anything b
 
 **The screen list** (`web/e2e/screens/list.ts`). A new route of `router.tsx` needs an entry there, or `src/screens-list.test.ts` fails and names it; `wide` is a person's look at the 1440x900 shot ("column" is the phone's column pulled wide, and when in doubt it is "column"), never derived by a test. Run it with `cd web && E2E_SET=screens bun run e2e --workers=4` (4 layout rules on every entry at 1440 and 390; its own set, in no other tier); add `SCREENS_SHOTS=<dir>` for the shots and `bun e2e/screens/sheet.ts <dir>` for contact sheets. The ceilings for column screens and waivers in the test only go down; a waiver that starts `FINDING:` is a defect to fix, and its removal lowers the ceiling.
 
-The pre-push hook (`scripts/git-hooks/pre-push`) runs `bun run gate`, the typechecks, the lint and
-the tests near the change. It does not run the browser suite, a browser download does not belong in
+The pre-push hook (`scripts/git-hooks/pre-push`) leaves ordinary pushes to CI when
+`collie.prepush=ci` is set and runs typechecks plus the bridge, ctl and changed-web suites on
+`chore(release):` pushes (or when `collie.prepush` is unset). It does not run the browser suite, a browser download does not belong in
 a hook that fires on every push. `cd web && bun run typecheck` covers `e2e/`; the root `bun run typecheck` does not.
 
 ## Linting — one linter, one config
@@ -767,7 +771,7 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
 - **`theme.toml` adds rather than shadows** — its `[[font]]` rows put extra UI typefaces UNDER the
   shipped three in the Settings picker, and the bridge serves the files read-only from
   `<config-dir>/fonts` at `GET /api/fonts/<basename>`. Same reader, same mtime liveness; a font cannot
-  fire an action and so shadows nothing ([ADR 0033](./.adr/0033-the-app-face-is-a-device-preference.md)).
+  fire an action and so shadows nothing ([ADR 0148](./.adr/0148-the-app-face-the-theme-and-the-character-are-device-settings.md)).
 - **`launchers.toml` is the operator's fifth file, and the only one whose rows CREATE a pane** — its
   rows are the allowlist `POST /api/launch` matches exactly, so the client names a row and never
   supplies a command line. Same reader, same mtime liveness; no scope ladder, because a row that

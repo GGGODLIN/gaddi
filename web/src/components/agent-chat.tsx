@@ -793,7 +793,7 @@ export function AgentChat({
   // Red only, on purpose: an unseen reply or a working pane is not worth pulling the eye off the
   // pane you are in, and the pane on screen already shows its own state.
   const hereKey = agent ? paneRowKey(agent) : null;
-  const elsewhereNeedsYou = agents.some((a) => a.status === "blocked" && paneRowKey(a) !== hereKey);
+  const elsewhereNeedsYou = agents.some((a) => shownStatus(a) === "blocked" && paneRowKey(a) !== hereKey);
   const paletteOpen = useActionsPaletteOpen();
   const hasSomewhereToGo = agents.length + shellPanes.length > 0 || launchers.length > 0;
   const switcherReachable = !inStrip && hasSomewhereToGo;
@@ -807,7 +807,12 @@ export function AgentChat({
       }
     : undefined;
   const actionsPill = hasSomewhereToGo
-    ? { onClick: openActionsPalette, label: t("actions.open.aria"), open: paletteOpen }
+    ? {
+        onClick: openActionsPalette,
+        label: t(inStrip && elsewhereNeedsYou ? "actions.open.ariaNeedsYou" : "actions.open.aria"),
+        alert: inStrip && elsewhereNeedsYou,
+        open: paletteOpen,
+      }
     : undefined;
   // ── PANE NAVIGATION BY GESTURE (M70 spec 03, ADR 0121) ────────────────────────
   // Two fingers (the default): hold one finger still on the reading area, then swipe a second finger.

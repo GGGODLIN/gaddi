@@ -383,7 +383,12 @@ export function ThreadSidebar({
   const shownRows =
     bestRows ?? [
       ...pinnedShown,
-      ...(ranked ? rankedRows : [...sectionsShown.flatMap((g) => g.rows), ...shellsShown]),
+      ...(ranked
+        ? rankedRows
+        : [
+            ...sectionsShown.flatMap((g) => nestPanes(g.rows, hits === null ? folded : NO_FOLDED).map((entry) => entry.pane)),
+            ...shellsShown,
+          ]),
       ...trickShown,
     ];
   const hitOf = (p: AgentView): PaneMatch | undefined => hits?.get(paneRowKey(p));
