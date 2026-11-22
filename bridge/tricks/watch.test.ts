@@ -21,6 +21,11 @@ afterAll(async () => {
 
 const FAST: WatchOptions = { debounceMs: 40, maxWaitMs: 160, pollMs: 60 };
 
+/** Wait until `ready()` holds, polling every 20 ms, up to `ms` (macOS FSEvents can land past 10 ms). */
+async function until(ready: () => boolean, ms = 3000): Promise<void> {
+  for (let waited = 0; waited < ms && !ready(); waited += 20) await Bun.sleep(20);
+}
+
 interface Probe {
   fires: WatchFire[];
   notes: string[];
@@ -84,7 +89,7 @@ describe("one file", () => {
     await writeFile(file, "a");
     const p = probe([file]);
     await writeFile(file, "ab");
-    await Bun.sleep(250);
+    await until(() => p.fires.length >= 1);
     expect(p.fires).toEqual([{ path: file, count: 1 }]);
     p.watch.close();
   });
@@ -197,13 +202,13 @@ describe("links", () => {
     // Two folders: the real file's and the link's own.
     expect(p.opened.toSorted()).toEqual([join(dir, "a"), dir].toSorted());
     await writeFile(join(dir, "a", "one.md"), "one, changed");
-    await Bun.sleep(250);
+    await until(() => p.fires.length >= 1);
     expect(p.fires).toEqual([{ path: link, count: 1 }]);
 
     // Retarget the way `ln -sfn` does: a new link renamed over the old one. The file the path names changed.
     await symlink(join(dir, "b", "two.md"), join(dir, ".new"));
     await rename(join(dir, ".new"), link);
-    await Bun.sleep(250);
+    await until(() => p.fires.length >= 2);
     expect(p.fires.length).toBe(2);
     expect(p.fires[1]).toEqual({ path: link, count: 1 });
     // The folder of the old target is not watched any more; the new target's is.
@@ -211,7 +216,7 @@ describe("links", () => {
     expect(p.opened).toContain(join(dir, "b"));
 
     await writeFile(join(dir, "b", "two.md"), "two, changed");
-    await Bun.sleep(250);
+    await until(() => p.fires.length >= 3);
     expect(p.fires.length).toBe(3);
     // The old target is not the watched file now.
     await writeFile(join(dir, "a", "one.md"), "one, changed again");
@@ -229,7 +234,7 @@ describe("a trick that writes the file it watches", () => {
     const p = probe([file]);
     // A change from outside: one fire.
     await writeFile(file, '{"a":1}');
-    await Bun.sleep(200);
+    await until(() => p.fires.length >= 1);
     expect(p.fires.length).toBe(1);
     // The run that fire started writes the file, and its end records the stat.
     await writeFile(file, '{"a":2,"own":true}');
@@ -238,7 +243,7 @@ describe("a trick that writes the file it watches", () => {
     expect(p.fires.length).toBe(1);
     // The next outside change, after the run, fires again.
     await writeFile(file, '{"a":3}');
-    await Bun.sleep(200);
+    await until(() => p.fires.length >= 2);
     expect(p.fires.length).toBe(2);
     p.watch.close();
   });
@@ -350,11 +355,12 @@ describe("closing", () => {
     const dir = await tempDir();
     const file = join(dir, "closing.md");
     await writeFile(file, "a");
-    const p = probe([file, join(dir, "gone", "x.md")]);
+    // Longer debounce so macOS FSEvents delivery always lands before the debounce timer fires.
+    const p = probe([file, join(dir, "gone", "x.md")], { debounceMs: 500, pollMs: 500 });
     expect(p.watch.open().handles).toBe(1);
     // The missing folder keeps the poll on; a write puts the debounce on.
-    await writeFile(file, "b");
-    await Bun.sleep(10);
+    await writeFile(file, "bb");
+    await until(() => p.watch.open().timers === 2);
     expect(p.watch.open().timers).toBe(2);
     p.watch.close();
     expect(p.watch.open()).toEqual({ handles: 0, timers: 0 });
