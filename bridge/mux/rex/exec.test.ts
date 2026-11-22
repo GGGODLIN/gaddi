@@ -104,7 +104,7 @@ describe("a child's output is capped", () => {
   });
 
   test.skipIf(NO_REX_ON_WINDOWS)("an answer under the cap arrives whole", async () => {
-    const exec = new SpawnRexExec("/usr/bin/echo", "", 5_000);
+    const exec = new SpawnRexExec(Bun.which("echo") ?? "/bin/echo", "", 5_000);
     const result = await exec.run(["ls", "--json"]);
     expect(result).toEqual({ code: 0, stdout: "--autostart=false --color=never ls --json\n", stderr: "" });
   });

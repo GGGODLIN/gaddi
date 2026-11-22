@@ -35,8 +35,9 @@ if [ "$prepush_mode" = "ci" ]; then
       *) range=("$local_sha" --not --remotes) ;;
     esac
     # A pattern match, not `| grep -q`: grep quitting early can SIGPIPE the writer, and pipefail would
-    # then read a found release as none.
-    if ! subjects="$(git log --format=%s "${range[@]}" 2>/dev/null)"; then
+    # then read a found release as none. `--first-parent` ignores upstream `chore(release):` commits
+    # brought in by a merge so an ordinary upstream sync stays on `collie.prepush=ci`.
+    if ! subjects="$(git log --first-parent --format=%s "${range[@]}" 2>/dev/null)"; then
       ci_only=0
       break
     fi
