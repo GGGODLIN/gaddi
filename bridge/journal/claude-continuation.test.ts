@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, readdir, rm, stat, utimes } from "node:fs/promises";
+import { mkdir, readdir, realpath, rm, stat, symlink, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { ClaudeTranscriptSource, DIR_SCAN_TTL_MS } from "./claude.ts";
 
 describe("ClaudeTranscriptSource — continuation scan caching", () => {
-  const ROOT = "bcb07539-e632-45de-a666-c2e55d7d50c2";
-  const OLD = "1967742a-7e1c-4453-b06f-c099c975f057";
-  const NEW = "63bdd902-60e3-4723-9c89-172ecf04b392";
-  const ACTIVE_B = "22222222-3333-4444-5555-666666666666";
+  const ROOT = "11111111-1111-4111-8111-111111111111";
+  const OLD = "22222222-2222-4222-8222-222222222222";
+  const NEW = "33333333-3333-4333-8333-333333333333";
+  const ACTIVE_B = "44444444-4444-4444-8444-444444444444";
 
   const row = (uuid: string, text: string) =>
     JSON.stringify({
@@ -20,7 +20,10 @@ describe("ClaudeTranscriptSource — continuation scan caching", () => {
     });
 
   async function makeLargeProject(coldCount: number) {
-    const dir = join(tmpdir(), `collie-cont-cache-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+    // The temp root by the OS's own real path, the spelling the source reads its folders by: a fake
+    // `readdir` that matches one folder by name must name it the same way (the Windows runner's
+    // `tmpdir()` is an 8.3 short name, `RUNNER~1`, Windows CI 2026-11-21).
+    const dir = join(await realpath(tmpdir()), `collie-cont-cache-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
     const project = join(dir, "-Users-dev-projects");
     await mkdir(project, { recursive: true });
 
@@ -195,6 +198,104 @@ describe("ClaudeTranscriptSource — continuation scan caching", () => {
       expect(fs.readdirCalls).toBe(1);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a sibling not yet grown past the pane's own log is not followed inside the TTL, and is after it", async () => {
+    const { dir, project } = await makeLargeProject(10);
+    let clock = Date.now();
+    try {
+      // NEW starts smaller and cold, so OLD wins on the first scan.
+      const newPath = join(project, `${NEW}.jsonl`);
+      await Bun.write(newPath, row(ROOT, "one"));
+      const coldSec = Date.now() / 1000 - 7200;
+      await utimes(newPath, coldSec, coldSec);
+
+      const src = new ClaudeTranscriptSource(dir, { now: () => clock, stat, readdir });
+      expect(await src.resolve({ kind: "id", value: OLD })).toEndWith(`${OLD}.jsonl`);
+
+      // Grow NEW in place past OLD without touching the directory mtime.
+      await Bun.write(newPath, [row(ROOT, "one"), row("u2", "two"), row("u3", "three")].join("\n"));
+      const futureSec = Date.now() / 1000 + 5;
+      await utimes(newPath, futureSec, futureSec);
+
+      // Inside the TTL the snapshot still holds the old size and time: the old path stays.
+      clock += DIR_SCAN_TTL_MS - 1;
+      expect(await src.resolve({ kind: "id", value: OLD })).toEndWith(`${OLD}.jsonl`);
+
+      clock += 1;
+      expect(await src.resolve({ kind: "id", value: OLD })).toEndWith(`${NEW}.jsonl`);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a scan whose readdir fails is not cached: the next resolve scans again and follows the sibling", async () => {
+    const { dir, project } = await makeLargeProject(10);
+    const newPath = join(project, `${NEW}.jsonl`);
+    await Bun.write(newPath, [row(ROOT, "one"), row("u2", "two"), row("u3", "three")].join("\n"));
+    const futureSec = Date.now() / 1000 + 5;
+    await utimes(newPath, futureSec, futureSec);
+
+    const clock = Date.now();
+    let failProjectOnce = true;
+    try {
+      const src = new ClaudeTranscriptSource(dir, {
+        now: () => clock,
+        stat,
+        readdir(path: string) {
+          // Only the sibling scan of the project folder fails, not the walk over the root.
+          if (failProjectOnce && path === project) {
+            failProjectOnce = false;
+            return Promise.reject(new Error("transient EIO"));
+          }
+          return readdir(path);
+        },
+      });
+
+      expect(await src.resolve({ kind: "id", value: OLD })).toEndWith(`${OLD}.jsonl`);
+      // Same clock, same directory mtime: only an uncached failure lets this scan again.
+      expect(await src.resolve({ kind: "id", value: OLD })).toEndWith(`${NEW}.jsonl`);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The snapshot holds names, sizes and times, never a verdict on containment. A sibling swapped for a
+  // symlink out of the root inside the TTL (same name, so the snapshot still lists it as the winner,
+  // and the directory mtime put back so no rescan fires) must still be refused at the point of use.
+  test("a sibling swapped for a symlink out of the root inside the TTL is never followed", async () => {
+    const { dir, project } = await makeLargeProject(10);
+    const outside = `${dir}-outside`;
+    const clock = Date.now();
+    try {
+      await mkdir(outside, { recursive: true });
+      const secret = join(outside, "secret.jsonl");
+      await Bun.write(secret, Array(50).fill(row(ROOT, "secret")).join("\n"));
+
+      const newPath = join(project, `${NEW}.jsonl`);
+      await Bun.write(newPath, [row(ROOT, "one"), row("u2", "two"), row("u3", "three")].join("\n"));
+      const futureSec = Math.floor(Date.now() / 1000) + 5;
+      await utimes(newPath, futureSec, futureSec);
+      const dirSec = Math.floor(Date.now() / 1000) - 600;
+      await utimes(project, dirSec, dirSec);
+
+      const src = new ClaudeTranscriptSource(dir, { now: () => clock, stat, readdir });
+      // The first resolve fills the snapshot and legitimately follows the real sibling.
+      expect(await src.resolve({ kind: "id", value: OLD })).toEndWith(`${NEW}.jsonl`);
+
+      // Swap it for a symlink to the outside file, and restore the directory mtime to its exact value.
+      await rm(newPath);
+      await symlink(secret, newPath);
+      await utimes(project, dirSec, dirSec);
+
+      // Same clock, same directory mtime: the snapshot is reused and still lists NEW as the winner.
+      const resolved = await src.resolve({ kind: "id", value: OLD });
+      expect(resolved).toEndWith(`${OLD}.jsonl`);
+      expect(resolved).not.toContain(outside);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
     }
   });
 });

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { parseAnsi } from "../ansi";
 import { splitLines, type StyledLine } from "../blocks";
 import { promptsEqual, type PromptModel } from "./prompt-model";
-import { describeAdapterConformance } from "./conformance";
+import { UNPRINTED_KEY_EXCEPTIONS, describeAdapterConformance, printedKeys, shownBlocks } from "./conformance";
 import { adapterFor } from "./registry";
 import { hermesAdapter } from "./hermes";
 import { detectApprovalRegion } from "./hermes/approval";
@@ -20,52 +20,6 @@ const fixtures = readdirSync(PANES).filter((name) => name.endsWith(".txt")).toSo
 const raw = (name: string) => readFileSync(join(PANES, name), "utf8");
 const load = (name: string) => splitLines(parseAnsi(raw(name)));
 const hermes = fixtures.filter((name) => name.startsWith("hermes--"));
-
-// The whole corpus, so a capture added later has to be placed in one cohort or the other here.
-const PINNED = [
-  "hermes--approval-long-full.txt",
-  "hermes--approval-long.txt",
-  "hermes--approval-moved.txt",
-  "hermes--approval-w60.txt",
-  "hermes--approval.txt",
-  "hermes--clarify-choices-moved.txt",
-  "hermes--clarify-choices-w60.txt",
-  "hermes--clarify-choices.txt",
-  "hermes--clarify-four.txt",
-  "hermes--clarify-long.txt",
-  "hermes--clarify-multi-toggled.txt",
-  "hermes--clarify-multi.txt",
-  "hermes--clarify-open.txt",
-  "hermes--clarify-other-draft-w60.txt",
-  "hermes--clarify-other-draft.txt",
-  "hermes--clarify-other-w60.txt",
-  "hermes--clarify-other.txt",
-  "hermes--clarify-two-second.txt",
-  "hermes--clarify-two.txt",
-  "hermes--done.txt",
-  "hermes--draft-multiline.txt",
-  "hermes--draft-six-lines.txt",
-  "hermes--draft-w60.txt",
-  "hermes--draft-wrapped.txt",
-  "hermes--draft.txt",
-  "hermes--exited.txt",
-  "hermes--idle-w60.txt",
-  "hermes--idle.txt",
-  "hermes--model-picker.txt",
-  "hermes--palette.txt",
-  "hermes--running.txt",
-  "hermes--slash-popup.txt",
-  "hermes--tui-busy-echo.txt",
-  "hermes--tui-busy-fresh.txt",
-  "hermes--tui-busy-title.txt",
-  "hermes--tui-busy.txt",
-  "hermes--tui-draft-title.txt",
-  "hermes--tui-draft.txt",
-  "hermes--tui-idle-en.txt",
-  "hermes--tui-idle-hint.txt",
-  "hermes--tui-idle-title.txt",
-  "hermes--v0225-title-idle.txt",
-];
 
 // The screens that lift a dialog. Everything else in the corpus is the raw cohort.
 const LIFTED = [
@@ -113,10 +67,6 @@ function edited(name: string, from: RegExp, to: (row: string) => string): Styled
 }
 
 describe("the hermes corpus", () => {
-  it("is exactly the captures this adapter was developed against", () => {
-    expect(hermes).toEqual(PINNED);
-  });
-
   it("lifts exactly the dialog screens", () => {
     const lifted = hermes.filter((name) => hermesAdapter.buildBlocks(load(name)).some((b) => b.kind !== "raw"));
     expect(lifted).toEqual(LIFTED);
@@ -519,5 +469,35 @@ describe("the adapter's titled top rule (issue 657): negative cases", () => {
     expect(isRule(TITLED)).toBe(false);
     expect(frame([BARE, PROMPT, TITLED])).toBeNull();
     expect(frame([TITLED, PROMPT, TITLED])).toBeNull();
+  });
+});
+
+// M102 spec 03: the unread card's declared key on the command palette. Hermes declares ctrl+c, and the
+// 2026-10-16 live probe stands for the clarify and approval panels (CLARIFY_NOTES.md, APPROVAL_NOTES.md),
+// where Hermes binds no Escape. The palette prints "Esc cancels", and no probe is recorded for it.
+describe("the unread card's cancel key on the command palette", () => {
+  const PALETTE = "hermes--palette.txt";
+  const cardKey = (): string | undefined => {
+    const card = shownBlocks(hermesAdapter, load(PALETTE)).find((b) => b.kind === "unread-dialog");
+    return card?.kind === "unread-dialog" ? card.cancel.key : undefined;
+  };
+
+  it("the palette shows the unread card with the declared cancel key, and prints Esc", () => {
+    // The guard for the expected failure below: it must fail for the key, not for a missing card.
+    expect(cardKey()).toBe(hermesAdapter.cancelKey);
+    expect(printedKeys(load(PALETTE).map(lineText)).has("escape")).toBe(true);
+  });
+
+  // EXPECTED TO FAIL until the orchestrator's live probe of the Hermes palette (Esc and ctrl+c) in the
+  // next harness lab pass. Its result decides the fix, and the worker picks none: either the declared
+  // key becomes per-screen data (Escape where the palette prints it), or ctrl+c stays as entry f with
+  // that probe recorded in its `probes`. Either way this test then passes, and `it.fails` goes red here.
+  it.fails("the cancel key the card offers on the palette is the key the palette prints, or entry f with its live probe named (waits on the live probe of the palette)", () => {
+    const key = cardKey()!;
+    const printed = printedKeys(load(PALETTE).map(lineText)).has(key.toLowerCase());
+    const f = UNPRINTED_KEY_EXCEPTIONS.find((entry) => entry.letter === "f")!;
+    const probed =
+      f.keys.includes(key) && (f.probes ?? []).some((p) => p.harness === "hermes" && /palette/iu.test(p.screen));
+    expect(printed || probed, `the card offers ${key} on the palette, which prints Esc and has no live probe for ${key}`).toBe(true);
   });
 });

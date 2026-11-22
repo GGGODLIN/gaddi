@@ -7,26 +7,18 @@ import { server } from "@/test/setup";
 import { fetchSnapshot } from "./api";
 import { healthFor, hostHealthMap, writeRefusal } from "./host-health";
 import { HOST_PARAM, normalizeSession, scopeSearch, SESSION_PARAM, sessionSearch } from "./session";
-import type {
-  AgentView,
-  DeviceAuth,
-  SessionSummary,
-  SnapshotResponse,
-  UpdateInfo,
-} from "./types";
+import type { AgentView, DeviceAuth, SessionSummary, SnapshotResponse, UpdateInfo } from "./types";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SOLO ZERO-TAX BASELINE — the client half.
+// SOLO ZERO-TAX — the client half.
 //
 // The bridge half lives in `bridge/solo-baseline.test.ts` and owns the contract (CREW_PROTOCOL.md
-// §11). This file pins the two things only the frontend can answer: that the hand-mirrored wire
-// types here gained no crew dimension either (they would otherwise drift into accepting a `servers`
-// the bridge must then emit), and that a solo client puts NO host param on the wire — §11's `?h=`
-// row: "never emitted by the client, never present in a URL".
+// §11). This file answers what only the frontend can: a solo body carries none of the crew fields
+// the mirror types allow, and a solo client puts NO host param on the wire — §11's `?h=` row:
+// "never emitted by the client, never present in a URL".
 //
-// The golden snapshot is read from the BRIDGE's fixture on purpose, the same way
-// `bridge/prompt-binding.test.ts` reads a web fixture: one committed body, both sides pinned to it.
-// A failure here is not a stale golden — it is a solo user being taxed.
+// The golden snapshot is read from the BRIDGE's fixture on purpose: one committed body, both sides
+// pinned to it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GOLDEN = join(__dirname, "..", "..", "..", "bridge", "fixtures", "solo-baseline", "snapshot.json");
@@ -64,6 +56,12 @@ const SNAPSHOT_KEYS = {
   // Not a crew dimension: present only while the mux is down for a refused durable token (M50 spec
   // 14), so a healthy solo body carries no such key and no golden byte moved.
   muxFault: true,
+  hillOff: true,
+  hillRev: true,
+  trickCardsRev: true,
+  trickViewsRev: true,
+  tricksOff: true,
+  tricksRev: true,
 } satisfies Record<keyof SnapshotResponse, true>;
 
 const SESSION_SUMMARY_KEYS = {
@@ -188,6 +186,14 @@ const AGENT_VIEW_KEYS = {
   // only when a live local parent exists, so no solo golden byte moved.
   parentPaneId: true,
   unpaned: true,
+  account: true,
+  agentTitle: true,
+  askRoute: true,
+  blockedBy: true,
+  linked: true,
+  picture: true,
+  view: true,
+  workspaceNamed: true,
 } satisfies Record<keyof AgentView, true>;
 
 const DEVICE_AUTH_KEYS = {
@@ -254,12 +260,18 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "agents",
       "bridge",
       "device",
+      "hillOff",
+      "hillRev",
       "muxFault",
       "notifications",
       "servers",
       "sessions",
       "shellPanes",
       "tabs",
+      "trickCardsRev",
+      "trickViewsRev",
+      "tricksOff",
+      "tricksRev",
       "ts",
       "update",
       "workspaces",
@@ -287,10 +299,14 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
     // the golden object above pins — and this list is the tripwire against a quiet third.
     expect(AGENT_VIEW_KEYS.session).toBe(true);
     expect(Object.keys(AGENT_VIEW_KEYS).toSorted()).toEqual([
+      "account",
       "actions",
       "agent",
+      "agentTitle",
+      "askRoute",
       "asks",
       "badge",
+      "blockedBy",
       "cache",
       "canSteer",
       "canStop",
@@ -310,11 +326,13 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "kind",
       "lastActiveAt",
       "lastSeenAt",
+      "linked",
       "manualUnseen",
       "model",
       "paneId",
       "paneLabel",
       "parentPaneId",
+      "picture",
       "pins",
       "progress",
       "readableLines",
@@ -335,9 +353,11 @@ describe("solo zero-tax — the client's mirror types carry no crew dimension", 
       "turnId",
       "unpaned",
       "usage",
+      "view",
       "walkyOff",
       "workspaceId",
       "workspaceLabel",
+      "workspaceNamed",
       "workspaceNumber",
     ]);
     expect(Object.keys(DEVICE_AUTH_KEYS).toSorted()).toEqual(["authorized", "device", "enforced"]);

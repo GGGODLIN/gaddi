@@ -191,7 +191,7 @@ export interface BareUrl {
 /**
  * Every bare `http://`, `https://` or `mailto:` address in `text`, by the SAME rule the prose
  * autolinker uses ({@link BARE_URL}) and through the same scheme gate, so a code span and a sentence
- * agree on what an address is. A host with no dot (`http://bluefin:8788`) counts. Claude Code prints
+ * agree on what an address is. A host with no dot (`http://lodge:8788`) counts. Claude Code prints
  * most addresses inside backticks, which the inline parser reads as a code span, so the renderer asks
  * this for the code span's own text.
  */
@@ -621,7 +621,7 @@ const startsTable = (line: string, next: string | undefined, math: boolean) =>
  * document in reading order; without it every image is its alt text, as the transcript wants.
  *
  * `math` reads LaTeX delimiters as math spans and blocks (`markdown-math.ts`). It is the device's
- * choice (Settings → Appearance), off by default, and off the parse is exactly the one before math
+ * choice (Settings → Look and feel), off by default, and off the parse is exactly the one before math
  * existed: a `$` is a dollar, `\$` is two characters, and a pipe in a code span still splits a cell.
  */
 export function parseMarkdown(source: string, opts: { images?: boolean; math?: boolean } = {}): MdBlock[] {

@@ -4,6 +4,7 @@ import { en } from "@/lib/i18n/messages/en";
 
 import { installApiStub, installCrewWorld, installMachinesWorld } from "./fixtures/api";
 import { collieHalves } from "./fixtures/collie-theme";
+import { STILL_MARK, stillMarkState } from "./fixtures/still-mark";
 
 // A ROOMY THEME FITS A SMALL PHONE (M57 spec 14). Schema version 2 lets a theme raise the spacing step
 // (`density: roomy`), and every `p-*`, `gap-*`, `h-*` and `size-*` grows with it. This walks every page
@@ -33,7 +34,7 @@ async function seedTheme(page: Page, surface: Readonly<Record<string, string>> |
       localStorage.setItem("collie:themes:v1", library);
     },
     [
-      JSON.stringify({ font: "aldrich", theme: "roomy" }),
+      JSON.stringify({ ...STILL_MARK, font: "aldrich", theme: "roomy" }),
       JSON.stringify({ version: 1, themes: [themeFile(surface)] }),
     ] as const,
   );
@@ -48,9 +49,9 @@ const PAGES: ReadonlyArray<{ path: string; world?: "crew" | "machines" }> = [
   { path: "/new" },
   { path: "/new/add?kind=agent" },
   { path: "/settings" },
-  { path: "/settings/appearance" },
+  { path: "/settings/look" },
   { path: "/settings/updates" },
-  { path: "/settings/system" },
+  { path: "/settings/devices" },
   { path: "/settings/voice" },
   { path: "/settings/voice/model" },
   { path: "/machines", world: "machines" },
@@ -119,7 +120,7 @@ function onlyOnePhone(testInfo: TestInfo): void {
 }
 
 function contextOptions(testInfo: TestInfo, viewport: { width: number; height: number }) {
-  return { viewport, baseURL: testInfo.project.use.baseURL, serviceWorkers: "block" as const, hasTouch: true };
+  return { viewport, baseURL: testInfo.project.use.baseURL, serviceWorkers: "block" as const, hasTouch: true, storageState: stillMarkState(testInfo.project.use.baseURL) };
 }
 
 for (const { path, world } of PAGES) {
@@ -266,8 +267,8 @@ for (const theme of [
       const context = await browser.newContext(contextOptions(testInfo, { width, height: 844 }));
       const page = await context.newPage();
       await installApiStub(page);
-      await page.addInitScript((design) => localStorage.setItem("collie:design:v1", design), JSON.stringify(theme.design));
-      await open(page, "/settings/appearance", undefined);
+      await page.addInitScript((design) => localStorage.setItem("collie:design:v1", design), JSON.stringify({ ...STILL_MARK, ...theme.design }));
+      await open(page, "/settings/look", undefined);
       await page.evaluate(() => document.fonts.ready);
       const select = page.getByRole("combobox", { name: "Theme", exact: true });
       await expect(select).toHaveCount(1);

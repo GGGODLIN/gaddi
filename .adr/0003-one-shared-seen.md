@@ -1,6 +1,7 @@
 # 0003 — "Seen" is one shared fact, and Collie only trusts what happened in Collie
 
 Status: **Accepted** (2026-07-28)
+Date: 2026-07-28
 
 ## Context
 
@@ -90,3 +91,7 @@ The status dot follows the same shared seen mark. A pane that finished its turn 
 ## Amendment 2026-11-15
 
 Manual **Mark as unseen** and **Mark as seen** (`POST /api/pane/:id/seen`, `{ seen: boolean }`, forwarded across crew links) from list action sheets adjust `seenAt` in the same shared `activity.json` ledger on settled (`done` or `idle`) top-level agent panes without moving `activeAt` or firing a push alert. `noteUnread` winds `seenAt` to `activeAt - 1` (ignoring unknown, zero-activity, or already-unseen panes so a genuine alert is never downgraded to manual) and keeps optional `unreadAt` across restarts (`PRUNE_AFTER_MS`); the bridge surfaces `manualUnseen?: true` so list surfaces show it as unseen while the app icon badge and notification sweep count alerts only.
+
+## Amendment 2026-11-19
+
+A pane that stopped on an error rests the same way (PR 787). On herdr-core a program reports `state=error` when its turn halted on a failure; the pane reads `blocked` with `blockedBy: "error"`. It counts as needing you while `activeAt > seenAt`, and once it is opened or driven in Collie every screen draws it as the resting `idle` ring, the session counts drop it, and the bridge retracts its push as it does a finished pane's. A `blocked` pane without that field is a question and stays until it is answered, as before.

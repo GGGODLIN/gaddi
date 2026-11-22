@@ -11,9 +11,11 @@ import {
   StateEngine,
   terminalTitleIsStale,
   type EngineSnapshot,
-  type MuseSessionNameProbe,
+  type ArgvNameProbe,
 } from "./state-engine.ts";
 import { HerdrMux } from "./mux/herdr/adapter.ts";
+import { HerdrCoreMux } from "./mux/herdr-core/adapter.ts";
+import { FakeHcCore } from "./mux/herdr-core/fake-core.ts";
 import type { HerdrClient, PaneRead } from "./mux/herdr/client.ts";
 import { muxOk, muxUnreachable } from "./mux/types.ts";
 import type { MuxAdapter, MuxOutcome, MuxPane, MuxTab } from "./mux/types.ts";
@@ -215,6 +217,30 @@ describe("StateEngine — the screen's ask wins for blocked", () => {
     herdr.panes = [pane("w1:p1", "w1", "idle", "pi"), pane("w1:p2", "w1", "done", "pi"), pane("w1:p3", "w1", "blocked", "pi"), pane("w1:p4", "w1", "working", "pi")];
     await poll();
     expect(engine.current().agents.map((a) => a.status)).toEqual(["blocked", "blocked", "blocked", "working"]);
+  });
+
+  test("a pane blocked by an error is a question once its screen shows an ask: the error's mark goes (PR 787)", async () => {
+    const fake = new FakeHcCore();
+    const engine = new StateEngine(new HerdrCoreMux(fake, "/home/dev"), 1500);
+    const poll = () => engine["poll"]();
+    const asking = new Set<string>();
+    engine.liftScreenAsks((paneId) => asking.has(paneId));
+    const t1 = () => engine.current().agents.find((a) => a.paneId === "t1");
+    fake.reportState("t1", "error");
+    await poll();
+    expect(t1()).toMatchObject({ status: "blocked", blockedBy: "error" });
+    asking.add("t1");
+    await poll();
+    expect(t1()?.status).toBe("blocked");
+    expect(t1()?.blockedBy).toBeUndefined();
+    asking.delete("t1");
+    await poll();
+    expect(t1()).toMatchObject({ status: "blocked", blockedBy: "error" });
+    // The next status the agent reports replaces it.
+    fake.reportState("t1", "working");
+    await poll();
+    expect(t1()?.status).toBe("working");
+    expect(t1()?.blockedBy).toBeUndefined();
   });
 
   test("with no screen reader wired the mux status stands", async () => {
@@ -703,6 +729,123 @@ describe("StateEngine — session name enrichment", () => {
     return { herdr, engine, poll, agent };
   }
 
+  function makeTitledEngine(titles: Record<string, { person?: string; agent?: string }>) {
+    const herdr = new NameHerdr();
+    const engine = new StateEngine(asMux(herdr), 1500, { titles: (a) => titles[a.paneId] });
+    const poll = () => engine["poll"]();
+    const agent = (id: string) => engine.current().agents.find((a) => a.paneId === id)!;
+    return { herdr, poll, agent };
+  }
+
+  test("the journal's names win: the person's name is sessionName and the agent's title is agentTitle", async () => {
+    const { herdr, poll, agent } = makeTitledEngine({ "w1:p1": { person: "migrate lodge", agent: "Lodge migration" }, "w1:p2": { agent: "Colour prompt" } });
+    herdr.panes = [pane("w1:p1", "w1", "idle", "claude"), pane("w1:p2", "w1", "idle", "opencode")];
+    herdr.texts.set("w1:p1", named("screen-name"));
+    await poll();
+    expect(agent("w1:p1").sessionName).toBe("migrate lodge");
+    expect(agent("w1:p1").agentTitle).toBe("Lodge migration");
+    expect(agent("w1:p2").agentTitle).toBe("Colour prompt");
+    expect("sessionName" in agent("w1:p2")).toBe(false);
+    // A pane the journal named spends no screen read on a name.
+    expect(herdr.reads.some(([id]) => id === "w1:p1")).toBe(false);
+  });
+
+  test("the screen read stays the fallback while the journal names no person, and the agent's title still rides", async () => {
+    const { herdr, poll, agent } = makeTitledEngine({ "w1:p1": { agent: "Lodge migration" } });
+    herdr.panes = [pane("w1:p1", "w1", "idle", "claude")];
+    herdr.texts.set("w1:p1", named("screen-name"));
+    await poll();
+    expect(agent("w1:p1").sessionName).toBe("screen-name");
+    expect(agent("w1:p1").agentTitle).toBe("Lodge migration");
+  });
+
+  test("an unstyled screen never turns a mode badge into sessionName when a journal tracks the session", async () => {
+    const { herdr, poll, agent } = makeTitledEngine({ "w1:p1": { agent: "PR 積壓、紅燈與合併" } });
+    const p = pane("w1:p1", "w1", "idle", "claude");
+    p.agent_session = { source: "hook", agent: "claude", kind: "id", value: "sess-1" };
+    herdr.panes = [p];
+    herdr.texts.set("w1:p1", named("ultracode"));
+    await poll();
+    expect("sessionName" in agent("w1:p1")).toBe(false);
+    expect(agent("w1:p1").agentTitle).toBe("PR 積壓、紅燈與合併");
+  });
+
+  test("a grid marked unstyled skips screen-name fallback even before a session ref arrives", async () => {
+    const herdr = new NameHerdr();
+    herdr.panes = [pane("w1:p1", "w1", "idle", "claude")];
+    herdr.texts.set("w1:p1", named("ultracode"));
+    const base = asMux(herdr);
+    const origReadGrid = base.readGrid.bind(base);
+    base.readGrid = async (id, req) => {
+      const res = await origReadGrid(id, req);
+      return res.ok ? { ok: true, value: { ...res.value, unstyled: true } } : res;
+    };
+    const engine = new StateEngine(base, 1500);
+    await engine["poll"]();
+    const view = engine.current().agents.find((a) => a.paneId === "w1:p1")!;
+    expect("sessionName" in view).toBe(false);
+  });
+
+  test("a real /rename ultracode in the journal still becomes sessionName on an unstyled screen", async () => {
+    const { herdr, poll, agent } = makeTitledEngine({ "w1:p1": { person: "ultracode", agent: "PR 積壓、紅燈與合併" } });
+    const p = pane("w1:p1", "w1", "idle", "claude");
+    p.agent_session = { source: "hook", agent: "claude", kind: "id", value: "sess-1" };
+    herdr.panes = [p];
+    herdr.texts.set("w1:p1", named("ultracode"));
+    await poll();
+    expect(agent("w1:p1").sessionName).toBe("ultracode");
+  });
+
+  test("a styled screen still reads a default-colour /rename when the journal names no person", async () => {
+    const { herdr, poll, agent } = makeTitledEngine({ "w1:p1": { agent: "Lodge migration" } });
+    const p = pane("w1:p1", "w1", "idle", "claude");
+    p.agent_session = { source: "hook", agent: "claude", kind: "id", value: "sess-1" };
+    herdr.panes = [p];
+    herdr.texts.set("w1:p1", [`\u001b[0m──────── screen-name ─`, "❯ ", "────────────────"].join("\n"));
+    await poll();
+    expect(agent("w1:p1").sessionName).toBe("screen-name");
+  });
+
+  test("attaching a session ref drops a badge cached from an earlier unstyled poll even at the same revision", async () => {
+    const titles: Record<string, { person?: string; agent?: string }> = {};
+    const { herdr, poll, agent } = makeTitledEngine(titles);
+    const p = pane("w1:p1", "w1", "idle", "claude");
+    p.revision = 5;
+    herdr.panes = [p];
+    herdr.texts.set("w1:p1", named("ultracode"));
+    await poll();
+    expect(agent("w1:p1").sessionName).toBe("ultracode");
+
+    p.agent_session = { source: "hook", agent: "claude", kind: "id", value: "sess-1" };
+    titles["w1:p1"] = { agent: "PR 積壓、紅燈與合併" };
+    await poll();
+    expect("sessionName" in agent("w1:p1")).toBe(false);
+    expect(agent("w1:p1").agentTitle).toBe("PR 積壓、紅燈與合併");
+  });
+
+  test("clearing a journal person name does not resurrect an earlier screen-cached name", async () => {
+    const titles: Record<string, { person?: string; agent?: string }> = {};
+    const { herdr, poll, agent } = makeTitledEngine(titles);
+    const p = pane("w1:p1", "w1", "idle", "claude");
+    p.revision = 1;
+    herdr.panes = [p];
+    herdr.texts.set("w1:p1", named("stale-screen"));
+    await poll();
+    expect(agent("w1:p1").sessionName).toBe("stale-screen");
+
+    p.agent_session = { source: "hook", agent: "claude", kind: "id", value: "sess-1" };
+    titles["w1:p1"] = { person: "renamed" };
+    p.revision = 2;
+    await poll();
+    expect(agent("w1:p1").sessionName).toBe("renamed");
+
+    titles["w1:p1"] = {};
+    p.revision = 3;
+    herdr.texts.set("w1:p1", "Do you want to proceed?\n ❯ 1. Yes\n   2. No");
+    await poll();
+    expect("sessionName" in agent("w1:p1")).toBe(false);
+  });
+
   test("threads a claude pane's /rename session name onto the view — claude-only", async () => {
     const { herdr, poll, agent } = makeNameEngine();
     herdr.panes = [pane("w1:p1", "w1", "idle", "claude"), pane("w1:p2", "w1", "idle", "codex")];
@@ -910,7 +1053,7 @@ describe("StateEngine — muse session names", () => {
   };
 
   function makeMuseEngine(
-    probe: MuseSessionNameProbe,
+    probe: ArgvNameProbe,
     panes: MuxPane[] = [musePane],
     foreground: () => MuxOutcome<readonly ForegroundProcess[]> = () =>
       muxOk([{ argv: ["muse", "resume", "some-uuid"] }]),
@@ -926,7 +1069,7 @@ describe("StateEngine — muse session names", () => {
       },
     };
     // SAFETY: see above — every member this poll can reach is present on `stub`.
-    const engine = new StateEngine(stub as MuxAdapter, 1500, { museSessionName: probe });
+    const engine = new StateEngine(stub as MuxAdapter, 1500, { argvNames: { muse: probe } });
     const poll = () => engine["poll"]();
     const agent = () => engine.current().agents[0]!;
     return { engine, poll, agent, processReads: () => processReads };
@@ -1383,12 +1526,13 @@ describe("terminalTitleIsStale", () => {
     return stub as MuxAdapter;
   }
 
-  test("the mark reaches the view, and the title itself goes on the wire untouched", async () => {
+  test("the mark reaches the view, and the title goes on the wire through the one normalizer", async () => {
     const stale = muxPane({ foregroundCommand: "bash", terminalTitle: "✳ waiting for soak time" });
     const engine = new StateEngine(muxOf([stale]), 1500);
     await engine["poll"]();
     const view = engine.current().shellPanes[0]!;
-    expect(view.terminalTitle).toBe("✳ waiting for soak time");
+    // The spinner glyph goes on every multiplexer now (session-title.ts); the stale check read the raw title.
+    expect(view.terminalTitle).toBe("waiting for soak time");
     expect(view.terminalTitleStale).toBe(true);
   });
 
@@ -1397,7 +1541,8 @@ describe("terminalTitleIsStale", () => {
     const engine = new StateEngine(muxOf([live]), 1500);
     await engine["poll"]();
     const view = engine.current().shellPanes[0]!;
-    expect(view.terminalTitle).toBe("✳ waiting for soak time");
+    // The spinner glyph goes on every multiplexer now (session-title.ts); the stale check read the raw title.
+    expect(view.terminalTitle).toBe("waiting for soak time");
     // Absent, exactly as every other optional field on the wire is when it has nothing to say.
     expect("terminalTitleStale" in view).toBe(false);
   });
@@ -1624,6 +1769,23 @@ describe("soleTabName and tabPosition", () => {
     expect(byId.get("t2")?.parentPaneId).toBe("t1");
     expect(byId.get("t2")?.unpaned).toBe(true);
     expect(byId.get("t2")?.soleTabName).toBeUndefined();
+  });
+});
+
+// Whether the space's label is a name of its own rides only when it differs from the default
+// (`workspaceLabel !== workspaceId`), so a pane whose adapter agrees with the default is byte-identical (M98).
+describe("workspaceNamed", () => {
+  test("the adapter's word rides only when it differs from the default", async () => {
+    const { herdr, engine, poll } = makeEngine();
+    herdr.workspaces = [{ ...ws("w1", 1), label: "api" }, ws("w2", 2), { ...ws("w3", 3), label: "" }];
+    herdr.panes = [pane("p1", "w1", "idle", "claude"), pane("p2", "w2", "idle", "claude"), pane("p3", "w3", "idle", "claude")];
+    await poll();
+    const byId = new Map(engine.current().agents.map((a) => [a.paneId, a]));
+    // A label of its own, and an id for a label: the adapter agrees with the default, so nothing rides.
+    expect(Object.hasOwn(byId.get("p1") ?? {}, "workspaceNamed")).toBe(false);
+    expect(Object.hasOwn(byId.get("p2") ?? {}, "workspaceNamed")).toBe(false);
+    // An empty label is not an id, yet no name either: the adapter's `false` rides.
+    expect(byId.get("p3")?.workspaceNamed).toBe(false);
   });
 });
 

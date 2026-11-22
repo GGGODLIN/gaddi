@@ -1,12 +1,12 @@
 # Terminals
 
 These are the terminals Collie reads [sessions](sessions.md) from: Herdr, the Herdr core
-(`herdr-core`), tmux, zellij, tuios and Tern. Collie drives one terminal per install, and Herdr is
+(`herdr-core`), tmux, zellij, tuios, Tern and Rex. Collie drives one terminal per install, and Herdr is
 the default. This page covers pointing
 Collie at any of them, what each one can answer, and the beacons Collie uses to detect an agent in
 a pane. A durable agent with no screen is not a terminal, and [Durable agents](durable-agents.md) covers it.
 
-tmux and zellij call their own top-level group a session. Collie shows it as a space.
+tmux, zellij and Rex call their own top-level group a session. Collie shows it as a space.
 
 ## Pointing Collie at a multiplexer
 
@@ -15,10 +15,11 @@ Name the backend in `COLLIE_MUX`, point it at an endpoint, restart, and install 
 > **Experimental.** tmux and zellij (since 1.0) were tested on **tmux 3.6b** and **zellij 0.44.2**,
 > on a single host. tuios (since 1.15.0) was tested on **tuios 0.8.4**. The Herdr core (since 1.25.0)
 > was tested on **hc 0.1.14**, a 0.x preview. Tern was probed by its
-> contributor on **tern 0.4.5**, a closed beta that the maintainers cannot run.
+> contributor on **tern 0.4.5**, a closed beta that the maintainers cannot run. Rex was probed by
+> its contributor on **rex 0.0.1795019727**, the Linux server of an invite-only beta.
 > Herdr is the default and the primary supported backend. **Testers wanted:** open an issue on
 > [AltanS/collie](https://github.com/AltanS/collie/issues/new) titled `tmux: …`, `zellij: …`,
-> `tuios: …` or `tern: …`, with your multiplexer, version, OS, and what you saw.
+> `tuios: …`, `tern: …` or `rex: …`, with your multiplexer, version, OS, and what you saw.
 
 Name the multiplexer on the command line:
 
@@ -29,6 +30,7 @@ COLLIE_MUX=tmux collie start
 COLLIE_MUX=zellij collie start
 COLLIE_MUX=tuios collie start
 COLLIE_MUX=tern collie start
+COLLIE_MUX=rex collie start
 ```
 
 Set the endpoint when the default target is not the one you want:
@@ -47,7 +49,7 @@ COLLIE_MUX_ENDPOINT_ZELLIJ=collie-zellij
 
 | variable | value | what it means |
 | --- | --- | --- |
-| `COLLIE_MUX` | `herdr`, `herdr-core`, `tern`, `tmux`, `zellij` or `tuios` | which terminal this install drives |
+| `COLLIE_MUX` | `herdr`, `herdr-core`, `rex`, `tern`, `tmux`, `zellij` or `tuios` | which terminal this install drives |
 | `COLLIE_MUX_ENDPOINT_HERDR_CORE` | `/run/user/1000/herdr-core/work.sock` | the core's socket PATH |
 | `COLLIE_MUX_ENDPOINT_HERDR_CORE` | empty | the socket `hc` would dial: `HC_SOCKET`, else `$XDG_RUNTIME_DIR/herdr-core/<session>.sock`, else `/run/user/<uid>/herdr-core/<session>.sock` when that directory exists, else `${XDG_STATE_HOME:-~/.local/state}/herdr-core/<session>/<session>.sock` (macOS); the session is `HC_SESSION` or `default` |
 | `COLLIE_MUX_ENDPOINT_TMUX` | `/run/user/1000/collie-tmux.sock` | a socket PATH (`tmux -S`), because it has a `/` |
@@ -60,6 +62,9 @@ COLLIE_MUX_ENDPOINT_ZELLIJ=collie-zellij
 | `COLLIE_MUX_ENDPOINT_TERN` | `/run/user/1000/tern/daemon.sock` | the Tern daemon's socket PATH |
 | `COLLIE_MUX_ENDPOINT_TERN` | empty | `$XDG_RUNTIME_DIR/tern/daemon.sock`, else `/tmp/tern-<uid>/daemon.sock` |
 | `COLLIE_TERN_BIN` | `/home/you/.local/opt/tern/tern` | only if tern sits somewhere unusual |
+| `COLLIE_MUX_ENDPOINT_REX` | `unix:///run/user/1000/rex/server.sock` | a Rex server, as `rex -S` takes it: an address or a host label |
+| `COLLIE_MUX_ENDPOINT_REX` | empty | the server `rex` finds by itself |
+| `COLLIE_REX_BIN` | `/opt/rex/bin/rex` | only if rex sits somewhere unusual |
 | `COLLIE_TMUX_BIN` | `/usr/bin/tmux` | only if tmux sits somewhere unusual |
 | `COLLIE_ZELLIJ_BIN` | `/home/you/.local/bin/zellij` | only if zellij sits somewhere unusual |
 
@@ -76,6 +81,7 @@ Then restart, install the beacon hooks, and start an agent where the phone can s
 ```bash
 collie restart                 # after every .env edit
 collie hooks install claude    # once per host; tmux, zellij and tern need it, Herdr gets hook edges
+                               # (on Rex it only gives a Claude pane its History)
 
 # open a window or a tab for the agent
 tmux -S /run/user/1000/collie-tmux.sock new-window -n claude
@@ -96,7 +102,7 @@ Herdr TUI ([herdr-core notes](#herdr-core-notes)). For the full configuration re
 
 `collie hooks install claude` installs Collie's [beacon](#agent-beacons-optional-linux) hooks, which
 tmux, zellij and tern require. They expose panes as generic shells, so without hooks every pane appears as
-`bash`.
+`bash`. Rex names its agents itself, so there the hooks only give a Claude pane its History.
 
 The command updates `~/.claude/settings.json` and leaves project configs untouched
 ([details below](#collie-writes-hooks-into-claudes-own-settings)). Claude Code 2.1.301 reloads its
@@ -168,6 +174,81 @@ Tern reports lifecycle events via `tern events`, enabling immediate topology cha
 "Show in terminal" moves your Tern window to the pane's Tern session and tab and focuses its block. A tab or a Tern session that Collie creates opens in the background and does not move your window.
 
 Collie does not detect Tern on its own, as it does not detect tuios: name it with `COLLIE_MUX=tern`. Typed text longer than 128 KiB is refused, because it travels as one command-line argument.
+
+### rex notes
+
+Rex is Superlogical's terminal server: it keeps your sessions running when you close the app.
+Collie mirrors it as an experiment.
+
+> **Experimental.** Rex support is new, and Rex itself is in beta. The support may change, or be
+> withdrawn, in a patch release. It is off until you name it with `COLLIE_MUX=rex`, and a first run
+> never picks it on its own. Collie was tested on **rex 0.0.1795019727**, the Linux server.
+
+Rex names an agent from the status the agent reports about itself:
+
+| Agent | Rex names it | Chat and History |
+| --- | --- | --- |
+| Claude Code | yes, tested on 2.1.329 | yes, with `collie hooks install claude` |
+| Codex | yes, tested on 0.170.0, once you trust its folder | no |
+| pi | yes, tested on 1.3.0 | no |
+| Grok | yes, tested on 1.0.89 | no |
+| omp | from 18.8.7 on | no |
+| opencode | no, 1.19 reports nothing | no |
+
+An agent that Rex does not name shows as a shell. A tested version is the one Collie was checked
+with, and an older one may work too.
+
+What works: the terminal view, sends, the permission and question cards, the keys, new tabs and
+new spaces, closing a pane or a tab, and renaming a tab. Collie was developed and tested on a Linux
+Rex server, at API revisions 18 and 19. The
+contributor also ran the probe and the write test on a macOS Rex app at API revision 11, and the
+commit reports that both passed and that the keys arrived as on Linux. macOS reports are welcome.
+
+**Before you turn it on.** On Linux, `rex server install` enables systemd's `rex.socket`, and then
+any connection starts the server, Collie's too. Collie looks at the server every few seconds, so
+such a server never idles out while Collie runs. To keep it stopped, stop `rex.socket` and
+`rex.service` together.
+
+```bash
+COLLIE_MUX=rex collie start
+# optional: gives a Claude pane its History
+collie hooks install claude
+```
+
+Collie shows each Rex session as a space, each window as a tab, and each block as a pane. A
+block that is not a terminal has no screen, and Collie leaves it out. A window that you have not
+named shows as unnamed, because Rex gives it a label of its own (`Window` and the last 8
+characters of its id).
+
+The status is what the program in the block reports about itself, and any program can print one.
+Rex drops it when the program that printed it exits. Collie does not read a status that the block's
+own shell prints, for example with `printf` at the prompt, so a plain shell never shows as an agent
+that needs you. A program that you start from the shell can still claim any status while it runs.
+
+Rex does not know the conversation id, so a pane's History needs the hooks. They name the session
+through `$REX_BLOCK` and `$REX_SERVER`, which Rex sets in every block.
+
+The endpoint is the Rex server. Leave it empty to use the server that `rex` finds by itself, or set
+anything `rex -S` takes. Collie asks `rex` never to start a server: start yours with
+`rex server start`, or `rex server install` to start it at boot. `collie doctor` prints the `rex`
+binary it found, the server's address and its API revision, and it warns on a revision that Collie
+was not tested with.
+
+Some things work differently on Rex:
+
+- A pane counts as the one your terminal shows only while a Rex app is attached to its session. On
+  a server with no app attached, no pane is focused.
+- Rex has no screen client on Linux, so a Linux Rex server never shows a pane as focused.
+- Show in terminal is not offered. A Rex focus moves a screen only where a Rex app shows the
+  session, and Collie was never tested with one.
+- Pane rename is not offered: Rex gives every block a label of its own choosing, so Collie cannot
+  tell your name from its default. Tab rename works.
+- The Keys tray sends only keys that Rex can send as they are. A chord with Cmd or Super, Alt with
+  a capital letter and `+` under a modifier are refused, and so is a symbol that Rex has no key for,
+  such as `?`. Text you type in the composer is not a key press, and this limit does not touch it.
+- A read of a pane takes only the end of its output, in two short `rex` calls. Load older can need
+  more rows than that tail holds, and then it reads the whole scrollback, so it is slower on a very
+  long one. Rex keeps about 100,000 lines.
 
 ### durable notes
 
@@ -294,6 +375,8 @@ What looks different on the core:
   while it reads older lines, and under a dialog one such read takes about 25 seconds. So the phone's
   mirror reads the screen alone, and Load older at the top of the mirror reads the lines above it,
   once per tap. While the agent waits on you, Load older waits too, and says so.
+  If the agent's transcript cannot be found, Load older remains available for any terminal rows the
+  core retained; it does not reconstruct output the terminal no longer holds.
 
 What the core cannot do:
 
@@ -414,6 +497,7 @@ drives. The command only reads: it starts and writes nothing.
 MUX         PRESENT                    DRIVEN BY    HINT
 herdr       yes                        next (8788)
 herdr-core  yes                        hc (8794)
+rex         no                         -
 tern        no                         -
 tmux        yes                        tmux (8789)
 tuios       no                         -
@@ -478,15 +562,29 @@ Behavior details for Claude configuration changes:
   Project-level `.claude/settings.json` files are untouched.
 - Injects **five** hooks tagged `# collie-beacon v1` with 10-second timeouts. Existing hooks are
   preserved. `hooks uninstall claude` removes only Collie entries.
-- **Leaves your statusLine alone unless you ask.** Without a flag the install does not touch
-  `statusLine`. You still get the context dot beside the model above the belt: the hooks read the
-  session transcript, and the window size from the session start.
-- **The 5-hour and 7-day windows show on their own.** They need no hook and no statusLine. While a
+- **Wraps your statusLine, if you have one.** The install points `statusLine.command` at
+  `collie beacon statusline …`, which reads what Claude Code hands it and then runs your own command
+  with the same input. Your status line prints exactly what it printed before and exits the same way;
+  each run takes about 0.13 s longer, for Collie to start. Other keys of `statusLine` (`padding`,
+  `refreshInterval`) stay. `--no-statusline` keeps a plain statusLine as it is and gives a wrapped one
+  its own command back; `hooks uninstall claude` does the same and removes the hooks. A second install
+  changes nothing. A statusLine with its own `shell` or `args`, and a settings file that is not plain
+  JSON (comments included), are left alone. Collie never adds a statusLine: with one configured,
+  Claude Code hides most of its footer hints, `esc to interrupt` among them. Not on Windows.
+- **The context figure beside the model.** The statusLine is the only place Claude Code states the
+  size of a session's context window, and the same model can have a different window on another
+  account or setup. With the wrap, the figure is Claude Code's own percent, and between two statusLine
+  runs the hooks read the token count from the end of the session transcript and divide it by that
+  stated size. Without the wrap (no statusLine, `--no-statusline`, or Windows) the figure is the
+  token count itself, `ctx 222k`, never a guessed percent; with Context and limits on Dots there is no
+  context dot then. `collie update` does not change your settings; `collie doctor` says in its
+  `statusline-claude` row when a statusLine could be wrapped and is not.
+- **The limits the agent reports show on their own.** Usually that is the 5-hour and 7-day windows, and a weekly window for one model when the plan has it. They need no hook and no statusLine. While a
   Claude pane is open, the bridge reads your Claude login on this machine
   (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR/.credentials.json`; the Keychain on a Mac
   with no file) and asks `api.anthropic.com/api/oauth/usage`, the same call Claude Code's `/usage`
-  makes. It asks when the pane appears, after a turn ends (at most once a minute) and every five
-  minutes. It stores nothing of the login, never refreshes it and sends it nowhere else. It skips a
+  makes. It asks when the pane appears, after a turn ends and every five minutes, and never more
+  than once in five minutes per agent. It stores nothing of the login, never refreshes it and sends it nowhere else. It skips a
   login file that others may read (anything looser than `0600`) and a login that has expired, and
   Claude Code refreshes that one at its next call. An API-key, Bedrock or Vertex session has no
   windows to show. Codex panes get theirs the same way, on the same schedule, from its own session
@@ -494,17 +592,11 @@ Behavior details for Claude configuration changes:
   `COLLIE_ACCOUNT_WINDOWS=all` or a list (see [Usage windows](configure.md#usage-windows)).
   `COLLIE_ACCOUNT_WINDOWS=0` (or `[bridge] account_windows = false`) turns all of it off, and
   `collie doctor` says which in its `account-windows` row.
-- **Wrapping your statusLine is the second road.** With
-  `collie hooks install claude --statusline` Collie also wraps your own statusLine, and the windows
-  come from what Claude Code hands it. Take it if you prefer that to the login read, with
-  `COLLIE_ACCOUNT_WINDOWS=0`. Its command becomes `collie beacon statusline …`, and your script
-  still runs and prints as before. Collie never adds a statusLine, and `hooks uninstall claude`
-  puts your command back exactly. An install without the flag keeps a wrap you already have and
-  points it at the current binary. To drop a wrap you no longer want, run
-  `collie hooks uninstall claude` and then `collie hooks install claude` without `--statusline`.
-  Not on Windows.
+- **The wrap is also the second road for the windows.** The limits the agent reports come from
+  what Claude Code hands the wrapper too. Take that road instead of the login read with
+  `COLLIE_ACCOUNT_WINDOWS=0`.
 - **To change a wrapped statusLine, unwrap it first.** Run `collie hooks uninstall claude`, edit
-  `statusLine.command`, then run `collie hooks install claude --statusline` again. The wrapped
+  `statusLine.command`, then run `collie hooks install claude` again. The wrapped
   command names the collie binary by its path, so if that binary moves, the statusLine prints
   nothing until you run the install again. `collie update` reminds you when a wrapped statusLine
   points at an older binary. To try the wrapper by hand, run it outside the multiplexer
@@ -530,18 +622,18 @@ broken paths to moved checkouts. For runtime details, see
 The table below summarizes key differences. Refer to [`MUX_CONTRACT.md`](../MUX_CONTRACT.md) for the
 exact specification.
 
-| | Herdr | tmux | zellij |
-| --- | --- | --- | --- |
-| [a **space** is](../MUX_CONTRACT.md#what-a-space-and-a-tab-are-per-multiplexer) | a workspace | a session | the session, exactly one, so the phone drops the space strip |
-| [a **tab** is](../MUX_CONTRACT.md#what-a-space-and-a-tab-are-per-multiplexer) | a tab | a window | a tab |
-| [a **pane** is](../MUX_CONTRACT.md#what-a-space-and-a-tab-are-per-multiplexer) | a pane | a pane | a terminal pane |
-| [who says a pane holds an agent](../MUX_CONTRACT.md#capabilities) | Herdr does, itself | a [beacon](#agent-beacons-optional-linux), or nothing | a [beacon](#agent-beacons-optional-linux), or nothing |
-| [how soon an unannounced change is seen](../MUX_CONTRACT.md#the-declared-facts--not-capabilities-either) | pushed | pushed | counted on a schedule, 12 s ceiling |
-| ["Show in terminal"](../MUX_CONTRACT.md#capabilities) | yes | yes | **no**, zellij accepts the request and moves nothing |
-| [open / rename / close a tab](../MUX_CONTRACT.md#capabilities) | yes | yes (opening is refused on the tmux crash case above) | yes |
-| [open a space](../MUX_CONTRACT.md#capabilities) | yes | yes | **no**, a session it made would be invisible to it |
-| [a **New worktree**](../MUX_CONTRACT.md#contract-owned-rules) | yes, with git | yes, with git | **no**, it cannot open a space |
-| [pane history](../MUX_CONTRACT.md#capabilities) | from Herdr's own pane record | from the beacon's session key | from the beacon's session key |
+| | Herdr | tmux | zellij | Rex (experimental) |
+| --- | --- | --- | --- | --- |
+| [a **space** is](../MUX_CONTRACT.md#what-a-space-and-a-tab-are-per-multiplexer) | a workspace | a session | the session, exactly one, so the phone drops the space strip | a session |
+| [a **tab** is](../MUX_CONTRACT.md#what-a-space-and-a-tab-are-per-multiplexer) | a tab | a window | a tab | a window |
+| [a **pane** is](../MUX_CONTRACT.md#what-a-space-and-a-tab-are-per-multiplexer) | a pane | a pane | a terminal pane | a block that is a terminal |
+| [who says a pane holds an agent](../MUX_CONTRACT.md#capabilities) | Herdr does, itself | a [beacon](#agent-beacons-optional-linux), or nothing | a [beacon](#agent-beacons-optional-linux), or nothing | Rex does, from the status the agent reports |
+| [how soon an unannounced change is seen](../MUX_CONTRACT.md#the-declared-facts--not-capabilities-either) | pushed | pushed | counted on a schedule, 12 s ceiling | pushed |
+| ["Show in terminal"](../MUX_CONTRACT.md#capabilities) | yes | yes | **no**, zellij accepts the request and moves nothing | **no**, a screen follows only where a Rex app shows the session |
+| [open / rename / close a tab](../MUX_CONTRACT.md#capabilities) | yes | yes (opening is refused on the tmux crash case above) | yes | yes |
+| [open a space](../MUX_CONTRACT.md#capabilities) | yes | yes | **no**, a session it made would be invisible to it | yes |
+| [a **New worktree**](../MUX_CONTRACT.md#contract-owned-rules) | yes, with git | yes, with git | **no**, it cannot open a space | yes, with git |
+| [pane history](../MUX_CONTRACT.md#capabilities) | from Herdr's own pane record | from the beacon's session key | from the beacon's session key | from the beacon's session key (Claude Code only) |
 
 Without active beacons, tmux, zellij and tern present panes as raw shells, and pane history is marked
 unavailable rather than returning empty content.
@@ -554,7 +646,8 @@ unavailable rather than returning empty content.
   omitted.
 - **"Show in terminal":** This pane action focuses the selected pane in your active host terminal.
   It is **disabled on zellij** because zellij's focus command accepts the instruction without
-  changing view state.
+  changing view state. It is not offered on Rex either, because a Rex focus moves a screen only
+  where a Rex app shows the session.
 
 > **Note.** The mobile interface never changes host terminal focus automatically. Only the explicit
 > "Show in terminal" action updates the display. Navigating the dashboard or opening panes does not
@@ -648,7 +741,11 @@ from a subagent is not about the pane, so it never changes what Collie reads the
 
 A send from the phone can show as **Confirmed**. That happens when a prompt edge carries the same
 text soon after the send. The window is 30 seconds, or ten minutes for a send queued behind a turn.
-The edge carries a salted hash of the prompt, never the text itself.
+The edge carries a salted hash of the prompt, never the text itself. A send that ended "cannot tell
+if this was sent" waits in the same window for that edge: when it comes with the same text, the send
+shows as Confirmed. Until then the receipt says how long it waits. A send that goes through the plugin
+waits the same way. When the agent changed the text (a folded paste, an image path, several queued
+messages taken as one), no edge matches, and the send stays "cannot tell" after the window.
 
 Claude Code and Codex take a message or a command during a turn. Collie types it at once, and the
 harness runs it after the turn. A harness that cannot take a send during its turn gets a held send
@@ -656,7 +753,7 @@ instead. So does a message that finds the input box not free, for example under 
 screen that changes between Collie's two reads, or a probe character that failed and that one
 Backspace took back out of a box Collie read clean again. Such a message goes after five free polls over ten
 seconds, or after a turn Collie sees. A command there is still refused, and so is a send on a
-screen you confirmed with Type here. A send on a pane with no profile is never held. Collie keeps the text and shows a card that floats over the bottom of the terminal view: "Queued.
+screen you confirmed with Send anyway. A send on a pane with no profile is never held. Collie keeps the text and shows a card that floats over the bottom of the terminal view: "Queued.
 Sends when the turn ends." On an agent whose version Collie could not read, the card says so and
 points to `collie doctor`: Collie types into a running turn only on a version the agent reported. The card shows the text and a Cancel button. Collie sends it after the turn ends, once the
 pane reads free on two polls in a row, oldest first. Each later held send waits for the turn that
@@ -669,7 +766,7 @@ away with Enter. It never holds them, and they do not wait behind other held sen
 later message on that pane waits behind the held ones. A held text lasts 30 minutes, a held command
 10 minutes. After that the row says the message was not sent, and offers Resend. A WalkyTalky
 message is also held over a draft, never typed into it, and its hold lasts 60 minutes
-([WalkyTalky](walky-talky.md)). Your own send over a draft is still refused, with Append and Replace. Before Collie refuses, adds to or clears a draft, it types one probe character and removes it, to prove that the box takes keys; when the box on the screen does not take keys, the send is refused and nothing is deleted. Focus that pane on the desktop or resize it, so the agent draws its screen again, then send again. A busy agent can also show typed keys seconds late, for example Claude Code with a subagent running under its agents footer. Collie waits about 3 seconds for the probe character when the agent is not in a turn, and the send goes on when it shows. When it shows later than that, the first send is refused because the probe character did not show, and Collie's characters (⌁) show in the box a little later. When the box holds only those characters and its probe is late again, the refusal says so: wait a moment and send again, and Collie takes them out first. A pane Collie reads at fewer rows than the box takes (a tab full of splits squeezes each pane) is refused with the rows read and the rows the box needs: zoom or resize it, or close the panes beside it. Some commands never
+([WalkyTalky](walky-talky.md)). Your own send over a draft is still refused, with Add to it and Replace. Add to it and Replace act only on the draft the refusal showed: when the box holds another draft at your tap, nothing is typed or deleted, and the offer shows again over that draft. When the box is empty by then, your text goes out alone. Before Collie refuses, adds to or clears a draft, it types one probe character and removes it, to prove that the box takes keys; when the box on the screen does not take keys, the send is refused and nothing is deleted. Focus that pane on the desktop or resize it, so the agent draws its screen again, then send again. A busy agent can also show typed keys seconds late, for example Claude Code with a subagent running under its agents footer. Collie waits about 3 seconds for the probe character when the agent is not in a turn, and the send goes on when it shows. When it shows later than that, the first send is refused because the probe character did not show, and Collie's characters (⌁) show in the box a little later. When the box holds only those characters and its probe is late again, the refusal says so: wait a moment and send again, and Collie takes them out first. A pane Collie reads at fewer rows than the box takes (a tab full of splits squeezes each pane) is refused with the rows read and the rows the box needs: zoom or resize it, or close the panes beside it. Some commands never
 wait, and Collie refuses them during a turn. On Claude Code these are `/clear`, `/exit`, `/quit`,
 `/logout`, `/resume`, `/branch` and every `!` line. On Codex these are `/quit`, `/exit`, `/new`,
 `/resume`, `/logout` and every `!` line. On Hermes these are `/exit`, `/quit`, `/clear`, `/new`,
@@ -686,6 +783,37 @@ most one line per reason and process each minute. An edge older than 30 seconds,
 not an edge, is counted but never logged. An edge from a pane of another multiplexer on the same
 machine, for example a Herdr TUI pane seen by a bridge that drives the Herdr core, is counted as
 `foreign-mux` and not logged.
+
+#### Send anyway
+
+When Collie cannot send your message as it stands, the card and the notice under the box both offer
+**Send anyway**. The word does not say whether Enter goes: what happened is in
+the answer after your tap. This works on
+every screen except four: a sign-in field (enter the code again there), a question or permission
+Collie read (answer it on its own card), a screen that changed since you looked, and a screen that
+shows a menu or a yes/no prompt. A screen that changed comes back with the rows as they are now; look
+at them and tap again. On a menu, use the keys to pick an option, because typed text could pick one.
+
+Where Collie can still place and check your text, on a screen that takes the manual Send, your second
+tap sends it, Enter included: you tapped twice with the screen in view. If only a number on the screen
+changed since you looked, Collie types your text but presses no key, so you check it first. Where it cannot, on a box that
+is not free, a box that already holds a draft, a turn it cannot read or does not queue into, or a stale
+or torn read, Collie pastes your text into the box in one piece and presses no key at all. A menu on
+the screen stops both. The card
+then says your text is in the box, and offers the keys: check the screen, and press Enter there when
+it is right. When the box already held a draft, the card can say so: your text went in after it. A message of more than one line goes this way only on Herdr, which pastes it whole;
+elsewhere send it one line at a time. On a turn the agent queues into, it goes in as any send does. Collie never holds a
+message you typed this way, and one tap types it at most once. When the box already holds the same
+text, left there by an earlier send, Collie types nothing again: press Enter on the Keys pad.
+
+On an agent Collie has no profile for, no message goes into a screen that shows a menu or a yes/no
+prompt at its bottom, whether you sent it or Collie did; answer the menu with the keys. On Herdr and
+the Herdr core, Collie also asks which program runs in the pane: a plain shell at its prompt takes every
+message, also with a numbered list or an answered `[Y/n]` above the prompt. On tmux, zellij, tuios and
+Tern Collie cannot ask, so it reads only the bottom of the screen: output above a shell prompt is no menu.
+
+A held send that waits two minutes or longer is marked as waiting long, so the phone can show the
+screen with a way to send it now or cancel it.
 
 #### Which bridges get the edges
 
@@ -753,6 +881,10 @@ older one.
 - **A background request waits up to the hold limit, even with no phone watching.** Then Collie
   lets the hook go, and Claude shows the dialog on the screen. Claude 2.1.301 does not deny it.
 - **Questions and plans stay screen cards.** `AskUserQuestion` and `ExitPlanMode` are never held.
+- **A linked Claude Code answers through its plugin.** After `collie harness link claude`, the plugin holds
+  the request once it has told the bridge about it, and the hook then lets go of that one dialog.
+  Until then the hook holds it, as above. One card shows either way. See
+  [Send by data](claude-code-on-your-phone.md#send-by-data-optional-experimental).
 
 The socket is `<stateDir>/hold/sock`. Its folder is mode 0700 and the socket is mode 0600, so
 another user cannot connect. Before it connects, the hook checks that the socket, its folder and the
@@ -778,6 +910,11 @@ says in how many settings files the hooks hold permissions.
 > the hook checks this before it connects. The bridge answers only a process it places on a pane.
 > The tap must carry the hash of the tool, the input shown and the labels the card showed. The
 > answer is only ever a person's tap: Collie never allows or denies on its own.
+>
+> A linked Claude Code (`collie harness link claude`, Collie 1.29.0 or later) adds a second control channel,
+> under the same guards: its socket is yours alone, the bridge answers only a session it places on a
+> pane, and an answer is only ever a person's tap. It carries plain messages, WalkyTalky messages and
+> permission answers, and reads the text in the box, nothing else ([ADR 0140](../.adr/0140-a-part-inside-the-agent-dials-the-bridge.md)).
 
 #### Codex
 
@@ -835,8 +972,12 @@ Collie checks the input box of an agent before it sends a message from the phone
 A profile file describes that box for one agent. It says where the box starts and ends.
 It says how a draft looks, which key sends, and which text the agent draws for a long paste.
 A plain shell and an agent with no profile still take sends. Collie cannot read their input box,
-so it types the text and presses Enter without a check, one line at a time. Only a password prompt
-on the last rows stops it: Collie types nothing there, and the phone offers Type.
+so it types the text and presses Enter without a check, one line at a time. A password prompt
+on the last rows stops it: Collie types nothing there, and the phone offers Type. So do last rows
+that look like a live agent's: an input box, a dialog's choices, or a footer row that an agent's
+profile names as the last row. Collie then cannot tell which agent runs there, so it types nothing
+either. An agent that exited leaves its last screen behind with a shell prompt under it; that pane is
+a shell again, and the send goes through.
 
 | Agent | Enter during a turn | Send key | Probe | Checked against |
 | ----- | ------------------- | -------- | ----------------- | --------------- |
@@ -864,7 +1005,9 @@ Collie checks that the character lands in the box, then removes it.
   A pi dialog opens between the same two rules.
   So Collie reads the key hints and the list from the top rule down.
   In pi, Enter steers a running turn, but Alt+Enter sends on an idle box and queues in a turn.
-  So Collie sends with Alt+Enter, and with Ctrl+Q on Windows and in WSL.
+  So Collie sends with Alt+Enter, and with Ctrl+Q on Windows.
+  In WSL, pi takes Ctrl+Q only when `WSL_DISTRO_NAME` or `WSL_INTEROP` is set in its own environment.
+  Under Herdr and the Herdr core, Collie reads the pi process's environment and sends the same key; elsewhere it sends Ctrl+Q in WSL.
   pi shows a queued message as a `Follow-up:` row above the box.
   A box taller than 30 rows does not read as a box. The screen reads as unknown, and a send needs your tap.
   Gentle Shell 4.5.1, which bundles pi 1.4.0, draws a float editor instead: a left rail of `▎` rows

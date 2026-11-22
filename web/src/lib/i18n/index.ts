@@ -1,6 +1,6 @@
 import { hasDocument } from "../env";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "./locale";
-import { en, type Dictionary, type MessageKey } from "./messages/en";
+import { en, PENDING_TRANSLATION, type Dictionary, type MessageKey } from "./messages/en";
 import { interpolate, type TemplateVars } from "./template";
 import { reloadOnChunkError } from "../chunk-reload";
 
@@ -168,6 +168,7 @@ export function t(key: MessageKey, vars?: TemplateVars): string {
 }
 
 const pluralRules = new Map<Locale, Intl.PluralRules>();
+const pendingTranslations = new Set<string>(PENDING_TRANSLATION);
 
 /** The CLDR plural category Intl reports for `count` in `locale`: `one`, `few`, `many`, `other` and so
  *  on. Which categories a language has is the language's business, not ours: English and German
@@ -193,12 +194,18 @@ function pluralCategory(locale: Locale, count: number): Intl.LDMLPluralRule {
  */
 export function tn(keyBase: PluralKey, count: number, vars?: TemplateVars): string {
   const dictionary: Readonly<Record<string, string | undefined>> = activeDictionary();
-  const template =
-    dictionary[`${keyBase}.${pluralCategory(activeLocale(), count)}`] ?? dictionary[`${keyBase}.other`];
-  // `.other` exists for every PluralKey in every dictionary (the type and the parity test see to
-  // it), so this only fires if that contract is broken.
-  if (template === undefined) throw new Error(`tn: no plural form for ${keyBase}`);
-  return interpolate(template.replace(BRAND, "Gaddi"), { ...vars, count });
+  // Pending forms contain English, so they must use English's plural rule even after a bundle loads.
+  const locale = pendingTranslations.has(`${keyBase}.other`) ? DEFAULT_LOCALE : activeLocale();
+  const template = dictionary[`${keyBase}.${pluralCategory(locale, count)}`] ?? dictionary[`${keyBase}.other`];
+  if (template !== undefined) return interpolate(template.replace(BRAND, "Gaddi"), { ...vars, count });
+  // A set on the pending-translation list may be missing from a bundle, as `t()` allows for one key.
+  // It reads English then, with English's plural rule, so the words and the grammar agree.
+  const english: Readonly<Record<string, string | undefined>> = en;
+  const fallback = english[`${keyBase}.${pluralCategory(DEFAULT_LOCALE, count)}`] ?? english[`${keyBase}.other`];
+  // `.other` exists for every PluralKey in English (the type sees to it), so this only fires if
+  // that contract is broken.
+  if (fallback === undefined) throw new Error(`tn: no plural form for ${keyBase}`);
+  return interpolate(fallback.replace(BRAND, "Gaddi"), { ...vars, count });
 }
 
 /** Switch languages: persist, stamp `<html lang>`, repaint now in whatever is available, and start

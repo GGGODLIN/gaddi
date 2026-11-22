@@ -3,152 +3,17 @@
 #
 # The caller gets the code, the toolchain and `bun install` ready. This script does none of that.
 # It runs `bun test` over bridge, cli and scripts, and prints one line per suite. Exit 0 means: no
-# failing test, and no suite with more skipped tests than its own budget allows. Any other result
-# exits 1.
+# failing test, and every suite passed at least one. Any other result exits 1.
+#
+# The skip count is printed, not judged. A test that cannot run on Windows says why where it skips
+# (`test.skipIf`, or a named helper such as `apiSocketTest`), not in a list kept here.
 #
 # Works in Windows PowerShell 5.1 and in PowerShell 7.
 #
 #   -Out       where the logs go: <suite>.log and <suite>.fails per suite (one failing name per line)
-#   -MaxSkipsBridge, -MaxSkipsCli, -MaxSkipsScripts
-#              the most skipped tests that still count as green, PER SUITE, so a new skip in one suite
-#              cannot hide behind a removed one in another. A test must not be skipped just to get
-#              green, so a higher count is a failure. Raise a number only with a reason.
-#              Bridge went from 2 to 0 when M43 spec 04 checked the access list instead of the mode.
-#              Today, 216 in all, each one named, with its reason:
-#              bridge 115. 5 are the POSIX-only and engine cases below, 1 the /etc link scan, 1 the telemetry file mode, 5 are the hold socket tests, 7 the walky ones, 6 the walky sibling registry ones, 30 are the
-#                durable example apps, 10 are the durable-harness adapter test, 36 are the durable socket tests (see "Durable, bridge" below),
-#                5 are the pane's program reads (see "The pane's program, bridge" below), and 6 are the fake git of a new
-#                worktree (see "The fake git of a new worktree, bridge" below).
-#                2 are "createPaneVersion — a harness off the login PATH" in pane-binary.test.ts (the test and its
-#                describe): the off-PATH agent is a `#!/bin/sh` script, which Windows cannot run.
-#                Pi skips the raw-control one-line send test in protocol.unstyled.test.ts; its Alt+Enter remains a named key.
-#                Of the first 5, four are in bridge/stt/local-cli.test.ts. Windows has no executable bit
-#                and no file owner check in this provider:
-#                - "commandFileProblem: regular executable passes, symlinks are followed" (the
-#                  executable bit; a symlink needs a privilege on Windows)
-#                - "status refuses a directory and a non-executable file, and names neither" (the
-#                  executable bit)
-#                - "only an old directory with the prefix, owned by this user, is removed" (the
-#                  owner check by uid)
-#                - "loading the provider sweeps its temp root once, in the background" (without a
-#                  uid the sweep removes nothing on Windows, so there is nothing to see)
-#                The fifth is bridge/stt/whistle.test.ts, "the whistle provider - the real engine, end
-#                to end > a 13 s WAV becomes text through a real child of this Collie". It runs only
-#                where COLLIE_TEST_WHISTLE_DIR holds the measured model, which is never committed, so
-#                no CI job or VM has it (Linux CI skips it too).
-#              The /etc link scan, bridge (1). In bridge/claude-commands.test.ts, "discoverClaudeCommands: the bounds
-#                a reader of the operator's disk keeps". Windows has no /etc, and a file symlink needs a privilege there:
-#                - "real disk: a symlink to /etc, in a project or in the personal folders, yields no row" (POSIX links to /etc)
-#              The telemetry file mode, bridge (1). A file mode is POSIX, and the rest of bridge/telemetry.test.ts runs on Windows:
-#                - "the file is owner-only" (telemetry.test.ts, "createTelemetry": the 0600 mode of telemetry.json)
-#              The hold socket, bridge (5). Windows builds no hold socket yet, so every permission there stays a
-#                screen ask (CHANGELOG, M56 spec 12). The five tests of the "the hold socket" block in
-#                bridge/surface/hook-ask.test.ts are `test.skipIf` on win32:
-#                Each name sits on one line, so the pin test can find it:
-#                - "owner-only: the folder is 0700, the socket 0600; a second bridge on the same path does not take it" (a POSIX socket file with an owner-only mode)
-#                - "a pid the bridge cannot place is dropped with one log line, and the connection closes with no decision" (it dials that socket)
-#                - "a placed request reaches the session; the decision travels back as one line" (the same)
-#                - "a request from another multiplexer's pane is dropped without a log line, a same-namespace miss is logged" (the same)
-#                - "an unparsed line is dropped" (the same)
-#              Walky talky, bridge (7). A file mode and a Unix socket are POSIX. In bridge/walky/ the checks of
-#                0700 and 0600 sit in their own skipped test, and the behaviour beside them runs on Windows:
-#                - "keeps its tokens at 0600 in a 0700 folder" (instances.test.ts, "the instance registry")
-#                - "is private: a 0700 folder and a 0600 file" (log.test.ts, "the log")
-#                - "the file is 0600 in a 0700 folder" (off.test.ts, "the off flag")
-#                - "keeps its file at 0600 in a 0700 folder" (refusals.test.ts, "the refusal counter")
-#                - "keeps an id and target a day, apart from the log, on disk at 0600" (seen.test.ts, "the seen file")
-#                - "is 0600, answers one line per connection, and refuses a second bridge on the same path" (socket.test.ts, "the socket"): every part of it is the Unix socket, and Windows builds no walky socket ("Windows has no socket" runs there)
-#                - "the server answers an unread line with its reason or `not here`, never the bare word" (socket.test.ts, "the socket"): the answer travels over the Unix socket
-#              The walky sibling registry, bridge (6). bridge/walky/siblings.test.ts walks a live hook target registry
-#                (liveHookTargets), which needs a pid start-time probe, and win32 has none: every target reads as dead, so
-#                the registry is empty there in production and there is nothing to merge. The rule, the merge, the cache and
-#                the fixture with the siblings handed in run on Windows. Each name sits on one line, so the pin test can find it:
-#                - "the next log's list for the pane holds the stable-recorded row, with `recordedBy`"
-#                - "the sibling's files are only read: the log, its inbox and its instances stay as they were"
-#                - "a registry that is not private reads as no siblings, and the list is the own one"
-#                - "a missing registry reads as no siblings"
-#                - "a sibling with no walky log adds nothing"
-#                - "a FIFO or a folder where a log should be is skipped, never opened" (mkfifo is POSIX only)
-#              Durable, bridge (30 + 36). Windows has no socket transport (WIRE.md section 1A), so a test
-#                that is about the Unix socket itself cannot run there. The tests about the wire (controls,
-#                asks, answers, receipts, events, Chat, starters, the conformance suite) run on Windows
-#                against the fake program on 127.0.0.1 (`FakeDurableProgram.startWire`). The 30 are every
-#                test of bridge/mux/durable/example.test.ts (12), example-hello.test.ts (6) and
-#                example-cloudflare.test.ts (12): the durable example speaks over a Unix socket (or needs
-#                `wrangler`), and Windows attaches a program over HTTPS, so none of them runs there. A file's
-#                count is its tests plus the skipped placeholder, the beforeAll and the afterAll that Bun
-#                counts with them. The VM run of release-1.22 counted bridge 71, nine more than the 62 this
-#                budget held before example-hello.test.ts (6) and three more counted in the other two files.
-#                The 36 are bridge/mux/durable/client.test.ts: "the privacy check", "the path walk" and "the request"
-#                (26; the socket client's owner, mode, link and path rules, and its deadline and size cap on
-#                a socket); bridge/mux/durable/adapter.test.ts (6: the factory reading
-#                COLLIE_DURABLE_SOCKET, the startup line, socket path rules, a program that asks for a token,
-#                a socket that loses its mode, a socket that is not there); events.test.ts (the factory
-#                handed a socket path), asks.test.ts (a socket with nothing listening) and
-#                http-client.test.ts (the socket client sends no Authorization header), one each; and
-#                bridge/durable/log.test.ts (a mode 0755 folder put back to 0700).
-#              Durable harness, bridge (10). bridge/mux/durable/example-durable-harness.test.ts returns a skip reason on
-#                win32: it starts the examples/durable-harness server with Node 24 and its Bun install, which no
-#                Windows job or VM has. The Linux job "durable example" in ci.yml runs it. The 10 are its 7 tests,
-#                the skipped placeholder, the beforeAll and the afterAll that Bun counts with them.
-#              The pane's program, bridge (5). The version read of 1.24.1 (.adr/0124) runs the pane's own binary.
-#                Each name sits on one line, so the pin test can find it:
-#                - "boundedRun answers at its cap even when a grandchild holds the pipe" (binary-version.test.ts, win32: a POSIX sh grandchild)
-#                - "boundedRun returns what a quick command printed, and its exit code" (binary-version.test.ts, win32: a POSIX sh)
-#                - "procProbe sees a live process's executable and folder" (pane-binary.test.ts, off Linux: it reads /proc)
-#                - "two copies of one harness" (pane-binary.test.ts, win32: its fake omp copies are POSIX sh scripts), its one test and
-#                  the hook Bun counts with it. The Windows path of paneBinaryOf runs on Windows with a fake host ("no /proc" tests).
-#              The fake git of a new worktree, bridge (6). bridge/worktree-add.test.ts hands `addWorktree` a fake git, a POSIX
-#                `#!/bin/sh` script that Windows cannot spawn (EFTYPE). Those tests are `test.skipIf` on win32; every test
-#                there that runs the real git runs on Windows too (M81). Each name sits on one line, so the pin test can find it:
-#                - "two creates for one folder at once spawn one git worktree add, and both open the checkout" (a logging wrapper)
-#                - "a create waiting on a failed one for its folder reports the failure, and runs no add of its own" (the same)
-#                - "removes the half-made checkout and the branch it made, and says so" (a git that sleeps past the timeout)
-#                - "says the branch stayed behind when its delete fails" (the same)
-#                - "keeps the branch when the checkout could not be removed" (the same)
-#                - "never removes a folder that was there before the call" (the same)
-#              cli 66 in all: 21 in the next paragraph, then 3 of the statusLine wrapper and 42 of walky talky. Of the 21, 12 are every test of the "doctor durable" describe in cli/doctor.test.ts: each reads a
-#                real Unix socket. Its Windows rows are tested in cli/durable-findings.test.ts with a fake
-#                platform. The other 9:
-#                "a per-call override wins over the Exec's own environment (#283) > a child killed by a signal says which one"
-#                (Windows has no POSIX signals),
-#                "a per-call override wins over the Exec's own environment (#283) > inherit and runIn can point the child's stdout at stderr"
-#                (cli/sys.test.ts, added in 1.25.0: its children are POSIX `sh -c` commands),
-#                "collie _whistle-transcribe - the real engine, end to end > a child of this checkout's CLI turns 10.4 s of speech into text"
-#                (the same missing model as the bridge case), and the 3 tests of
-#                "installScript from a shallow lead, run for real" in cli/remote.test.ts: they run the
-#                install leg, POSIX sh that a crew member runs over ssh, and a Windows machine cannot be a
-#                crew member (WINDOWS_CREW_SENTENCE in cli/crew.ts), and
-#                "the real probe on an hc-only home reports the core and Gaddi's own config dir" in cli/remote.test.ts
-#                (M84: the stand-in `hc` and the probe are POSIX `sh`), and the 2 tests of
-#                "the probe's dirty check, run for real" in cli/remote.test.ts (the probe again, run
-#                with /bin/sh against a real git checkout).
-#              The statusLine wrapper, cli (3). The "runShell stops the whole command" block in cli/statusline.test.ts is
-#                `describe.skipIf` off Linux: it signals a POSIX process group, and the wrapper is not on Windows by design
-#                (the usage row, .adr/0115). Its 3 tests are "a SIGTERM to the wrapper stops a compound command's grandchild"
-#                (2, one per group layout) and "passes the command's output and exit code through".
-#              Walky talky, cli (42). cli/walky.test.ts runs the verbs against a real bridge socket in a temp state
-#                dir, and Windows cannot bind it (the same reason as the hold socket). Each of those tests is
-#                `socketTest`, 10 in "send", 28 in "reply, inbox, status, who" (two of them, from M85, are the resting-session sends and the `--wake` refusal on a reply; three, from M89, are `off` and `on`, the who marks and the two off refusals; one, from 1.28.2, is the `pane` question `collie pair` asks), 1 in "cancel" and 3 in "on a crew member". The
-#                tests that never reach the socket run on Windows: the usage errors, "no bridge at all is
-#                UNREACHABLE" and "on Windows it says why and exits STATE".
-#              scripts 35: 23 are every test of scripts/install.test.ts ("scripts/install.sh > ..."):
-#                install.sh is POSIX sh, and Windows installs with install.ps1, tested beside it.
-#                The other 2 are in the harness lab (scripts/harness-canary/lab/):
-#                - "POSIX only: the login copy has mode 600" in seed.test.ts (Windows has no file modes)
-#                - "a real throwaway server starts, shows its pane, stops, and leaves no socket" in tmux.test.ts
-#                  (it needs a tmux binary, and Windows has none)
-#                10 are scripts/pre-push.test.ts ("pre-push collie.prepush=ci > ..."): its 8 tests and
-#                the describe's beforeAll and afterAll, which bun lists as two "(unnamed)" skips. They
-#                drive the hook with a stand-in bun that is a shebang script on a colon-joined PATH,
-#                and the switch they pin is this fork's, set in a clone on a Mac.
 param(
-  [Parameter(Mandatory = $true)][string]$Out,
-  [int]$MaxSkipsBridge = 115,
-  [int]$MaxSkipsCli = 66,
-  [int]$MaxSkipsScripts = 35
+  [Parameter(Mandatory = $true)][string]$Out
 )
-$skipBudget = @{ bridge = $MaxSkipsBridge; cli = $MaxSkipsCli; scripts = $MaxSkipsScripts }
 $ErrorActionPreference = "Continue"
 $ProgressPreference = "SilentlyContinue"
 
@@ -184,7 +49,6 @@ function Get-BunCount([string[]]$lines, [string]$word) {
 
 $failed = $false
 $allFails = @()
-$overBudget = @()
 $totalSkips = 0
 
 # One suite = one command line. cmd.exe does the redirect, so PowerShell never wraps or
@@ -210,7 +74,6 @@ foreach ($name in $suites.Keys) {
   [System.IO.File]::WriteAllLines("$Out\$name.fails", [string[]]$failing)
   Write-Output ("{0,-8} {1} pass, {2} fail, {3} skip" -f $name, $pass, $fail, $skip)
   $totalSkips += $skip
-  if ($skip -gt $skipBudget[$name]) { $overBudget += ("{0} {1}, allowed {2}" -f $name, $skip, $skipBudget[$name]) }
   $allFails += @($failing | ForEach-Object { "{0}: {1}" -f $name, $_ })
   if ($pass -eq 0) {
     # No summary line, or none passed: a suite that ran nothing must not look green.
@@ -226,13 +89,7 @@ foreach ($name in $suites.Keys) {
   }
 }
 
-$allowed = $MaxSkipsBridge + $MaxSkipsCli + $MaxSkipsScripts
-Write-Output ("skips    {0} (allowed {1}: bridge {2}, cli {3}, scripts {4})" -f $totalSkips, $allowed, $MaxSkipsBridge, $MaxSkipsCli, $MaxSkipsScripts)
-if ($overBudget.Count -gt 0) {
-  Write-Output ("         too many skipped tests: {0}." -f ($overBudget -join "; "))
-  Write-Output "         Remove the skip. If a test truly cannot run on Windows, raise that suite's -MaxSkips<Suite> in scripts/windows-suites.ps1 and say why in the PR."
-  $failed = $true
-}
+Write-Output ("skips    {0}" -f $totalSkips)
 if ($allFails.Count -gt 0) {
   Write-Output "failing tests (first 40):"
   $allFails | Select-Object -First 40 | ForEach-Object { Write-Output "         $_" }

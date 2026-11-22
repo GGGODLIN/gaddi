@@ -2,9 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-07
-- **Shipped in:** pending
 - **Amends:** upstream [ADR 0129](./0129-an-anonymous-install-count-on-by-default.md) in this fork
-  (keeps [ADR 0034](./0034-collie-collects-nothing-and-opt-in-is-the-ceiling.md)'s default-off posture)
+- **Relates to:** [ADR 0034](./0034-collie-collects-nothing-and-opt-in-is-the-ceiling.md) (keeps its default-off posture)
 - **Trail:** upstream `v1.27.0`–`v1.27.2` sync review (`4c35b3dea`) · `bridge/telemetry.ts`
   (`telemetryState`) · `bridge/config-schema.ts` (`COLLIE_TELEMETRY`) ·
   `web/src/lib/i18n/messages/*.ts` (`telemetry.card.cause.default`) · fork-only divergence
@@ -40,3 +39,4 @@ and flips step 10 of the decision ladder (`decidedBy: "default"`) from **on** to
 3. **Settings copy matches the default.** `telemetry.card.cause.default` across all twelve locale
    dictionaries reads "Off, the default. Turn it on with the switch." (and its translations), and the
    switch remains enabled when `decidedBy === "default"` because `"default"` is not in `LOCKED_OFF`.
+- **Addendum (2026-11-22):** When opted in, the ping carries upstream schema v3 (`usage` and `trouble.linked`); default remains off (`decidedBy: "default"` → `on: false`).

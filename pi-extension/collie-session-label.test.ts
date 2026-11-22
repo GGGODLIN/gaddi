@@ -49,40 +49,56 @@ const session = (file: string | undefined, hasUI = true, mode: string | undefine
 const A = resolve("/tmp/pi-sessions/-proj/2026-11-15T10-00-00-000Z_aaaa.jsonl");
 const B = resolve("/tmp/pi-sessions/-proj/2026-11-15T11-00-00-000Z_bbbb.jsonl");
 const C = resolve("/tmp/pi-sessions/-proj/2026-11-15T12-00-00-000Z_cccc.jsonl");
+const D = resolve("/tmp/pi-sessions/-proj/2026-11-15T13-00-00-000Z_dddd.jsonl");
 const set = (file: string) => `label t7 pi.session_file=${file}`;
 const REMOVE = "label t7 pi.session_file=";
 
 describe("the pi.session_file label", () => {
   test("outside herdr-core, and in a nested pi started from pi's bash tool, nothing is hooked", () => {
-    for (const env of [{}, { HC_TERMINAL_ID: "" }, { HC_TERMINAL_ID: "t7", PI_SESSION_ID: "019f4665-7df0-7540-a64f-7068335f2301" }]) {
+    for (const env of [{}, { HC_TERMINAL_ID: "" }, { HC_TERMINAL_ID: "t7", PI_SESSION_ID: "00000000-0000-0000-0000-000000000001" }]) {
       const runtime = fakePi();
       expect(activate(runtime.pi, env, recorder().run, new Map())).toBe(false);
       expect(runtime.handlers.size).toBe(0);
     }
   });
 
-  test("startup, replacement runtimes (/new, /resume, /fork) and quit keep one label lifecycle", async () => {
-    const shared = new Map<string, LabelState>();
+  test("startup, replacement runtimes (/new, /resume, /fork, /reload) and quit keep one label lifecycle", async () => {
     const hc = recorder();
+    const env = { HC_TERMINAL_ID: "t7" };
+    globalThis.__colliePiSessionLabel?.delete("t7");
 
-    // First runtime: startup writes A, then `/new` tears down with reason "new" (does NOT clear).
-    const first = fakePi();
-    expect(activate(first.pi, { HC_TERMINAL_ID: "t7" }, hc.run, shared)).toBe(true);
-    await first.emit("session_start", session(A), { reason: "startup" });
-    await first.emit("session_shutdown", session(A), { reason: "new" });
+    try {
+      // Uses the default process-wide globalThis store across replacement runtimes.
+      const first = fakePi();
+      expect(activate(first.pi, env, hc.run)).toBe(true);
+      await first.emit("session_start", session(A), { reason: "startup" });
+      await first.emit("session_shutdown", session(A), { reason: "new" });
 
-    // Second runtime in the same process: `/new` starts B, `/resume` replaces with C, then Ctrl+D quits.
-    const second = fakePi();
-    activate(second.pi, { HC_TERMINAL_ID: "t7" }, hc.run, shared);
-    await second.emit("session_start", session(B), { reason: "new" });
-    await second.emit("session_shutdown", session(B), { reason: "resume" });
+      const second = fakePi();
+      activate(second.pi, env, hc.run);
+      await second.emit("session_start", session(B), { reason: "new" });
+      await second.emit("session_shutdown", session(B), { reason: "resume" });
 
-    const third = fakePi();
-    activate(third.pi, { HC_TERMINAL_ID: "t7" }, hc.run, shared);
-    await third.emit("session_start", session(C), { reason: "resume" });
-    await third.emit("session_shutdown", session(C), { reason: "quit" });
+      const third = fakePi();
+      activate(third.pi, env, hc.run);
+      await third.emit("session_start", session(C), { reason: "resume" });
+      await third.emit("session_shutdown", session(C), { reason: "fork" });
 
-    expect(hc.calls).toEqual([set(A), set(B), set(C), REMOVE]);
+      const fourth = fakePi();
+      activate(fourth.pi, env, hc.run);
+      await fourth.emit("session_start", session(D), { reason: "fork" });
+      await fourth.emit("session_shutdown", session(D), { reason: "reload" });
+
+      // Reload keeps the same file D; shared state avoids a redundant write until Ctrl+D quits.
+      const fifth = fakePi();
+      activate(fifth.pi, env, hc.run);
+      await fifth.emit("session_start", session(D), { reason: "reload" });
+      await fifth.emit("session_shutdown", session(D), { reason: "quit" });
+
+      expect(hc.calls).toEqual([set(A), set(B), set(C), set(D), REMOVE]);
+    } finally {
+      globalThis.__colliePiSessionLabel?.delete("t7");
+    }
   });
 
   test("an unchanged file writes nothing more; --no-session or a relative path removes the label", async () => {

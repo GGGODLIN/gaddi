@@ -30,12 +30,18 @@ import durableAgentsTroubleshooting from "../docs/durable-agents-troubleshooting
 import durableSdk from "../docs/durable-sdk.md" with { type: "text" };
 import durableWire from "../docs/durable-wire.md" with { type: "text" };
 import fiveMinuteInstall from "../docs/five-minute-install.md" with { type: "text" };
+import hill from "../docs/hill.md" with { type: "text" };
 import install from "../docs/install.md" with { type: "text" };
+import keyboardShortcuts from "../docs/keyboard-shortcuts.md" with { type: "text" };
 import multiplexers from "../docs/multiplexers.md" with { type: "text" };
 import security from "../docs/security.md" with { type: "text" };
 import sessions from "../docs/sessions.md" with { type: "text" };
 import terminology from "../docs/terminology.md" with { type: "text" };
 import themes from "../docs/themes.md" with { type: "text" };
+import themesReference from "../docs/themes-reference.md" with { type: "text" };
+import tricks from "../docs/tricks.md" with { type: "text" };
+import tricksAuthoring from "../docs/tricks-authoring.md" with { type: "text" };
+import tricksReference from "../docs/tricks-reference.md" with { type: "text" };
 import troubleshooting from "../docs/troubleshooting.md" with { type: "text" };
 import upgrading from "../docs/upgrading.md" with { type: "text" };
 import voiceAndPush from "../docs/voice-and-push.md" with { type: "text" };
@@ -108,6 +114,11 @@ export const DOC_PAGES: readonly DocPage[] = [
     text: configure,
   },
   {
+    name: "keyboard-shortcuts",
+    purpose: "Drive Collie from a keyboard: the prefix, every action and its keys, and shortcuts.toml",
+    text: keyboardShortcuts,
+  },
+  {
     name: "commands",
     purpose: "Every verb, putting `collie` on your PATH, and the Herdr actions that mirror them",
     text: commands,
@@ -159,13 +170,33 @@ export const DOC_PAGES: readonly DocPage[] = [
   },
   {
     name: "multiplexers",
-    purpose: "Pointing Collie at Herdr, tern, tmux, zellij or tuios, and what each terminal can answer",
+    purpose: "Pointing Collie at Herdr, the Herdr core, tern, tmux, zellij, tuios or rex, and what each terminal can answer",
     text: multiplexers,
   },
   {
     name: "walky-talky",
     purpose: "Messages between agent sessions: who, send, reply, inbox, receipts, the phone, the skill and limits",
     text: walkyTalky,
+  },
+  {
+    name: "hill",
+    purpose: "Where agents and tricks ask you a question: Decisions, collie hill post, how you answer, receipts, Clear, Here, Quiet and Away, proposals",
+    text: hill,
+  },
+  {
+    name: "tricks",
+    purpose: "How tricks work: where a trick can show, the two kinds, the parts, three examples, trust, adding one, and troubleshooting",
+    text: tricks,
+  },
+  {
+    name: "tricks-authoring",
+    purpose: "Write a trick: the folder, one program trick, one agent view, proposing it, several tricks in one repository",
+    text: tricksAuthoring,
+  },
+  {
+    name: "tricks-reference",
+    purpose: "Every place, part, manifest key, limit and command of a trick, complete, generated from the code",
+    text: tricksReference,
   },
   {
     name: "voice-and-push",
@@ -176,6 +207,11 @@ export const DOC_PAGES: readonly DocPage[] = [
     name: "themes",
     purpose: "Pick, import, export and write a theme: colours, shape, look and terminal palette",
     text: themes,
+  },
+  {
+    name: "themes-reference",
+    purpose: "Every key, colour token, shape word, palette key, typeface, character and glyph set of a theme file, complete, generated from the code",
+    text: themesReference,
   },
   {
     name: "security",

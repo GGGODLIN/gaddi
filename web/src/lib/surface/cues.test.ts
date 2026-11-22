@@ -563,6 +563,8 @@ describe("running signs and the prompt row", () => {
   const plain = (text: string): StyledLine => ({ segments: [{ text, style: {}, muted: false }] });
   const cases = [
     { fixture: "grok--draft-single.txt", harness: "grok", phrase: "Esc:cancel" },
+    { fixture: "grok--draft-single.txt", harness: "grok", phrase: "Ctrl+c:cancel" },
+    { fixture: "grok--draft-single.txt", harness: "grok", phrase: "⠋ Waiting for response… 0.6s" },
     { fixture: "oc--draft-single.txt", harness: "opencode", phrase: "esc interrupt" },
   ];
   for (const { fixture, harness, phrase } of cases) {
@@ -600,8 +602,14 @@ describe("running signs and the prompt row", () => {
 
   it.each([
     ["grok", "grok--working.txt"],
+    ["grok", "grok--v1.0.77-running--w120.txt"],
+    ["grok", "grok--v1.0.77-running-draft--w120.txt"],
+    ["grok", "grok--v1.0.77-queued--w120.txt"],
     ["opencode", "oc--working.txt"],
     ["opencode", "oc--draft-while-working.txt"],
+    // After one Escape opencode asks for a second one and the row reads `esc again to interrupt`; the
+    // turn still runs (opencode 1.19.5 and 2.3.2, lab 2026-11-20).
+    ["opencode", "oc--v232-herdr--esc-again.txt"],
   ])("running: the %s hint in %s, on its real row, is a running turn", (harness, fixture) => {
     const idle = requireProfile(harness).idle;
     const rows = fixtureRows(fixture);

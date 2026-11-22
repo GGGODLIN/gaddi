@@ -150,7 +150,7 @@ describe("ThemePickerControl", () => {
     it("lists every refusal of a refused file, names the key, and offers only Close", async () => {
       const { ThemePickerControl } = await load();
       const { container } = render(<ThemePickerControl />);
-      const bad = JSON.stringify({ version: 5, id: "x", name: "X", light: { background: "#ffffff" }, bogus: 1 });
+      const bad = JSON.stringify({ version: 6, id: "x", name: "X", light: { background: "#ffffff" }, bogus: 1 });
       pick(container, fileOf(bad));
       const dialog = await screen.findByRole("dialog", { name: "This file was not imported" });
       expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
@@ -442,6 +442,29 @@ describe("ThemePickerControl", () => {
       expect(out.ansi).toEqual(PALETTE);
       const again = parseTheme(themeFileText(parsed.theme), { maxBytes: 64 * 1024 });
       expect(again.ok && again.theme).toEqual(parsed.theme);
+    });
+
+    it("exports a theme's own pane-active, never the derived frame, so a round trip draws the same frame (ADR 0174)", async () => {
+      const { themeFileText } = await load();
+      const { deriveTokens } = await import("@/lib/theme/derive");
+      const { fillHalves } = await import("@/lib/theme/schema");
+      const file = (id: string) => {
+        const parsed = parseTheme(readFileSync(resolve(web, `src/themes/${id}.json`), "utf8"), { maxBytes: 64 * 1024, allowReservedId: true });
+        if (!parsed.ok) throw new Error(id);
+        return parsed.theme;
+      };
+      const base = file("collie");
+      const nightwatch = file("nightwatch");
+      const again = parseTheme(themeFileText(nightwatch), { maxBytes: 64 * 1024, allowReservedId: true });
+      if (!again.ok) throw new Error("the export does not parse");
+      // The file carries the start colour the theme set, not the mix the app draws: imported, it is mixed once.
+      expect(again.theme.dark?.["pane-active"]).toBe(nightwatch.dark?.["pane-active"]);
+      for (const half of ["light", "dark"] as const) {
+        expect(deriveTokens(fillHalves(again.theme, base)[half], half)["pane-active"]).toBe(deriveTokens(fillHalves(nightwatch, base)[half], half)["pane-active"]);
+      }
+      // A theme that set none exports none, and keeps taking the relation.
+      const harbour = parseTheme(themeFileText(file("harbour")), { maxBytes: 64 * 1024, allowReservedId: true });
+      expect(harbour.ok && harbour.theme.light?.["pane-active"]).toBeUndefined();
     });
 
     it("draws a version 1 file at the default shape", async () => {
@@ -1051,7 +1074,7 @@ describe("ThemePickerControl and the header character", () => {
     pick(container, fileOf(JSON.stringify({ ...copy("odd", "Odd"), version: 4, character: "Dog" })));
     const dialog = await screen.findByRole("dialog", { name: "This file was not imported" });
     expect(dialog).toHaveTextContent("The character choice is not valid.");
-    expect(dialog).toHaveTextContent('"character" must be one of: collie, kawaii, kawaii-tilt, pixel, glass, glass-front, sheep, owl.');
+    expect(dialog).toHaveTextContent('"character" must be one of: collie, collie-collar, collie-blaze, kawaii, kawaii-tilt, pixel, glass, glass-front, sheep, owl.');
   });
 
   it("exports a theme with a character as version 4, and the file imports back to the same theme", async () => {

@@ -9,7 +9,7 @@ import {
   whenLocaleReady,
 } from "./index";
 import { LOCALES } from "./locale";
-import { PENDING_TRANSLATION, en, type MessageKey } from "./messages/en";
+import { PENDING_TRANSLATION, TRANSLATION_ALIASES, en, type MessageKey } from "./messages/en";
 
 /** The extra plural categories a language may carry beyond English's `.one`/`.other`. */
 const EXTRA_PLURAL_CATEGORIES = ["few", "many"] as const;
@@ -73,6 +73,23 @@ describe("the fork's name", () => {
     expect(t("tour.title")).not.toContain("Collie");
   });
 
+  it("brands a plural template without changing a supplied name", async () => {
+    vi.resetModules();
+    vi.doMock("./messages/ru", async (importOriginal) => {
+      const original = await importOriginal<typeof import("./messages/ru")>();
+      return { ...original, ru: { ...original.ru, "space.overview.paneCount.one": "{count} Collie {name}" } };
+    });
+    try {
+      const fresh = await import("./index");
+      fresh.setLocale("ru");
+      await fresh.whenLocaleReady("ru");
+      expect(fresh.tn("space.overview.paneCount", 1, { name: "Collie" })).toBe("1 Gaddi Collie");
+    } finally {
+      vi.doUnmock("./messages/ru");
+      vi.resetModules();
+    }
+  });
+
   // A key built at run time from a value the dictionary does not know, as the cache sheet builds
   // `cache.confidence.<value>`, must read empty as it does upstream, not throw mid-render.
   it("reads a key the dictionary lacks as nothing rather than throwing", () => {
@@ -100,6 +117,38 @@ describe("plurals", () => {
     await whenLocaleReady("ja");
     expect(tn("space.overview.paneCount", 1)).toBe("1ペイン");
     expect(tn("space.overview.paneCount", 2)).toBe("2ペイン");
+  });
+
+  // The fallback does not read `PENDING_TRANSLATION`: it fires for any plural set a bundle lacks. So the
+  // test builds that bundle itself, a Russian one without one set, and reads it through a fresh module.
+  it("reads a plural set in English, with English's rule, where a bundle lacks it", async () => {
+    vi.resetModules();
+    vi.doMock("./messages/ru", async (importOriginal) => {
+      const original = await importOriginal<typeof import("./messages/ru")>();
+      const kept = Object.fromEntries(
+        Object.entries(original.ru).filter(([key]) => !key.startsWith("home.tabs.hill.")),
+      );
+      return { ...original, ru: kept };
+    });
+    try {
+      const fresh = await import("./index");
+      fresh.setLocale("ru");
+      await fresh.whenLocaleReady("ru");
+      expect(fresh.tn("home.tabs.hill", 1)).toBe("1 Decision waits on you");
+      expect(fresh.tn("home.tabs.hill", 3)).toBe("3 Decisions wait on you");
+      // A set the bundle keeps still reads Russian, with Russian's rule.
+      expect(fresh.tn("home.changes.files", 2)).toBe("2 файла");
+    } finally {
+      vi.doUnmock("./messages/ru");
+      vi.resetModules();
+    }
+  });
+
+  it("uses English grammar for a pending plural set after a Japanese bundle loads", async () => {
+    setLocale("ja");
+    await whenLocaleReady("ja");
+    expect(tn("tricks.menu.moreSee", 1)).toBe("1 more trick has rows. See Settings, Tricks and the Hill.");
+    expect(tn("tricks.menu.moreSee", 2)).toBe("2 more tricks have rows. See Settings, Tricks and the Hill.");
   });
 
   it("picks one/few/many for Russian", async () => {
@@ -257,14 +306,22 @@ describe("every translated dictionary", () => {
       const keys = Object.keys(dictionary);
       const pending = new Set<string>(PENDING_TRANSLATION);
       expect(
-        englishKeys.filter((key) => !(key in dictionary) && !pending.has(key)),
+        englishKeys.filter((key) => !(key in dictionary)),
         `${code} lacks keys`,
       ).toEqual([]);
-      // A pending key a bundle already carries is translated: it leaves the list in that commit.
+      // Pending keys expose the English fallback until all locales translate them.
       expect(
-        PENDING_TRANSLATION.filter((key) => key in dictionary),
-        `${code} carries keys still listed as pending`,
+        PENDING_TRANSLATION.filter((key) => dictionary[key] !== en[key]),
+        `${code} does not expose the English fallback for pending keys`,
       ).toEqual([]);
+      // An alias is safe only while the English words and the localized values still match.
+      // SAFETY: `Object.keys` returns the own keys of this constant alias map.
+      const aliases = Object.keys(TRANSLATION_ALIASES) as (keyof typeof TRANSLATION_ALIASES)[];
+      for (const key of aliases) {
+        const source = TRANSLATION_ALIASES[key];
+        expect(en[key], `${key} differs from its alias source`).toBe(en[source]);
+        expect(dictionary[key], `${code} ${key} differs from its alias source`).toBe(dictionary[source]);
+      }
       // The one thing a bundle may add: `.few`/`.many` next to a `.one`/`.other` pair English has.
       const isExtraPlural = (key: string): boolean =>
         EXTRA_PLURAL_CATEGORIES.some((category) => {
@@ -276,8 +333,11 @@ describe("every translated dictionary", () => {
         `${code} has keys English lacks`,
       ).toEqual([]);
       // Intl gives Russian `few` and `many` for whole numbers, so a plural base without both would
-      // quietly read `.other` for 2 and for 5.
-      const bases = englishKeys.filter((key) => key.endsWith(".one")).map((key) => key.slice(0, -4));
+      // quietly read `.other` for 2 and for 5. A set still pending translation reads English with
+      // English's rule (`tn`), so it carries no extra category until its translation pass.
+      const bases = englishKeys
+        .filter((key) => key.endsWith(".one") && !pending.has(key))
+        .map((key) => key.slice(0, -4));
       const extras = bases.flatMap((base) => EXTRA_PLURAL_CATEGORIES.map((category) => `${base}.${category}`));
       expect(
         extras.filter((key) => key in dictionary),
@@ -286,8 +346,9 @@ describe("every translated dictionary", () => {
 
       // A bundle that is English in disguise would pass every check below. A few strings are
       // legitimately identical (a unit, a name, a placeholder); a copied bundle makes nearly all so.
-      const sameAsEnglish = englishKeys.filter((key) => dictionary[key] === en[key]);
-      expect(sameAsEnglish.length, `${code} looks like English`).toBeLessThan(englishKeys.length / 10);
+      const translatedKeys = englishKeys.filter((key) => !pending.has(key));
+      const sameAsEnglish = translatedKeys.filter((key) => dictionary[key] === en[key]);
+      expect(sameAsEnglish.length, `${code} looks like English`).toBeLessThan(translatedKeys.length / 10);
 
       for (const key of englishKeys) {
         if (pending.has(key)) continue;

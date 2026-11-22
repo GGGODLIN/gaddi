@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { muxAck, muxOk, muxUnconfirmed, type MuxAck, type MuxGrid, type MuxGridRequest, type MuxOutcome } from "../mux/types.ts";
+import { muxAck, muxOk, muxUnconfirmed, muxUnreachable, type MuxAck, type MuxGrid, type MuxGridRequest, type MuxOutcome } from "../mux/types.ts";
 import { parseAnsi } from "../../web/src/lib/ansi.ts";
 import { splitLines } from "../../web/src/lib/blocks.ts";
 import type { Answer, AskReply } from "../../web/src/lib/surface/ask.ts";
@@ -55,6 +55,12 @@ class ScriptPane {
   beforeRead: ((pane: ScriptPane, n: number) => void) | null = null;
   /** What the multiplexer answers to a key batch. The default confirms it. */
   keysAnswer: (keys: readonly string[]) => MuxAck = () => muxAck();
+  /**
+   * How read `n` comes back: whole (the default), `partial` (the multiplexer marks it so, and its rows
+   * are `partialScreen`, the dialog missing), or `failed` (the multiplexer did not answer).
+   */
+  readAnswer: (n: number) => "whole" | "partial" | "failed" = () => "whole";
+  partialScreen = "";
 
   constructor(screen: string) {
     this.screen = screen;
@@ -64,6 +70,9 @@ class ScriptPane {
     void request;
     this.reads++;
     this.beforeRead?.(this, this.reads);
+    const how = this.readAnswer(this.reads);
+    if (how === "failed") return Promise.resolve(muxUnreachable("the multiplexer did not answer"));
+    if (how === "partial") return Promise.resolve(muxOk({ paneId, text: this.partialScreen, truncated: false, revision: 0, partial: true }));
     return Promise.resolve(muxOk({ paneId, text: this.screen, truncated: false, revision: 0 }));
   };
 
@@ -228,6 +237,7 @@ function liftOf(screen: string) {
 // phone showed it on 2026-10-29. `breakAfter` wraps the sentence after that many words, as a narrow
 // box does; `sentence` replaces the harness wording.
 const DENY_SENTENCE = (clock: string) => `⚠ Claude Code will automatically deny this request in ${clock}, to avoid blocking progress on an unattended session`;
+const BLOCK_SENTENCE = (clock: string) => `⚠ Claude Code will automatically block this request in ${clock}, to avoid holding up an unattended session`;
 function countdown(screen: string, clock: string, breakAfter?: number, sentence = DENY_SENTENCE): string {
   const rows = screen.split("\n");
   const at = rows.findIndex((row) => row.includes("Dangerous rm operation"));
@@ -267,9 +277,37 @@ describe("a dialog's self-answer countdown is not part of the ask", () => {
     }
   });
 
+  test("the Claude Code 2.1.330 block/holding-up countdown wording keeps the same binding, hash and ask id", async () => {
+    const reference = liftOf(countdown(BG_RM, "1:20", undefined, BLOCK_SENTENCE));
+    expect(reference.signature).toContain("automatically block this request in 1:20");
+    for (const breakAfter of [undefined, 3, 9, 10, 14]) {
+      for (const clock of ["1:20", "1:19", "0:59", "0:05", "about 2 minutes", "about 1 minute", "about 45 seconds", "about 1 second"]) {
+        const after = liftOf(countdown(BG_RM, clock, breakAfter, BLOCK_SENTENCE));
+        expect(after.hash).toBe(reference.hash);
+        expect(askBinding(GEN, after)).toBe(askBinding(GEN, reference));
+        expect(sameDialog(reference, after)).toBe(true);
+      }
+    }
+    const { pane, poll, answer } = rig(countdown(BG_RM, "1:20", undefined, BLOCK_SENTENCE));
+    const ask = poll()!;
+    pane.screen = countdown(BG_RM, "1:19", undefined, BLOCK_SENTENCE);
+    expect(poll()!.id).toBe(ask.id);
+    let second = 18;
+    pane.beforeRead = (p) => {
+      p.screen = countdown(BG_RM, `1:${second--}`, undefined, BLOCK_SENTENCE);
+    };
+    pane.onKeys = (_keys, p) => {
+      p.beforeRead = null;
+      p.screen = IDLE;
+    };
+    const reply = await answer(ask, idOf(ask, "Yes"));
+    expect(reply.receipt).toMatchObject({ outcome: "sent", keys: ["1"] });
+  });
+
   test("a clock in a sentence that is not the harness countdown still changes the ask", () => {
     const sentences = [
       (clock: string) => `⚠ Claude Code will automatically allow this request in ${clock}, to avoid blocking progress on an unattended session`,
+      (clock: string) => `⚠ Claude Code will automatically allow this request in ${clock}, to avoid holding up an unattended session`,
       (clock: string) => `Agent will automatically deny this request in ${clock}, to avoid blocking progress on an unattended session`,
       (clock: string) => `⚠ Claude Code will automatically deny this request in ${clock} unless you stop it`,
     ];
@@ -930,6 +968,23 @@ describe("changed, replaced and repeated asks are refused with no key", () => {
     expect(pane.keysSeen).toEqual(["s", "Down", "Enter"]);
   });
 
+  // A plan approval paints its plan ABOVE the rule that tops the question, so the rows under that rule
+  // (the question, the options, the plan file's path) are the same for a revised plan in the same
+  // file. The ask then binds the lookback that holds the plan, and the old tap answers nothing.
+  test("a revised plan under the same question and options is refused ask_changed, nothing sent", async () => {
+    const before = fx("claude-lab--plan-approval--w82.txt");
+    const revised = before.replace("the heading and prior three lines untouched.", "the heading and prior three lines rewritten.");
+    expect(revised).not.toBe(before);
+    const { pane, poll, answer } = rig(before);
+    const ask = poll()!;
+    expect(ask.options.map((o) => o.label)).toContain("Yes, manually approve edits");
+    pane.screen = revised;
+    const reply = await answer(ask, idOf(ask, "Yes, manually approve edits"));
+    expect(reply.receipt).toMatchObject({ outcome: "refused", reason: "ask_changed", keys: [] });
+    expect(reply.ask!.id).not.toBe(ask.id);
+    expect(pane.keysSeen).toEqual([]);
+  });
+
   test("a picker id minted before the confirmation came up is refused ask_changed on the confirmation screen", async () => {
     const { pane, poll, answer } = rig(PICKER);
     const picker = poll()!;
@@ -1053,6 +1108,48 @@ describe("changed, replaced and repeated asks are refused with no key", () => {
       const plans = [0, 1, 2, 3, 4, 5].map((i) => planFor(dialog!, i));
       expect(plans).toEqual([null, null, null, null, null, null]);
     }
+  });
+});
+
+// M100 spec 03, item 6: herdr-core marks a read `partial` while a full-screen app works, and such a read
+// may miss the dialog. Before, the check read it as the dialog gone (`ask_gone`, the ask voided), and a
+// read that failed as `pane_gone`. A partial read is no read: one more is taken, and the answer goes on
+// a whole one or is refused `unreadable`, with no key and the ask kept.
+describe("a partial or failed read before the first key (M100 spec 03)", () => {
+  test("one partial check read, then a whole one: the answer goes, one key", async () => {
+    const { pane, poll, answer } = rig(BASH);
+    pane.partialScreen = IDLE;
+    const ask = poll()!;
+    pane.readAnswer = (n) => (n === 1 ? "partial" : "whole");
+    pane.onKeys = (keys, p) => {
+      if (keys.join(",") === "1") p.screen = IDLE;
+    };
+    const reply = await answer(ask, idOf(ask, "Yes"));
+    expect(reply.receipt).toMatchObject({ outcome: "sent", keys: ["1"] });
+    expect(pane.keysSeen).toEqual(["1"]);
+  });
+
+  test("two partial check reads: refused unreadable, no key, the ask not voided", async () => {
+    const { pane, poll, answer, book } = rig(BASH);
+    pane.partialScreen = IDLE;
+    const ask = poll()!;
+    pane.readAnswer = (n) => (n <= 2 ? "partial" : "whole");
+    const reply = await answer(ask, idOf(ask, "Yes"));
+    expect(reply.receipt).toMatchObject({ outcome: "refused", reason: "unreadable", keys: [] });
+    expect(reply.detail).toContain("rows may be missing");
+    expect(pane.keysSeen).toEqual([]);
+    // The partial reads published nothing, so nothing voided the ask as gone.
+    expect(book.entry(ask.id)?.state).not.toBe("voided");
+  });
+
+  test("two failed check reads: refused unreadable, never pane_gone, no key", async () => {
+    const { pane, poll, answer } = rig(BASH);
+    const ask = poll()!;
+    pane.readAnswer = (n) => (n <= 2 ? "failed" : "whole");
+    const reply = await answer(ask, idOf(ask, "Yes"));
+    expect(reply.receipt).toMatchObject({ outcome: "refused", reason: "unreadable", keys: [] });
+    expect(reply.detail).toBe("The screen could not be read, so Gaddi cannot see the dialog. Nothing was sent. Tap again.");
+    expect(pane.keysSeen).toEqual([]);
   });
 });
 

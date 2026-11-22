@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { ArrowLeft, BookOpenText, Clipboard, Compass, UserRoundCog } from "lucide-react";
 import { Icon } from "@/components/icons/icon";
 
@@ -6,6 +6,8 @@ import { BottomSheet } from "@/components/ui/sheet";
 import { UnseenMark } from "@/components/ui/unseen-mark";
 import { WalkyIcon, WalkyOffIcon } from "@/components/walky-icon";
 import { ActionRow, DestructiveActionRow, RenameView } from "@/components/action-sheet-rows";
+import { TrickMenuGroups } from "@/components/trick-menu-group";
+import type { TricksStore } from "@/lib/tricks/store";
 import { HostChip } from "@/components/host-chip";
 import { useHostWriteBlock, useCrew } from "@/components/crew-provider";
 import { useActionEcho } from "@/hooks/use-action-echo";
@@ -14,10 +16,13 @@ import { useLocale } from "@/hooks/use-locale";
 import * as api from "@/lib/api";
 import { describeApiError, describeThrownError } from "@/lib/api-error-message";
 import { t } from "@/lib/i18n";
+import { shortcutTarget } from "@/lib/shortcuts/target";
 import { useMuxCapability, useMuxName } from "@/lib/mux-capability";
 import { branchOffOffered } from "@/lib/branch-off";
 import { setStatus } from "@/lib/status";
 import { stampTopology } from "@/lib/poll-intent";
+import { CrossfadeText } from "@/components/ui/crossfade-text";
+import { paneRowKey } from "@/lib/hosts";
 import { paneName } from "@/lib/pane-name";
 import { useOperatorAccounts } from "@/lib/operator-config";
 import { useHostClipboard } from "@/lib/host-clipboard";
@@ -96,6 +101,12 @@ interface PaneActionsSheetProps {
    */
   openInRename?: boolean;
   /**
+   * Open with the Close row already armed ("Tap again to close"), so one more tap closes. The Actions
+   * palette's Close pane (ADR 0165) opens the menu this way: the confirm a person sees is this sheet's
+   * own, and nothing closes without a tap on it. Read when the sheet opens, like {@link openInRename}.
+   */
+  armCloseOnOpen?: boolean;
+  /**
    * WHICH BODY THE PANE DRAWS, and the one place that value is written (ADR 0071's shape).
    *
    * Absent is the gate, as it is for find, history and zen: the pane view always passes it since
@@ -165,6 +176,35 @@ interface PaneActionsSheetProps {
    * closes (durable-simple, 2026-10-13).
    */
   conversation?: boolean;
+  /**
+   * AGENT VIEWS, the session's third body (components/agent-view-screen.tsx, hooks/use-agent-view-pane.ts).
+   * Absent on a pane that has none (a shell, a durable conversation, a bridge without agent views, no
+   * trick that offers one): the sheet is byte-identical to before.
+   *
+   * With a view on, the body switch row above becomes the way back: while the view shows it opens the
+   * standing body (Chat or Terminal) for this session and leaves the view on, and while that body shows a
+   * "<name> view" row returns. One switch row per trick that offers a view, labelled with the trick's
+   * name; at most one is on, and the bridge's answer is what they show. `onSwitch` is a write, absent
+   * where nothing may write, and then no switch row is drawn.
+   */
+  agentViews?: {
+    /** One per trick that offers a view: its id, its name cut for the row, and whether its view is on. */
+    rows: readonly { readonly trick: string; readonly label: string; readonly on: boolean }[];
+    /** The name of the view that is on, cut for the row; undefined with none on. */
+    label: string | undefined;
+    on: boolean;
+    /** The view is on screen. */
+    showing: boolean;
+    onShow: () => void;
+    onSwitch?: (trick: string, on: boolean) => Promise<string | null>;
+  };
+  /** The tricks store the trick groups read, for a test or the playground. Absent: the app's own. */
+  tricksStore?: TricksStore;
+  /** The button the sheet was opened from, when a tap on it opened it: on a wide window the sheet is then
+   *  a menu beside it (ui/sheet.tsx `anchor`). Absent for a hold, the Actions palette or a shortcut. */
+  anchor?: RefObject<HTMLElement | null>;
+  /** The menu was opened by the Pane menu key: beside its button, the first row takes the focus (ui/sheet.tsx `focusFirstRow`). */
+  focusFirstRow?: boolean;
 }
 
 const NO_HERD: readonly AgentView[] = [];
@@ -185,6 +225,32 @@ type Mode = "actions" | "rename" | "accounts";
 /** The icon of a row of this sheet. */
 const ROW_ICON = "size-4 shrink-0 text-muted-foreground";
 
+/**
+ * Pin or unpin a pane on this device, the Pin to top row's act: the pin store's write, then the answer,
+ * either the caller's (the dashboard moves the row and shows it) or a toast. The Actions palette's
+ * `pin_pane` runs the same function from the pane view (ADR 0165).
+ */
+export function togglePanePin(input: {
+  pane: AgentView;
+  pinned: boolean;
+  herd: readonly AgentView[];
+  onPinChange?: ((pane: AgentView, pinned: boolean) => void) | undefined;
+}): void {
+  const next = !input.pinned;
+  setPinned(input.pane, next, input.herd);
+  if (input.onPinChange) input.onPinChange(input.pane, next);
+  else setStatus(next ? t("paneActions.pin.done") : t("paneActions.unpin.done"), "success");
+}
+
+/**
+ * Where the body switch row takes the operator: the other body, or, while an agent view shows, the
+ * standing body itself (the way back from the view, which leaves it on).
+ */
+function bodyRowTarget(paneView: PaneView, viewShowing: boolean): PaneView {
+  if (viewShowing) return paneView;
+  return paneView === "chat" ? "terminal" : "chat";
+}
+
 export function PaneActionsSheet({
   open,
   onClose,
@@ -201,6 +267,7 @@ export function PaneActionsSheet({
   onReport,
   onMessages,
   openInRename = false,
+  armCloseOnOpen = false,
   onZen,
   onRetell,
   paneView,
@@ -211,6 +278,10 @@ export function PaneActionsSheet({
   onSeenChange,
   onBranchOff,
   conversation = false,
+  agentViews,
+  tricksStore: trickStore,
+  anchor,
+  focusFirstRow,
 }: PaneActionsSheetProps) {
   useLocale();
   // Whether this pane is pinned on this device, read live from the store so the row's word is right
@@ -242,7 +313,7 @@ export function PaneActionsSheet({
   // success branch closes the sheet — and that is correct: the pane VANISHING is the outcome, and a
   // success `setStatus` on top of it would announce a fact the screen is already making.
   const closeEcho = useActionEcho();
-  const { pending, confirm, reset } = usePendingConfirm();
+  const { pending, confirm, reset, arm } = usePendingConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
   // Rename and close are writes, and both are §10.3 writes to a specific machine — the PANE's, read
   // off the row rather than from the ambient scope, because a pane's host is the only thing that
@@ -300,6 +371,7 @@ export function PaneActionsSheet({
     if (!open) return;
     setLabel(pane?.paneLabel ?? "");
     reset();
+    if (armCloseOnOpen && pane && canClose.capable) arm(pane.paneId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pane?.paneId]);
 
@@ -433,11 +505,8 @@ export function PaneActionsSheet({
    */
   function togglePin() {
     if (!pane) return;
-    const next = !pinned;
     onClose();
-    setPinned(pane, next, herd);
-    if (onPinChange) onPinChange(pane, next);
-    else setStatus(next ? t("paneActions.pin.done") : t("paneActions.unpin.done"), "success");
+    togglePanePin({ pane, pinned, herd, onPinChange });
   }
 
   async function toggleSeen(nextSeen: boolean) {
@@ -472,6 +541,8 @@ export function PaneActionsSheet({
     <BottomSheet
       open={open}
       onClose={onClose}
+      anchor={anchor}
+      focusFirstRow={focusFirstRow}
       title={
         pane ? (
           // Every row below acts on THIS pane on THIS machine — rename, close, focus — so the
@@ -486,7 +557,7 @@ export function PaneActionsSheet({
           // acting on the wrong one.
           <span className="flex min-w-0 items-center gap-1.5">
             <span data-slot="pane-actions-title-name" className="min-w-0 truncate">
-              {paneName(pane)}
+              <CrossfadeText text={paneName(pane)} identity={paneRowKey(pane)} />
             </span>
             <HostChip host={pane.host} variant="target" />
           </span>
@@ -515,6 +586,7 @@ export function PaneActionsSheet({
             <ActionRow
               icon={<Icon name="find-in-pane" className="size-4 shrink-0 text-muted-foreground" />}
               label={t("chat.find.label")}
+              target={shortcutTarget("find")}
               onClick={() => {
                 // Close FIRST, then act. Both land in one React event, so the sheet unmounts in the
                 // same commit that mounts the find bar — see the focus note in agent-chat.tsx.
@@ -568,20 +640,35 @@ export function PaneActionsSheet({
           {paneView !== undefined && onPaneViewChange && (
             <ActionRow
               icon={
-                paneView === "chat" ? (
+                bodyRowTarget(paneView, agentViews?.showing === true) === "terminal" ? (
                   <Icon name="view-terminal" className="size-4 shrink-0 text-muted-foreground" />
                 ) : (
                   <Icon name="view-chat" className="size-4 shrink-0 text-muted-foreground" />
                 )
               }
-              label={t(paneView === "chat" ? "chat.mode.terminal" : "chat.mode.chat")}
+              label={t(bodyRowTarget(paneView, agentViews?.showing === true) === "terminal" ? "chat.mode.terminal" : "chat.mode.chat")}
+              target={shortcutTarget("toggle_chat_terminal")}
               hint={paneViewNote}
               onClick={() => {
                 onClose();
-                onPaneViewChange(paneView === "chat" ? "terminal" : "chat");
+                onPaneViewChange(bodyRowTarget(paneView, agentViews?.showing === true));
               }}
             />
           )}
+          {/* Back to the agent view, while Chat or the terminal stands in for it. Close-then-act. */}
+          {agentViews !== undefined && agentViews.on && !agentViews.showing && agentViews.label !== undefined && (
+            <ActionRow
+              icon={<Icon name="view-preview" className={ROW_ICON} />}
+              label={t("view.back", { name: agentViews.label })}
+              onClick={() => {
+                onClose();
+                agentViews.onShow();
+              }}
+            />
+          )}
+          {/* The switch of each trick that offers a view is in that trick's group, after Close
+              (TrickMenuGroups below): it is labelled with the trick's name, so it does not sit among
+              Collie's own rows. */}
           {/* Pane settings sits between the looking rows and zen: it is the one row here that opens a
               control rather than a view, and it is still the cheap, reversible half of this sheet — a
               preference on this collie, typed into no terminal. Close-then-act, for the reason the find
@@ -590,6 +677,7 @@ export function PaneActionsSheet({
             <ActionRow
               icon={<Icon name="pane-settings" className="size-4 shrink-0 text-muted-foreground" />}
               label={t("paneActions.settings.label")}
+              target={shortcutTarget("pane_settings")}
               onClick={() => {
                 onClose();
                 onSettings();
@@ -605,6 +693,7 @@ export function PaneActionsSheet({
             <ActionRow
               icon={<Icon name="zen-enter" className="size-4 shrink-0 text-muted-foreground" />}
               label={t("chat.zen.label")}
+              target={shortcutTarget("zen_mode")}
               onClick={() => {
                 onClose();
                 onZen();
@@ -807,6 +896,19 @@ export function PaneActionsSheet({
           // A blank pane field clears the label (blank → null on the bridge), so Save stays enabled.
           canSave={true}
           placeholder={t("paneActions.rename.placeholder")}
+        />
+      )}
+      {/* THE TRICKS' GROUPS (the menu place, contract 2), after Collie's rows and Close, one per trick in
+          a frame of its own under "From the trick <name>": a trick's rows, and its agent view switch. The
+          rows freeze when the sheet opens. Agent sessions only; trick rows only where this device may
+          write. */}
+      {mode === "actions" && (
+        <TrickMenuGroups
+          open={open}
+          pane={pane}
+          canWrite={!readOnly && !savedCopy}
+          {...(trickStore === undefined ? {} : { store: trickStore })}
+          {...(agentViews === undefined ? {} : { views: agentViews.onSwitch === undefined ? { rows: agentViews.rows } : { rows: agentViews.rows, onSwitch: agentViews.onSwitch } })}
         />
       )}
     </BottomSheet>

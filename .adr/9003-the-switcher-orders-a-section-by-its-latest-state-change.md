@@ -5,7 +5,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
-- **Shipped in:** pending
+- **Amended in scope by:** [ADR 9004](./9004-both-pane-switcher-entries-use-attention.md) (in-pane switcher uses the same frozen attention order)
 - **Amends:** [0063](./0063-a-pane-keeps-its-place-when-its-state-changes.md), in scope: the
   switcher's attention sections only
 - **Trail:** `web/src/lib/triage.ts` (`triage`, `newestFirst`) · Herdr v0.9.0

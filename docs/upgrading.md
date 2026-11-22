@@ -93,11 +93,11 @@ the phone cannot level.
 
 ### From the phone
 
-Open **Settings** and select **Updates**. The card displays the running version, the newest release,
+Open **Settings** and select **Updates and about**. The card displays the running version, the newest release,
 and the intermediate versions included in the update. If the host is on the newest release, the card
 says so and offers nothing.
 
-![Settings with the Updates row reading Up to date.](images/updates/settings-updates-row.png)
+![Settings with the Updates and about row reading Up to date.](images/updates/settings-updates-row.png)
 
 ![The Updates page on a host running the newest release.](images/updates/updates-page-up-to-date.png)
 
@@ -111,11 +111,13 @@ Under that sits the preflight, one line per check: `doctor`, `disk`, `bun`, `tre
   1 GB free for the staged build, no `bun` on the host, or an upstream that cannot be reached. Where
   one command clears it, the card prints that command as `Fix: <command>`.
 
-Tapping **Update to `<version>`** asks once, and the confirm text is literal: your terminal session
-stays alive, and the phone view drops for up to 30 seconds. The restart takes the bridge down, not
-your multiplexer, so the agents keep running and the phone comes back on the new version. A major
-never rides a routine update: crossing one asks its own confirm, names the version as a new major,
-and tells you to read the release notes first.
+Tapping **Update to `<version>`** opens the update screen, and **Start update** on it is the one
+confirmation. The screen says what happens: "While it runs, the app is locked on this phone. Your
+terminal and agents keep running." The connection drops for up to 30 seconds while the lead restarts.
+The restart takes the bridge down, not your multiplexer, so the agents keep running and the phone
+comes back on the new version. A major never rides a routine update: crossing one opens a screen
+headed **Cross to `<version>`** that names the version as a new major and tells you to read its
+release notes first.
 
 While it runs, a sheet takes the screen. See
 [What the phone shows while an update runs](#what-the-phone-shows-while-an-update-runs) below. The
@@ -149,11 +151,12 @@ next 09:00 after it. One urgent release makes the whole waiting train daily, and
 an ordinary patch. An install that predates this feature keeps the weekly window for an urgent
 patch until it has updated once. The card always shows the
 current state regardless of the window. The `updates` notification preference, under Settings →
-notifications ([Web Push](voice-and-push.md#web-push-optional)), is the single off switch.
+Notifications ([Web Push](voice-and-push.md#web-push-optional)), is the single off switch.
 
-On a crew lead, the button shows **Update crew to `<version>`**, and one confirmation applies to
-every machine. The lead updates first, under its own health gate. Each peer then levels itself to
-the same release, one at a time, using its own preflight, its own health gate and its own rollback.
+On a crew lead, a release on offer shows the button **Update all machines to `<version>`**, and one
+**Start update** on the screen it opens applies to every machine. The lead updates first, under its
+own health gate. Each peer then levels itself to the same release, one at a time, using its own
+preflight, its own health gate and its own rollback.
 There is no per-peer button and no second confirmation prompt. For details, the two recovery paths,
 and the one case the phone cannot fix, see
 [Updating the rest of the crew](#updating-the-rest-of-the-crew).
@@ -184,13 +187,14 @@ machines and that closing the app does not stop it.
 The device that started the run cannot use the app behind the sheet. Nothing else is blocked: a
 second phone or a tablet shows one line it can tap to open, and closes again.
 
-When every machine is done and the phone is running the new app, the sheet closes itself and a short
-message names the version. On a crew it reads `Crew updated to <version>`; on one machine it names
-that machine instead.
+When every machine is done and the phone is running the new app, the sheet ends on a Done screen,
+`Update finished`, that names each machine and the version it runs. The sheet stays until you tap
+**Back to the app**.
 
-A run that updates only the members, such as **Retry crew update**, takes the screen the same way.
+A run that updates only the members, such as **Try `<member>` again** or **Retry crew update**, takes
+the screen the same way.
 The lead's row reads `already up to date`, because the lead is not part of that run and does not
-restart. The end reads `Members updated to <version>`, and a member that could not update leaves the
+restart. The end is the same Done screen, and a member that could not update leaves the
 sheet open on the phone that started the run, with its reason.
 
 Three states can stall, and each one has a way out. None of them cancels the update, and none of them
@@ -280,11 +284,12 @@ On a checkout each `versions/vX.Y.Z` is a git worktree of the release tag, shari
 so a version costs a tree and not a second object store. The build runs inside the new directory and
 writes a completeness marker last; the flip refuses without that marker, so a killed build leaves
 the live version untouched. Going live is one rename of the `current` symlink. Retention keeps
-`current` plus the two newest previous versions, and only a successful run prunes, so a run that may
-need its rollback target never removes it.
+three versions on a checkout (`current` plus the two newest previous) and two on a binary install
+(`current` plus one previous), and only a successful run prunes, so a run that may need its rollback
+target never removes it.
 
 A **Herdr-managed** checkout is the exception and keeps advancing in place
-([ADR 0006](../.adr/0006-update-advances-the-checkout-herdr-installed.md), amended 2026-09-03). It
+({D143}). It
 is detached and shallow, and it lives in a directory Herdr owns, so there is no `versions/` layout
 beside it, nothing to hand off, and nothing to flip back to. `--rollback` is refused there; the
 recovery path is a reinstall of a named tag
@@ -426,7 +431,7 @@ bin/collie update --major                                         # Standalone
 ```
 
 This advances one major version to its newest strict release. It does not target prereleases
-([ADR 0020](../.adr/0020-a-major-upgrade-is-consented-by-flag.md)). See also:
+([ADR 0143](../.adr/0143-how-an-install-updates-and-what-a-release-offers-it.md)). See also:
 [Upgrading from 0.x to 1.0](#upgrading-from-0x-to-10).
 
 ### If that fails with *"You are not currently on a branch"*
@@ -454,8 +459,8 @@ collie crew update --all
 ```
 
 That is the terminal path, for a peer the phone cannot level. From the phone, update the whole crew
-with one tap and one confirmation: open **Settings → System → Updates** on the lead and select
-**Update crew to `<version>`**. The preflight above the button covers every member, not just the
+with one tap and one confirmation: open **Settings → Updates and about → Update Collie** on the lead and select
+**Update all machines to `<version>`**. The preflight above the button covers every member, not just the
 lead. If a check is red anywhere, the button is disabled and names the failing machine and the
 reason.
 
@@ -496,10 +501,11 @@ Two requirements decide whether a peer can follow at all:
 A peer that rolls back says so on the Updates page and does not retry on its own. Two paths give it
 another attempt:
 
-![The Updates page after a peer rollback, with Retry crew update.](images/updates/updates-page-peer-rolled-back.png)
+![The Updates page after a peer rollback, with the button Try workshop again.](images/updates/updates-page-peer-rolled-back.png)
 
-- **From the phone.** Once the lead is current and a peer is behind, the button reads
-  **Retry crew update**. It starts a new run whose only legs are the peers, and that new run is what
+- **From the phone.** Once the lead is current and a peer is behind or rolled back, the button on the
+  **Update Collie** card names the peer when one needs it, **Try `<member>` again**, and reads
+  **Retry crew update** when several do. It starts a new run whose only legs are the peers, and that new run is what
   grants each of them one more attempt.
 - **From the terminal, on the lead.** Use this for a peer the phone cannot level at all. The command
   is unchanged:
@@ -527,15 +533,16 @@ half-updated crew is a supported state and pressing on is not.
 
 **One case the phone cannot fix.** If you roll the lead back by hand, with git or by copying files,
 after its peers have levelled, the peers are left ahead of their lead. Collie did not see the
-rollback, so no member steps down. A rollback made with the phone's **Roll back** or with
+rollback, so no member steps down. A rollback made with the phone's **Roll back to `<version>`** or with
 `collie update --rollback`, and a switch back to Stable, do step the members down. See "The crew follows the lead" under
 [Release lines](#release-lines). Those two runs are the only ones that move a member to
 a lower version, because a lead that could move a peer backwards at will could move it anywhere. The
 skew from a hand rollback is harmless, and the remedy is `collie crew update <member>` on the lead.
 
 Code reaches a peer over your SSH and never over the crew link
-([ADR 0016](../.adr/0016-updates-ride-the-operators-ssh.md), addendum 2026-09-04). When a peer
-levels itself, its code comes from GitHub over anonymous HTTPS and the peer decides for itself. The
+([ADR 0144](../.adr/0144-one-lead-one-door-and-the-operator-moves-the-crown.md), rule 3). When a peer
+levels itself, its code comes from GitHub over anonymous HTTPS and the peer decides for itself
+([ADR 0143](../.adr/0143-how-an-install-updates-and-what-a-release-offers-it.md)). The
 lead states only the version it is running and which peer may proceed.
 
 ### If the updater itself dies
@@ -649,7 +656,7 @@ Each machine is on one of two release lines. The default is **Stable**.
   pre-release, cut from the same tree a few days before the final release. It reaches volunteers
   first, so a regression is found before it reaches everybody.
 
-Set the line on the phone: **Settings → Updates → Release line**. The switch installs nothing. It
+Set the line on the phone: **Settings → Updates and about → Release line**. The switch installs nothing. It
 saves the line and shows a receipt. The Updates card then offers what the new line offers, through
 the normal update screen.
 
@@ -683,7 +690,7 @@ last Stable build. The last Stable build is not pruned until the machine is back
 "Go back now" is a switch and not a download.
 
 **Roll back.** A rollback off an Edge build puts the machine on Stable and marks that build as
-rolled back from. This is true for **Roll back** on the phone and for `collie update --rollback`.
+rolled back from. This is true for **Roll back to `<version>`** on the phone and for `collie update --rollback`.
 An Edge build that fails its own health check is rolled back by the updater and marked the same
 way, so it is not offered again. The line stays Edge, and the next Edge build is offered as usual.
 
@@ -709,7 +716,7 @@ itself.
 Stable installs do not receive prereleases. Edge builds are the exception, on the Edge line (see
 [Release lines](#release-lines)). Opting into a prerelease tracks that major's prereleases
 until the final release arrives
-([ADR 0020](../.adr/0020-a-major-upgrade-is-consented-by-flag.md)):
+([ADR 0143](../.adr/0143-how-an-install-updates-and-what-a-release-offers-it.md)):
 
 ```bash
 # Standalone — the install script's opt-in flag takes the newest prerelease
@@ -733,7 +740,7 @@ herdr plugin action invoke restart --plugin herdr.collie
 ## Launcher rows in a crew
 
 The lead's launcher rows are now the crew's rows, and a row you add from the phone goes to the lead
-([Your own launchers](configure.md#your-own-launchers), [ADR 0127](../.adr/0127-the-leads-launcher-rows-are-the-crews-rows.md)).
+([Your own launchers](configure.md#your-own-launchers), [ADR 0145](../.adr/0145-a-start-names-what-to-run-and-a-retry-lands-on-its-receipt.md)).
 Nothing needs doing on upgrade day. Update the lead first, and the members follow. A member that
 still runs the older Collie lists the lead's rows, but it refuses to start one. The phone says that
 the command is not one of its launchers, and nothing runs. Its own rows still work. Update that
@@ -754,7 +761,7 @@ nothing needs doing on upgrade day. What you will notice:
   If you never ran `collie hooks install claude`, run it once. A Claude session that is already
   running shows no dot until it starts again, resumes, clears or compacts, because the window size
   comes from the session start.
-- **The 5-hour and 7-day dots read your own logins.** For Claude, Collie reads the login file on this
+- **The usage figures read your own logins.** For Claude, Collie reads the login file on this
   machine and asks `api.anthropic.com`. For Codex, it reads Codex's session files and asks nobody.
   Both are on by default. Set `COLLIE_ACCOUNT_WINDOWS=0` in your `.env`, or `account_windows = false`
   under `[bridge]`, to turn them off. OpenCode Go and Grok stay off until you name them
@@ -849,7 +856,7 @@ Verify with `bin/collie version` or `herdr plugin action invoke version --plugin
 ### What 1.0 changes for you
 
 Herdr action IDs and `scripts/collie-ctl.sh` routes are unchanged
-([ADR 0006](../.adr/0006-update-advances-the-checkout-herdr-installed.md)).
+([ADR 0143](../.adr/0143-how-an-install-updates-and-what-a-release-offers-it.md)).
 
 CLI verbs are compiled into `<checkout>/bin/collie` ([Commands](commands.md)). Use
 `bin/collie link` to add `collie` to PATH

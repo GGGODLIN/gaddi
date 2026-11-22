@@ -1,6 +1,9 @@
 # 0008 — Collie does not run a terminal emulator
 
 Status: **Accepted** (2026-08-04)
+Date: 2026-08-04
+
+Amended in scope by: [ADR 0162](./0162-an-adapter-that-reads-raw-vt-keeps-two-stateless-row-transforms.md) — an adapter that reads raw VT, such as Rex's, may turn a cursor-forward into spaces and drop what is not SGR, row by row, and nothing that keeps state across rows.
 
 ## Context
 

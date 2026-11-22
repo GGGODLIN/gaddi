@@ -8,6 +8,7 @@ import { ACCEPTED_WHISTLE_SHAS, NEEDLE_WASM_BYTES } from "@/stt/pins";
 
 import { installApiStub } from "./fixtures/api";
 import { serveWithShellCsp, sttWorkerCsp } from "./fixtures/csp";
+import { stillMarkState } from "./fixtures/still-mark";
 
 // SPEECH ON THE PHONE AND ON THE HOST, END TO END (ADR 0096), against a stubbed bridge.
 //
@@ -430,7 +431,7 @@ async function openChange(page: Page): Promise<void> {
   await expect(changeRow(page)).toHaveAttribute("aria-expanded", "true");
   // Wait for the fold to finish opening. While it glides its box clips, and a click that scrolls a
   // control inside into view would scroll the clipping box itself, leaving the rows offset after.
-  const fold = page.locator('[data-slot="collapse"]', { has: page.getByRole("heading", { name: en["settings.voice.phone.label"] }) });
+  const fold = page.locator('[data-slot="collapse"]', { has: page.getByRole("heading", { name: en["settings.voice.phoneSpeech.label"] }) });
   await expect(fold).toHaveCSS("overflow-y", "visible");
 }
 
@@ -793,6 +794,7 @@ test.describe("the real engine", () => {
         hasTouch: true,
         serviceWorkers: "block",
         permissions: ["microphone"],
+        storageState: stillMarkState(baseURL),
       });
       await realEngineCase(await context.newPage());
     } finally {

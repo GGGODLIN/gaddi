@@ -21,8 +21,9 @@ import { promisify } from "node:util";
 
 import { HOOK_TARGET_SCHEMA_VERSION, hookTargetFileName, hookTargetsDir, identityFields, parseHookTarget, type HookTargetEnv, type HookTargetIdentity } from "./beacon/hook-targets.ts";
 
-import { startTimeProbe, type StartTimeCommand } from "./beacon/liveness.ts";
+import { readStartTimeWith, startTimeProbe, type StartTimeCommand } from "./beacon/liveness.ts";
 import { HOST } from "./host.ts";
+import { win32StartTime } from "./win32-process.ts";
 import { parseEdge } from "./beacon/parse.ts";
 import type { SavedSource, SourceStore } from "./surface/edges.ts";
 import { asJsonNumber, asJsonObject, asJsonString, parseJson } from "../web/src/lib/json.ts";
@@ -85,14 +86,17 @@ export interface ProcLivenessDeps {
   readonly readText?: (path: string) => string | null;
   /** One probe command's stdout, or null when it failed. Defaults to a real `execFile`. */
   readonly run?: (command: StartTimeCommand, pid: number) => Promise<string | null>;
-  /**
-   * Fast in-process existence check run before forking `ps` on macOS. Defaults to `process.kill(pid, 0)`.
-   */
+  /** The in-process read on Windows (issue 798). Defaults to kernel32's `win32StartTime`. */
+  readonly native?: (pid: number) => number | null;
+  /** Fast in-process existence check run before forking `ps` on macOS. Defaults to `process.kill(pid, 0)`. */
   readonly isAlive?: (pid: number) => boolean;
   readonly now?: () => number;
 }
 
 function defaultPidAlive(pid: number): boolean {
+  // `process.kill(0, 0)` and `process.kill(-1, 0)` do not throw: they address the process group and
+  // every process. Without this guard a pid of 0 or -1 would read as alive.
+  if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -125,8 +129,8 @@ async function runCommand(command: StartTimeCommand, pid: number): Promise<strin
 }
 
 /**
- * The pid probe: `/proc/<pid>/stat` on Linux, `ps -o lstart=` on macOS (no `/proc` there), nothing
- * elsewhere.
+ * The pid probe: `/proc/<pid>/stat` on Linux, `ps -o lstart=` on macOS (no `/proc` there), kernel32's
+ * creation time on Windows (issue 798), nothing elsewhere.
  *
  * The probe is `bridge/beacon/liveness.ts`'s {@link startTimeProbe} and must stay that module's,
  * because the EMITTER stores what the same probe returned: two implementations that agree today are
@@ -135,19 +139,23 @@ async function runCommand(command: StartTimeCommand, pid: number): Promise<strin
  * Every failure (no such process, no `/proc`, a `ps` that failed or timed out, a platform with no
  * probe) answers null, which means the same thing to the reader: it cannot confirm the writer is
  * alive, so the beacon is expired rather than live. On macOS an answer is kept for
- * {@link COMMAND_PROBE_CACHE_MS}, so an agent that ended reads live that much longer at most.
+ * {@link COMMAND_PROBE_CACHE_MS}, but a pid that no longer exists reads null at once, cached or not. The
+ * Windows read takes well under a millisecond and is not cached.
  */
 export function procBeaconLiveness(deps: ProcLivenessDeps = {}): BeaconLiveness {
   const probe = startTimeProbe(deps.platform ?? HOST.platform);
   const readText = deps.readText ?? readTextOrNull;
   const run = deps.run ?? runCommand;
+  const native = deps.native ?? win32StartTime;
   const isAlive = deps.isAlive ?? defaultPidAlive;
   const now = deps.now ?? Date.now;
   const cache = new Map<number, { at: number; start: Promise<number | null> }>();
   return {
     startTimeOf(pid: number): Promise<number | null> {
-      const stat = readText(probe.stat.path(pid));
-      if (stat !== null) return Promise.resolve(probe.stat.parse(stat));
+      if (probe.native) return Promise.resolve(native(pid));
+      const statFile = probe.stat;
+      const stat = statFile === null ? null : readText(statFile.path(pid));
+      if (statFile !== null && stat !== null) return Promise.resolve(statFile.parse(stat));
       const command = probe.command;
       if (command === null) return Promise.resolve(null);
       if (!isAlive(pid)) {
@@ -183,6 +191,7 @@ export interface SyncProbeDeps {
   readonly platform?: NodeJS.Platform;
   readonly readText?: (path: string) => string | null;
   readonly run?: (command: StartTimeCommand, pid: number) => string | null;
+  readonly native?: (pid: number) => number | null;
 }
 
 function runCommandSync(command: StartTimeCommand, pid: number): string | null {
@@ -201,12 +210,11 @@ function runCommandSync(command: StartTimeCommand, pid: number): string | null {
 
 /** A pid's start time with the same probe, synchronously, or null: for this bridge's own hook target file. */
 export function readStartTimeSync(pid: number, deps: SyncProbeDeps = {}): number | null {
-  const probe = startTimeProbe(deps.platform ?? HOST.platform);
-  const stat = (deps.readText ?? readTextOrNull)(probe.stat.path(pid));
-  if (stat !== null) return probe.stat.parse(stat);
-  if (probe.command === null) return null;
-  const text = (deps.run ?? runCommandSync)(probe.command, pid);
-  return text === null ? null : probe.command.parse(text);
+  return readStartTimeWith(startTimeProbe(deps.platform ?? HOST.platform), pid, {
+    readText: deps.readText ?? readTextOrNull,
+    native: deps.native ?? win32StartTime,
+    run: deps.run ?? runCommandSync,
+  });
 }
 
 /** Everything a real sweep needs. The clock and the TTL stay the reader's defaults. */

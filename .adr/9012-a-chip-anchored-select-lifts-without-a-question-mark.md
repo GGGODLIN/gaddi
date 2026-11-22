@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-21
-- **Shipped in:** 2.9.0 (`ce3830d9`; narrowed after merging upstream 1.23.1)
 - **Trail:** upstream issue [#543](https://github.com/AltanS/collie/issues/543) · fork commit `ce3830d9` ·
   upstream 1.23.1 commit `9ac77b3e` (`hasQuestionMark` and its negative test on
   `claude--v2296-question-fullwidth--w150.txt`) · GPT-6 Pro advisor review (`6ad79f5c`) ·

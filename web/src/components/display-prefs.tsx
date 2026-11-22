@@ -56,15 +56,22 @@ export interface PaneViewControl {
    * (ADR 0099 point 9). Absent reads as true, a pane with a terminal to switch to.
    */
   terminalOffered?: boolean;
-  /** Whether the stream draws the agent's tool calls. Settings → Appearance writes the same value. */
+  /** Whether the stream draws the agent's tool calls. Settings → Look and feel writes the same value. */
   showToolCalls: boolean;
   setShowToolCalls: (on: boolean) => void;
-  /** Whether the stream keeps the recap Claude writes at a compaction. Settings → Appearance writes the same value. */
+  /** Whether the stream keeps the recap Claude writes at a compaction. Settings → Look and feel writes the same value. */
   showCompactions: boolean;
   setShowCompactions: (on: boolean) => void;
   /** The stream's own text size in px, and its stepper. Its own number, never the mirror's. */
   chatFontSize: number;
   stepChatFontSize: (delta: number) => void;
+  /**
+   * An agent view of the session is on (components/agent-view-screen.tsx): the View row offers it as a
+   * third choice, named by its trick's `name` (cut for the row, `label`). `selected` while the view shows;
+   * picking Terminal or Chat then calls `onChange` and the view stays on, picking the view calls `onPick`.
+   * Absent: the row is the two-way it always was.
+   */
+  agentView?: { label: string; selected: boolean; onPick: () => void };
 }
 
 interface DisplayPrefsContentProps {
@@ -168,16 +175,25 @@ function TextSizeRow({
  * app is broken.
  */
 function ViewRow({ view }: { view: PaneViewControl }) {
-  const options: { value: PaneView; label: string }[] = [
+  const options: { value: PaneView | "agent-view"; label: string }[] = [
     { value: "terminal", label: t("chat.mode.option.terminal") },
     { value: "chat", label: t("chat.mode.option.chat") },
+    ...(view.agentView === undefined ? [] : [{ value: "agent-view" as const, label: view.agentView.label }]),
   ];
+  const picked = view.agentView?.selected === true ? "agent-view" : view.chosen;
+  const pick = (value: PaneView | "agent-view") => {
+    if (value === "agent-view") {
+      view.agentView?.onPick();
+      return;
+    }
+    view.onChange(value);
+  };
   return (
     <div className="py-1.5">
       <div className="mb-1.5 text-sm font-medium">{t("chat.mode.view.label")}</div>
       <div role="radiogroup" aria-label={t("chat.mode.view.label")} className="flex gap-1">
         {options.map((option) => {
-          const selected = option.value === view.chosen;
+          const selected = option.value === picked;
           const blocked = option.value === "chat" && view.note !== undefined;
           return (
             <button
@@ -186,7 +202,7 @@ function ViewRow({ view }: { view: PaneViewControl }) {
               role="radio"
               aria-checked={selected}
               disabled={blocked}
-              onClick={() => view.onChange(option.value)}
+              onClick={() => pick(option.value)}
               className={cn(
                 "flex min-h-11 flex-1 items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 "disabled:opacity-50",
@@ -227,15 +243,15 @@ export function DisplayPrefsContent({
   // this one row answers for either.
   const stretchTextRow = (
     <Row
-      label={t("settings.display.stretchText.label")}
-      hint={t("settings.display.stretchText.hint")}
+      label={t("settings.display.shortForm.label")}
+      hint={t("settings.display.shortForm.hint")}
       htmlFor="pref-stretch-text"
       control={
         <Switch
           id="pref-stretch-text"
           checked={prefs.stretchText}
           onCheckedChange={setStretchText}
-          aria-label={t("settings.display.stretchText.label")}
+          aria-label={t("settings.display.shortForm.label")}
         />
       }
     />
@@ -309,7 +325,7 @@ export function DisplayPrefsContent({
             }
           />
           <Row
-            label={t("settings.display.fullReply.label")}
+            label={t("settings.display.wholeReply.label")}
             hint={t("settings.display.fullReply.hint")}
             htmlFor="pref-expand-clipped-reply"
             control={
@@ -317,7 +333,7 @@ export function DisplayPrefsContent({
                 id="pref-expand-clipped-reply"
                 checked={prefs.expandClippedReply}
                 onCheckedChange={setExpandClippedReply}
-                aria-label={t("settings.display.fullReply.label")}
+                aria-label={t("settings.display.wholeReply.label")}
               />
             }
           />
@@ -336,15 +352,15 @@ export function DisplayPrefsContent({
             }
           />
           <Row
-            label={t("settings.display.noInvert.label")}
-            hint={t("settings.display.noInvert.hint")}
+            label={t("settings.display.ownColours.label")}
+            hint={t("settings.display.ownColours.hint")}
             htmlFor="pref-no-invert"
             control={
               <Switch
                 id="pref-no-invert"
                 checked={mirrorNative}
                 onCheckedChange={setMirrorNative}
-                aria-label={t("settings.display.noInvert.label")}
+                aria-label={t("settings.display.ownColours.label")}
               />
             }
           />

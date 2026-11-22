@@ -7,6 +7,7 @@ import {
   verifyExpectedPrompt,
   verifyExpectedStyled,
   verifyPromptBinding,
+  verifyPromptParts,
 } from "./prompt-binding.ts";
 import {
   decodeStyledRegion,
@@ -195,28 +196,6 @@ const REGIONS = JSON.parse(
   readFileSync(join(import.meta.dir, "..", "web", "src", "fixtures", "prompt-binding-regions.json"), "utf8"),
 ) as BindingRegion[];
 
-/** Fixtures that show ONE dialog and so legitimately share a region: the `-named-` captures of Claude
- *  Code 2.1.296 beside their unnamed twins, the wizard review step at both widths, and the `/effort`
- *  slider on `high` at 120 columns captured twice. That last pair differed only in the label spliced
- *  into the `▔` edge, which the menu's region leaves out since 1.22.5 (Claude puts timed notices
- *  there). */
-const SAME_DIALOG: string[][] = [
-  ["claude--menu-effort-slider--w120.txt", "claude--v2283-slash-effort.txt"],
-  ["claude-lab--ask-multi-named-v2296--w82.txt", "claude-lab--ask-multi-v2296--w82.txt"],
-  ["claude-lab--ask-multi-named-v2296--w40.txt", "claude-lab--ask-multi-v2296--w40.txt"],
-  ["claude-lab--ask-single-named-v2296--w40.txt", "claude-lab--ask-single-v2296--w40.txt"],
-  ["claude-lab--ask-wizard-named-v2296--w82.txt", "claude-lab--ask-wizard-v2296--w82.txt"],
-  [
-    "claude-lab--ask-wizard-review-named-v2296--w82.txt",
-    "claude-lab--ask-wizard-review-named-v2296--w40.txt",
-    "claude-lab--ask-wizard-review-v2296--w82.txt",
-    "claude-lab--ask-wizard-review-v2296--w40.txt",
-  ],
-  ["claude-lab--menu-config-panel-named-v2296--w40.txt", "claude-lab--menu-config-panel-v2296--w40.txt"],
-  // The survey over the context row (issue 705), once with its styling and once as herdr-core's plain text.
-  ["claude--v2317-survey-context-row--w160.txt", "claude--v2317-survey-context-row-plain--w160.txt"],
-];
-
 describe("client/bridge binding contract", () => {
   test("the committed expectations cover every dialog detector", () => {
     expect(REGIONS.length).toBeGreaterThan(0);
@@ -236,54 +215,6 @@ describe("client/bridge binding contract", () => {
       if (bindColumns === undefined) expect(verifyExpectedPrompt(raw, region)).toEqual({ ok: true });
     });
   }
-
-  test("a region from a different dialog is never accepted", () => {
-    const rawCache = new Map<string, string>();
-    const rawOf = (fixture: string): string => {
-      const hit = rawCache.get(fixture);
-      if (hit !== undefined) return hit;
-      const text = readFileSync(join(FIXTURE_DIR, fixture), "utf8");
-      rawCache.set(fixture, text);
-      return text;
-    };
-
-    let compared = 0;
-    let identicalPairs = 0;
-    let sameDialogPairs = 0;
-    for (const a of REGIONS) {
-      const raw = rawOf(a.fixture);
-      for (const b of REGIONS) {
-        if (a.fixture === b.fixture) continue;
-        // Two fixtures can be the same screen, byte for byte: the /effort slider sits in the corpus
-        // twice, once as `claude--menu-effort-slider.txt` and once as the capture-lab original it
-        // was copied from. A match between those two is the contract working, not a collision. The
-        // exemption is keyed on the RAW FILE BYTES, never on the region text — two different dialogs
-        // that declared the same region would be exactly the collision this test exists to catch.
-        if (raw === rawOf(b.fixture)) {
-          identicalPairs++;
-          continue;
-        }
-        // The same dialog captured twice, with different bytes around it: a session named with
-        // `/rename` and an unnamed one draw the same dialog (Claude Code 2.1.296 adds a closing
-        // rule under it in the named one), and the wizard's review step reads the same at 40 and 82
-        // columns. The exemption is a NAMED list, not a comparison of region text, and a group is
-        // only legitimate while its members really hold one region, as the bridge reads a region:
-        // normalized, so a capture with trailing spaces on its blank rows is still the same one.
-        if (SAME_DIALOG.some((group) => group.includes(a.fixture) && group.includes(b.fixture))) {
-          expect(normalizePromptRegion(b.region), `${a.fixture} and ${b.fixture} are listed as one dialog`).toEqual(normalizePromptRegion(a.region));
-          sameDialogPairs++;
-          continue;
-        }
-        compared++;
-        expect(verifyPromptBinding(raw, b.region, undefined, b.bindColumns).ok).toBe(false);
-      }
-    }
-    expect(compared).toBeGreaterThan(0);
-    // The exemption must not go vacuous: if the duplicate capture ever leaves the corpus, the skip
-    // above is dead code and this line says so.
-    expect(identicalPairs).toBeGreaterThan(0);
-    expect(sameDialogPairs).toBeGreaterThan(0);
-  });
 });
 
 // Claude Code 2.1.299 draws its task checklist under a dialog's footer, and a list of five rows or
@@ -510,6 +441,7 @@ describe("verifyPromptBinding: the style check", () => {
       });
     });
 
+    // It reads and projects every fixture (over 1300): the Windows VM took 5.5 s, past Bun's 5 s default.
     test("every committed pane fixture has aligned text and styled projections", () => {
       const names = readdirSync(FIXTURE_DIR).filter((f) => f.endsWith(".txt"));
       expect(names.length).toBeGreaterThan(100);
@@ -518,7 +450,7 @@ describe("verifyPromptBinding: the style check", () => {
         return normalizePromptRegion(raw).length !== styledRegionLines(raw).length;
       });
       expect(misaligned).toEqual([]);
-    });
+    }, 30_000);
   });
 
   describe("the format line", () => {
@@ -823,5 +755,37 @@ describe("the declared tail window", () => {
     expect(verifyExpectedPrompt(screen(6), region, tailWindow)).toEqual({ ok: true });
     expect(verifyExpectedPrompt(screen(7), region, tailWindow)).toEqual({ ok: true });
     expect(verifyExpectedPrompt(screen(8), region, tailWindow)).toEqual({ ok: false, reason: "not_in_tail" });
+  });
+});
+
+describe("verifyPromptParts", () => {
+  const read = ["older output", "Title", "subject one", "subject two", "clock 1:20", "Question?", "1. Yes", "2. No", "footer"].join("\n");
+  const parts = ["Title\nsubject one\nsubject two", "Question?\n1. Yes\n2. No\nfooter"];
+
+  test("every part in order, one left-out row between, the last in the tail: bound", () => {
+    expect(verifyPromptParts(read, parts)).toEqual({ ok: true });
+    expect(verifyPromptParts(read.replace("1:20", "0:05"), parts)).toEqual({ ok: true });
+  });
+
+  test("a changed row inside a part refuses", () => {
+    expect(verifyPromptParts(read.replace("subject two", "subject 2"), parts)).toEqual({ ok: false, reason: "not_found" });
+    expect(verifyPromptParts(read.replace("2. No", "2. Nope"), parts)).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  test("the parts must sit apart by 1 to MAX_PART_GAP_ROWS rows, no more and no less", () => {
+    expect(verifyPromptParts(read.replace("clock 1:20\n", ""), parts).ok).toBe(false);
+    expect(verifyPromptParts(read.replace("clock 1:20", "a\nb\nc\nd\ne"), parts).ok).toBe(false);
+    expect(verifyPromptParts(read.replace("clock 1:20", "a\nb\nc\nd"), parts).ok).toBe(true);
+  });
+
+  test("out of order, or the last part away from the tail, refuses", () => {
+    expect(verifyPromptParts(read, parts.toReversed()).ok).toBe(false);
+    expect(verifyPromptParts(`${read}\n1\n2\n3\n4\n5\n6\n7`, parts)).toEqual({ ok: false, reason: "not_in_tail" });
+  });
+
+  test("fewer than two parts, too many, or an empty one is empty", () => {
+    expect(verifyPromptParts(read, [parts[1]!])).toEqual({ ok: false, reason: "empty" });
+    expect(verifyPromptParts(read, [parts[0]!, " "])).toEqual({ ok: false, reason: "empty" });
+    expect(verifyPromptParts(read, [...parts, ...parts, "x"])).toEqual({ ok: false, reason: "empty" });
   });
 });

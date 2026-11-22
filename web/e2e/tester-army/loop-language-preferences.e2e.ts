@@ -68,8 +68,8 @@ async function openClaudeMenu(app: Openable, screen: Screen) {
   return sheet;
 }
 
-test("SET-LANG/reload — Appearance starts in English, Traditional Chinese is selected, and reload keeps that language", async ({ app, screen }) => {
-  await openSection(app, screen, /^Appearance\b/u, en["settings.section.appearance.title"]);
+test("SET-LANG/reload — Look and feel starts in English, Traditional Chinese is selected, and reload keeps that language", async ({ app, screen }) => {
+  await openSection(app, screen, /^Look and feel\b/u, en["settings.page.look.title"]);
   const english = screen.getByRole("combobox", en["settings.language.title"]);
   await expect(english).toBeVisible();
   await expect(english).toHaveValue("en");
@@ -79,18 +79,18 @@ test("SET-LANG/reload — Appearance starts in English, Traditional Chinese is s
   await english.selectOption({ value: "zh-TW" });
   const chinese = screen.getByRole("combobox", zhTW["settings.language.title"]);
   await expect(chinese).toHaveValue("zh-TW");
-  await expect(screen.getByRole("heading", zhTW["settings.section.appearance.title"])).toBeVisible();
+  await expect(screen.getByRole("heading", zhTW["settings.page.look.title"])).toBeVisible();
   await expect(screen.getByText(zhTW["settings.language.description"])).toBeVisible();
 
   // Same page and context: a restarted browser would drop the API routes.
   await page().reload();
-  await expect(screen.getByRole("heading", zhTW["settings.section.appearance.title"])).toBeVisible();
+  await expect(screen.getByRole("heading", zhTW["settings.page.look.title"])).toBeVisible();
   await expect(screen.getByRole("combobox", zhTW["settings.language.title"])).toHaveValue("zh-TW");
   await expect(screen.getByText(zhTW["settings.language.description"])).toBeVisible();
 });
 
-test("SET-CHG-RANGE/reload — Device starts at 2 levels and keeps 4 levels after reload", async ({ app, screen }) => {
-  await openSection(app, screen, /^Device\b/u, en["settings.section.device.title"]);
+test("SET-CHG-RANGE/reload — Dashboard and projects starts at 2 levels and keeps 4 levels after reload", async ({ app, screen }) => {
+  await openSection(app, screen, /^Dashboard and projects\b/u, en["settings.page.dashboard.title"]);
   const nested = screen.getByRole("switch", en["settings.changes.nested.label"]);
   await expect(nested).toHaveAttribute("aria-checked", "true");
   await expect(depthRadio(screen, DEPTH_DEFAULT)).toHaveAttribute("aria-checked", "true");
@@ -100,14 +100,14 @@ test("SET-CHG-RANGE/reload — Device starts at 2 levels and keeps 4 levels afte
   await expect(depthRadio(screen, DEPTH_DEFAULT)).toHaveAttribute("aria-checked", "false");
 
   await page().reload();
-  await expect(screen.getByRole("heading", en["settings.section.device.title"])).toBeVisible();
+  await expect(screen.getByRole("heading", en["settings.page.dashboard.title"])).toBeVisible();
   await expect(nested).toHaveAttribute("aria-checked", "true");
   await expect(depthRadio(screen, DEPTH_CHOSEN)).toHaveAttribute("aria-checked", "true");
   await expect(depthRadio(screen, DEPTH_DEFAULT)).toHaveAttribute("aria-checked", "false");
 });
 
 test("SET-CHG-RANGE/off — turning folder search off disables the depth radios and keeps 4 levels", async ({ app, screen }) => {
-  await openSection(app, screen, /^Device\b/u, en["settings.section.device.title"]);
+  await openSection(app, screen, /^Dashboard and projects\b/u, en["settings.page.dashboard.title"]);
   await chooseDepth(screen, DEPTH_CHOSEN);
   const nested = screen.getByRole("switch", en["settings.changes.nested.label"]);
   await nested.tap();
@@ -118,7 +118,7 @@ test("SET-CHG-RANGE/off — turning folder search off disables the depth radios 
   await expect(depthRadio(screen, DEPTH_CHOSEN)).toHaveAttribute("aria-checked", "true");
 
   await page().reload();
-  await expect(screen.getByRole("heading", en["settings.section.device.title"])).toBeVisible();
+  await expect(screen.getByRole("heading", en["settings.page.dashboard.title"])).toBeVisible();
   await expect(nested).toHaveAttribute("aria-checked", "false");
   for (const name of DEPTH) {
     await expect(depthRadio(screen, name)).toBeDisabled();
