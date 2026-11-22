@@ -308,6 +308,8 @@ describe("a dialog's self-answer countdown is not part of the ask", () => {
     const sentences = [
       (clock: string) => `⚠ Claude Code will automatically allow this request in ${clock}, to avoid blocking progress on an unattended session`,
       (clock: string) => `⚠ Claude Code will automatically allow this request in ${clock}, to avoid holding up an unattended session`,
+      (clock: string) => `⚠ Claude Code will automatically deny this request in ${clock}, to avoid holding up an unattended session`,
+      (clock: string) => `⚠ Claude Code will automatically block this request in ${clock}, to avoid blocking progress on an unattended session`,
       (clock: string) => `Agent will automatically deny this request in ${clock}, to avoid blocking progress on an unattended session`,
       (clock: string) => `⚠ Claude Code will automatically deny this request in ${clock} unless you stop it`,
     ];

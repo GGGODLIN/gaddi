@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Countdown wording checks stay paired and session-ref switches drop stale screen names.** The Claude Code unattended countdown guard now pairs each version's verb with its own clause rather than accepting cross-version mixes, and switching to a different Claude session ref on the same pane revision now re-checks and drops the prior session's cached screen name without touching shared argv-bound caches.
+
 ## [2.17.0] - 2026-11-22
 
 ### Changed
