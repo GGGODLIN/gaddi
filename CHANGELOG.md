@@ -43,6 +43,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 - **A report about a sign-in code the agent did not take holds no line of the agent's screen.** The Report a problem preview printed the agent's own error row there. It now prints a fixed sentence. ([2caf4c1](https://github.com/AltanS/collie/commit/2caf4c1))
 - **A read card names the right last line.** When an agent reads 20 lines from line 10, the card says lines 10 to 29, where it said 10 to 30. Thanks @soarkit (#845). ([0ad0547](https://github.com/AltanS/collie/commit/0ad0547))
 - **On a narrow phone, the font menus and the Light or dark buttons stay inside their card.** In languages with long words, the interface font and terminal font menus shrink and cut a long name with an ellipsis, and the three Light or dark buttons share the card width, where they ran past the card edge. Nothing changes in English. ([3e19005](https://github.com/AltanS/collie/commit/3e19005))
+- **Plain-text session naming matches upstream when a pane has no log link yet.** On the experimental `herdr-core` backend, sessions with a log link still read their name from the log only so mode badges like `ultracode` never hijack the title, while a pane with no log link yet keeps reading its screen name so manual renames still appear. ([257f9bd](https://github.com/AltanS/collie/commit/257f9bd))
 
 ## [2.17.0] - 2026-11-22
 
