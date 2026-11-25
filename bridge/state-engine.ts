@@ -861,7 +861,9 @@ export class StateEngine {
    * THEN TWO FALLBACKS, each for a harness that declares one as data (harness-name-sources.ts), and
    * only while the journal named no person-set name for the pane. A screen read: Claude paints its
    * `/rename` name into its input box (see {@link extractClaudeSessionName}), which matters where the
-   * pane reports no session id. An argv-bound journal read: Muse names no session ref
+   * pane reports no session id. On a multiplexer that marks its grid as plain text (`MuxGrid.unstyled`,
+   * the Herdr core), the grid cannot tell a mode badge from a name even before a session ref arrives.
+   * An argv-bound journal read: Muse names no session ref
    * ({@link ArgvNameProbe}). Reads run in parallel and are individually best-effort: a read that fails
    * or times out, a screen with no input box in view, or a probe that cannot bind the pane exactly keeps
    * the last-known name (sticky cache) and never fails the poll; a proven-unnamed answer drops it, and so

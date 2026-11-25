@@ -1,11 +1,11 @@
-import { paneRowKey } from "@/lib/hosts";
 import { nestPanes, toggleFoldedParent, useFoldedParents } from "@/lib/pane-tree";
 import { groupPanesByTab } from "@/lib/spaces";
 import { CrossfadeText } from "@/components/ui/crossfade-text";
-import { spaceKey, tabKey } from "@/lib/hosts";
+import { paneRowKey, paneScope, spaceKey, tabKey } from "@/lib/hosts";
 import { tabTitle } from "@/lib/pane-name";
 import { bucketOf } from "@/lib/triage";
-import type { AgentView, TabView, WorkspaceView } from "@/lib/types";
+import type { AgentView, ServerSummary, SessionSummary, TabView, WorkspaceView } from "@/lib/types";
+import type { Scope } from "@/lib/scope";
 import { AgentCard } from "./agent-card";
 import { t, tn } from "@/lib/i18n";
 import { useLocale } from "@/hooks/use-locale";
@@ -27,6 +27,14 @@ interface SpaceViewProps {
   onHold?: (pane: AgentView) => void;
   /** The machine this space is on — the WORKSPACE's host, not the crew's lead. Undefined when solo. */
   host?: string;
+  /**
+   * The view's address, the machine list and the session registry: each row's own address (`paneScope`) is
+   * what its composer saves a draft under, for the pencil of an unsent draft (ui/draft-mark.tsx). Omit and
+   * the rows read the lead's primary session.
+   */
+  scope?: Scope | undefined;
+  servers?: readonly ServerSummary[] | undefined;
+  sessions?: readonly SessionSummary[] | undefined;
 }
 
 // One space's panes, grouped by tab (agents AND bare shells). Tab selection + creation live in the
@@ -44,6 +52,9 @@ export function SpaceView({
   onPress,
   onHold,
   host,
+  scope,
+  servers,
+  sessions,
 }: SpaceViewProps) {
   useLocale();
   const folded = useFoldedParents();
@@ -112,6 +123,7 @@ export function SpaceView({
                       unseen={bucketOf(entry.pane) === "ready"}
                       scope="tab"
                       tree={entry}
+                      draftScope={paneScope(scope ?? {}, entry.pane, servers, sessions)}
                       onToggleFold={entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
                     />
                   );
