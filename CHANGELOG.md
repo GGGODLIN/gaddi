@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A new worktree no longer lands inside the project it branches from.** When the Worktree folder setting pointed at the folder that holds your projects, a branch opened from the phone was checked out inside the project itself, where git then listed it as a stray new folder. Collie now refuses that spot. It also stops reading a folder whose name starts with two dots as outside your home, and stops making a hidden folder for a project whose name starts with a dot.
+
 ## [2.17.1] - 2026-11-26
 
 ### Changed
