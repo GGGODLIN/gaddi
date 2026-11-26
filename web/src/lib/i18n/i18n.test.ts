@@ -145,10 +145,35 @@ describe("plurals", () => {
   });
 
   it("uses English grammar for a pending plural set after a Japanese bundle loads", async () => {
+    const one = "tricks.menu.moreSee.one";
+    const other = "tricks.menu.moreSee.other";
+    vi.resetModules();
+    vi.doMock("./messages/en", async (importOriginal) => ({
+      ...await importOriginal<typeof import("./messages/en")>(),
+      PENDING_TRANSLATION: [one, other],
+    }));
+    vi.doMock("./messages/ja", async (importOriginal) => {
+      const original = await importOriginal<typeof import("./messages/ja")>();
+      return { ...original, ja: { ...original.ja, [one]: en[one], [other]: en[other] } };
+    });
+    try {
+      const fresh = await import("./index");
+      fresh.setLocale("ja");
+      await fresh.whenLocaleReady("ja");
+      expect(fresh.tn("tricks.menu.moreSee", 1)).toBe("1 more trick has rows. See Settings, Tricks and the Hill.");
+      expect(fresh.tn("tricks.menu.moreSee", 2)).toBe("2 more tricks have rows. See Settings, Tricks and the Hill.");
+    } finally {
+      vi.doUnmock("./messages/en");
+      vi.doUnmock("./messages/ja");
+      vi.resetModules();
+    }
+  });
+
+  it("uses Japanese grammar for the translated trick overflow hint", async () => {
     setLocale("ja");
     await whenLocaleReady("ja");
-    expect(tn("tricks.menu.moreSee", 1)).toBe("1 more trick has rows. See Settings, Tricks and the Hill.");
-    expect(tn("tricks.menu.moreSee", 2)).toBe("2 more tricks have rows. See Settings, Tricks and the Hill.");
+    expect(tn("tricks.menu.moreSee", 1)).toBe("行を持つトリックがほかに 1 個あります。「設定」の「トリックと Hill」を確認してください。");
+    expect(tn("tricks.menu.moreSee", 2)).toBe("行を持つトリックがほかに 2 個あります。「設定」の「トリックと Hill」を確認してください。");
   });
 
   it("picks one/few/many for Russian", async () => {

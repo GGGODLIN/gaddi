@@ -13,7 +13,7 @@ import { SectionHeader } from "@/components/section-header";
 import { StatusCounts, StatusSummaryLine } from "@/components/status-counts";
 import { SUMMARY_LINE_TAP_TARGET } from "@/components/ui/tap-target";
 import { pinnedRows, shownGroups } from "@/lib/dash-view";
-import { paneRowKey, paneSpaceKey, tabKey } from "@/lib/hosts";
+import { paneRowKey, paneScope, paneSpaceKey, tabKey } from "@/lib/hosts";
 import { groupPanesByWorkspace } from "@/lib/pane-groups";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
 import { nestPanes, parentRowKeyOf, toggleFoldedParent, useFoldedParents, type PaneTreeRow } from "@/lib/pane-tree";
@@ -37,6 +37,7 @@ import { paneSubtitle } from "@/lib/pane-marks";
 import { PaneBadge } from "@/components/pane-badge";
 import { PaneGlyph } from "@/components/ui/pane-glyph";
 import { PaneTreeFoldButton, PaneTreeGuides } from "@/components/ui/pane-tree-chrome";
+import { DraftMark } from "@/components/ui/draft-mark";
 import { UnseenMark } from "@/components/ui/unseen-mark";
 import { shortenHome } from "@/lib/shorten-home";
 import { bucketOf, isAttention, isUnseen, shownStatus, worstTriage, type TriageKey } from "@/lib/triage";
@@ -438,6 +439,7 @@ export function ThreadSidebar({
         roomy={roomy}
         match={hitOf(a)}
         highlighted={highlightedKey !== null && paneRowKey(a) === highlightedKey}
+        draftScope={paneScope(scope ?? {}, a, servers, sessions)}
       />
     );
 
@@ -582,6 +584,7 @@ export function ThreadSidebar({
                         roomy={roomy}
                         match={hitOf(entry.pane)}
                         highlighted={highlightedKey === key}
+                        draftScope={paneScope(scope ?? {}, entry.pane, servers, sessions)}
                         tree={entry}
                         onToggleFold={hits === null && entry.childCount > 0 ? () => toggleFoldedParent(key) : undefined}
                       />
@@ -730,6 +733,7 @@ export function PaneRow({
   onToggleFold,
   match,
   highlighted = false,
+  draftScope,
 }: {
   /** The row's DOM id, for the summary line's jump. Every row has one, shells too. */
   id?: string;
@@ -742,6 +746,12 @@ export function PaneRow({
   onToggleFold?: (() => void) | undefined;
   match?: PaneMatch | undefined;
   highlighted?: boolean;
+  /**
+   * The pane's own address (`paneScope`, lib/hosts.ts), the scope its composer saves a draft under, for the
+   * pencil of an unsent draft (ui/draft-mark.tsx). Absent: the lead's primary session. The open pane's row
+   * (`active`) never draws it: its composer is on screen.
+   */
+  draftScope?: Scope | undefined;
 }) {
   const isShell = pane.kind === "shell";
   const hasFold = (tree?.childCount ?? 0) > 0 && onToggleFold !== undefined;
@@ -816,6 +826,12 @@ export function PaneRow({
             <MatchText text={name} ranges={marks?.name} fade={paneRowKey(pane)} />
           </span>
           <PaneBadge pane={pane} className={cn("shrink-0 self-center", roomy && "text-muted-foreground")} />
+          {/* An unsent draft this device holds for the pane: the muted pencil, one slot on every row, so a name
+              truncates at one width whether it is drawn or not. Never on the open pane's row. */}
+          <DraftMark scope={draftScope} paneId={pane.paneId} off={active} reserve />
+          {/* A finished pane nobody opened: the dashboard's square, after the name, so a row agrees with
+              the heading's `■` count. The slot is kept on every agent row, so a name truncates at one
+              width whether the mark is drawn or not (DESIGN.md §2). */}
           {!isShell && <UnseenMark on={isUnseen(pane)} reserve />}
           <PaneMeta
             host={undefined}

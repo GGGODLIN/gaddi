@@ -212,6 +212,9 @@ export function SpaceRoute() {
                 onPress={approval.press}
                 onHold={setHeld}
                 host={navHost}
+                scope={data.scope}
+                servers={data.servers}
+                sessions={data.sessions}
               />
             </main>
             {plus.sheet}
