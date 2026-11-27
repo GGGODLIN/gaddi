@@ -556,8 +556,9 @@ describe("collie doctor — the contract", () => {
       // alone) and a screen row `harness` (spec 02); no other finding carries a fifth key.
       const keys = Object.keys(f).toSorted();
       const extra = f.check === "collie" ? ["instance", "stateDir"] : f.check.startsWith("sends-") ? ["byCollie", "counts", "harness", "window"] : f.check.startsWith("holds") ? ["harness", "holds"] : f.check.startsWith("screen-") ? ["harness"] : [];
-      expect(keys.filter((k) => k !== "scope" && !extra.includes(k))).toEqual(["check", "detail", "remedy", "status"]);
+      expect(keys.filter((k) => k !== "scope" && k !== "blocksUpdate" && !extra.includes(k))).toEqual(["check", "detail", "remedy", "status"]);
       if (keys.includes("scope")) expect(f.scope).toBe("crew");
+      if (keys.includes("blocksUpdate")) expect(f.status).toBe("error");
       expect(["ok", "warn", "error", "skipped"]).toContain(f.status);
     }
   });
@@ -807,6 +808,7 @@ describe("collie doctor — the local checks", () => {
     expect(bind?.status).toBe("error");
     expect(bind?.detail).toContain("probe has not landed yet");
     expect(bind?.detail).not.toContain("never lands");
+    expect(bind?.blocksUpdate).toBeUndefined();
     expect(bind?.remedy).toContain("COLLIE_HOST=laptop.tail.ts.net");
   });
 
@@ -834,6 +836,7 @@ describe("collie doctor — the local checks", () => {
     expect(solo.byCheck.get("bind")?.status).toBe("error");
     expect(solo.byCheck.get("bind")?.remedy).toContain("COLLIE_ALLOW_NON_LOOPBACK_BIND=1");
     expect(solo.code).toBe(EXIT.FAIL);
+    expect(solo.byCheck.get("bind")?.blocksUpdate).toBe(true);
 
     const hatched = await findings(
       harness(null, [], { env: { COLLIE_HOST: "10.0.0.4", COLLIE_ALLOW_NON_LOOPBACK_BIND: "1" } }),
@@ -1128,6 +1131,7 @@ describe("collie doctor — the local checks", () => {
     );
     expect(byCheck.get("front-door")?.status).toBe("error");
     expect(byCheck.get("front-door")?.remedy).toContain("collie unserve");
+    expect(byCheck.get("front-door")?.blocksUpdate).toBeUndefined();
   });
 
   test("front-door: COLLIE_SKIP_SERVE=1 with a leftover record warns; without one it passes", async () => {
@@ -1228,6 +1232,7 @@ describe("collie doctor — the local checks", () => {
     const f = (await findings(h)).byCheck.get("versions");
     expect(f?.status).toBe("error");
     expect(f?.detail).toContain("resolves to no version");
+    expect(f?.blocksUpdate).toBe(true);
   });
 
   test("versions: a worktree git records with no directory on disk is reconciled and warned about", async () => {
@@ -1274,6 +1279,7 @@ describe("collie doctor — the local checks", () => {
     expect(f?.detail).toContain("youngsecurity/collie");
     expect(f?.remedy).toContain("docs/upgrading.md");
     expect(code).toBe(EXIT.FAIL);
+    expect(f?.blocksUpdate).toBe(true);
   });
 
   test("update-source: a fork the operator chose is a warning, not a failure", async () => {
@@ -1445,6 +1451,7 @@ describe("collie doctor — the crew checks", () => {
     expect(byCheck.get("store-drift")?.detail).toContain("laptop");
     expect(byCheck.get("store-drift")?.remedy).toContain("collie restart");
     expect(code).toBe(EXIT.FAIL);
+    expect(byCheck.get("store-drift")?.blocksUpdate).toBeUndefined();
   });
 
   test("store-drift: no marker at all is skipped — no process exists for the store to be ahead of", async () => {

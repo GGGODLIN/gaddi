@@ -1138,11 +1138,14 @@ is the one place that says when to release; the agent proposes, the operator app
   origin/dev`), the number and the sentence of *Version numbers* that picked the axis. Cut it only
   after the operator says yes. Propose without being asked; the operator should not have to
   remember.
-- **The operator's phone checks `dev` before `main` moves.** A release reaches `main` only after the
-  change was accepted on the operator's iPhone against a dev instance running that `dev` commit.
-  The agent does that check itself through iPhone Mirroring and shows the screenshots; the operator
-  is not asked to test.
-  Until that dev instance exists, the phone check stays after the tag, as before.
+- **The dev instance is checked before `main` moves.** A release reaches `main` only after the
+  change was accepted against a dev instance running that `dev` commit. The agent does that check
+  itself and shows the screenshots; the operator is not asked to test. A patch whose changes are
+  web and bridge only is checked in the operator's paired desktop browser. The operator's iPhone
+  checks a release that touches `ios/` or native inputs, a minor or a major, and a change that
+  shows only on a phone (the island, push notifications, the home-screen web app, touch gestures,
+  the on-screen keyboard). The operator may waive the phone for one release in so many words.
+  The update after the tag takes the same route.
 - **Docs-only changes batch per working session.** One `main` commit per session, after the link
   check and CI, not one per edit. They need no weekly wait: no tag means no update offer.
 
