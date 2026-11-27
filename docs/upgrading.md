@@ -115,8 +115,9 @@ Under that sits the preflight, one line per check: `doctor`, `disk`, `bun`, `tre
 
 Only a few `collie doctor` errors turn the line red: an `origin` that is not the update source, a
 `current` version that is missing or incomplete, a bind, a `COLLIE_MUX` or a `sources.json` the
-bridge refuses to start with, and on a crew peer a Tailscale mapping Collie did not record. Anything
-else, such as a pane whose session cannot be found, shows amber and the update goes ahead.
+bridge refuses to start with, and on a packaged install in a crew a bridge still running crew state
+older than its trust store (`store-drift`). Anything else, such as a pane whose session cannot be
+found, shows amber and the update goes ahead.
 
 Tapping **Update to `<version>`** opens the update screen, and **Start update** on it is the one
 confirmation. The screen says what happens: "While it runs, the app is locked on this phone. Your

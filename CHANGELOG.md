@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A leftover Tailscale mapping on a crew member no longer turns the Update button off.** The member still reports the mapping as a problem, but the update goes ahead: the mapping does not use the port the new version starts on.
+
 ## [2.17.3] - 2026-11-27
 
 ### Changed

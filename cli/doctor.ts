@@ -778,8 +778,9 @@ function versionsLayout(deps: DoctorDeps, install: InstallKind): Finding {
   const previous = newestFirst.filter((v) => v.complete && v.dir !== at).map((v) => v.dir);
   const kept = `${previous.length} retained${previous.length === 0 ? "" : ` (${previous.join(", ")})`}`;
   const drift = staged ? worktreeDrift(deps, layout, newestFirst.map((v) => v.dir)) : null;
-  // Both errors below block an update: with no complete `current` there is no version to roll back
-  // to, so a new one that fails its health check leaves the service down.
+  // Both errors below block an update: the runner rolls back only to the `current` it found, so with
+  // no complete one a new version that fails its health check has nothing to switch back to, and
+  // the service stays down. A retained version is no help there: the runner never picks one.
   if (at === null) {
     return blockingUpdate(bad(
       "versions",
@@ -1161,15 +1162,14 @@ export function frontDoor(deps: DoctorDeps, mode: string): Finding {
       return skipped("front-door", "the serve status was not readable", "run `tailscale serve status --json` by hand");
     }
     if (mode === "peer") {
-      // Blocks an update, unlike the recorded mapping above, which the bridge tears down at boot. This
-      // one has no record, so boot leaves it alone, and tailscaled holding the port is what kept a
-      // peer from binding in the takeover rehearsal (bridge/front-door.ts header).
+      // Does not block an update: the mapping listens on the serve port, not on the port the peer
+      // binds, so the new version starts beside it, and the update leaves it no worse.
       return availability === "adoptable"
-        ? blockingUpdate(bad(
+        ? bad(
             "front-door",
             `this collie is a PEER and a root mount on :${listener} still proxies to ${proxy} — a peer publishes nothing (ADR 0013)`,
             "`collie unserve` here",
-          ))
+          )
         : ok("front-door", "a peer publishes nothing, and nothing of ours is published");
     }
     if (availability === "occupied" || availability === "protocol-mismatch") {

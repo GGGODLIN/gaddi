@@ -327,7 +327,11 @@ export async function doctorCheck(deps: UpdateCheckDeps): Promise<PreflightCheck
   // ADR 0045's floor check is NOT here and is untouched — it is `skewCheck`, its own preflight check
   // on the member walk. A member the update would strand still blocks the confirm.
   //
-  // ONE LOCAL ERROR IS AMBER: a `sends-<harness>` row (M71 spec 01, cli/send-findings.ts). It says
+  // A LOCAL ERROR IS RED ONLY WHEN ITS FINDING CARRIES `blocksUpdate` (cli/finding.ts): the doctor
+  // branch that knows the update cannot finish, or would leave it worse, stamps it. Every other local
+  // error is amber and named by check id, like a crew error.
+  //
+  // A `sends-<harness>` row is one such amber error (M71 spec 01, cli/send-findings.ts). It says
   // Collie cannot send to that harness on this machine, and a new version is often the fix: a reader
   // or a profile that does not know the harness's new build. Holding the update back on it would keep
   // the machine on the version that cannot send. It is named by check id, like a crew error.
@@ -337,7 +341,7 @@ export async function doctorCheck(deps: UpdateCheckDeps): Promise<PreflightCheck
     return red(
       "doctor",
       `collie doctor reports ${blocking.length} problem${blocking.length === 1 ? "" : "s"}: ${blocking.join(", ")}`,
-      "collie doctor — clear each error it names, then re-run this check",
+      "collie doctor — fix the errors this line names, then re-run this check",
     );
   }
   const unstamped = errors.filter((f) => isLocal(f) && f.blocksUpdate !== true);
