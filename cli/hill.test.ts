@@ -770,9 +770,8 @@ describe("post --image", () => {
     expect(d.io.stderr).toEqual([`hill: ${HILL_IMAGES_DROPPED}`]);
   });
 
-  // Each case that stages stands a Unix socket up for the bridge and stages from /tmp, the folder systemd's
-  // PrivateTmp hides: both POSIX, and the hill verbs refuse on Windows, which has no walky socket.
-  describe("a picture under /tmp, for a bridge with a private /tmp", () => {
+  // These cases exercise systemd's PrivateTmp paths. On macOS realpath resolves /tmp to /private/tmp.
+  describe.skipIf(HOST.platform !== "linux")("a picture under /tmp, for a bridge with a private /tmp", () => {
     /** A folder of the test's own as the staging root, and a folder under /tmp for the picture. */
     function stage() {
       const root = join(work(), "image-staging");

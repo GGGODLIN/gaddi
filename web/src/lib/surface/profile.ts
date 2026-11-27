@@ -421,6 +421,16 @@ export interface FrameLayout {
    */
   readonly maxWidgetRows?: number;
   /**
+   * The edges walk only: how many more rows the status row that is the bottom edge may wrap onto (#838).
+   * On a narrow pane a harness may wrap that row, and its next row has the bottom edge's shape too. Then
+   * the lowest row of that shape is no edge: when the row over it has the shape as well, and the upper
+   * row is full to the screen's width where the lower one goes on, the walk tries the box one row up, at
+   * most this many times, and the rows under the edge walk as status rows. A third row of the shape past
+   * the bound, or an upper row with room for the lower row's first word, finds no box. Optional: with
+   * none, only the lowest row is tried. At most {@link MAX_BOTTOM_WRAPS}.
+   */
+  readonly bottomWraps?: number;
+  /**
    * How the walk finds the box. `edges` (the default) walks up from the bottom edge: rows that are
    * no edge are the wrapped draft, the first edge row is the prompt row, the top edge is over it.
    * `interior` walks up from the bottom edge (or from the last row, with no bottom anchor) to the
@@ -692,6 +702,13 @@ export interface Profile {
          * kept. A row with a word added or changed, or a row no hint row gives, still counts. Optional.
          */
         readonly losesText?: true;
+        /**
+         * The last rows under the box may go to the box when a draft needs their room: Claude Code in a
+         * short pane drops its mode row and then its statusline. The Send Protocol then counts those
+         * rows as kept when the rows left are the first ones, unchanged and in order, and the box grew
+         * by at least as many rows. A row with new or changed text still counts. Optional.
+         */
+        readonly losesRows?: true;
         /**
          * Rows the harness draws under its box that are neither a statusline nor a dialog, each with a
          * name and a regular expression source (Claude Code's agents panel and its hints). The frame
@@ -1410,13 +1427,18 @@ function commandListFooter(value: JsonValue, path: string): CommandListFooter {
   return { pattern: compiled.source, maxRows: whole(field(node, "maxRows", path), `${path}.maxRows`, 1) };
 }
 
-/** `idle.volatile.below`: its row counts, and `losesText` (only true, only beside hints), the hint rows, named footer rows, other screens' rows and command list only when the profile names them. */
+/** `idle.volatile.below`: its row counts, `losesText` (only true, only beside hints) and `losesRows` (only true), the hint rows, named footer rows, other screens' rows and command list only when the profile names them. */
 function volatileBelow(node: JsonObject): Profile["idle"]["volatile"]["below"] {
   const maxRows = whole(field(node, "maxRows", "idle.volatile.below"), "idle.volatile.below.maxRows", 0);
   const footerMaxRows = whole(field(node, "footerMaxRows", "idle.volatile.below"), "idle.volatile.below.footerMaxRows", 0);
   if (node.losesText !== undefined && node.losesText !== true) fail("idle.volatile.below.losesText", "must be true when present");
   if (node.losesText === true && node.hints === undefined) fail("idle.volatile.below.losesText", "needs idle.volatile.below.hints: only a hint row may lose text");
-  const base: Profile["idle"]["volatile"]["below"] = node.losesText === true ? { maxRows, footerMaxRows, losesText: true } : { maxRows, footerMaxRows };
+  if (node.losesRows !== undefined && node.losesRows !== true) fail("idle.volatile.below.losesRows", "must be true when present");
+  const base: Profile["idle"]["volatile"]["below"] = Object.assign(
+    { maxRows, footerMaxRows },
+    node.losesText === true ? { losesText: true as const } : {},
+    node.losesRows === true ? { losesRows: true as const } : {},
+  );
   const withHints =
     node.hints === undefined
       ? base
@@ -1598,6 +1620,9 @@ function parseScroll(value: JsonValue, maxDraftRows: number): FrameScroll {
   return { keeps, rows, marker: pattern(node.marker, "idle.frame.scroll.marker").source };
 }
 
+/** The most rows `idle.frame.bottomWraps` may name: each one is a row of the bottom edge's shape the walk passes. */
+export const MAX_BOTTOM_WRAPS = 2;
+
 /** `idle.frame`: the three anchors, the bounds, and the interior walk's own fields when the profile names that walk. */
 function parseFrame(frameNode: JsonObject): FrameLayout {
   const walk = frameNode.walk === undefined ? "edges" : oneOf(frameNode.walk, "idle.frame.walk", FRAME_WALKS);
@@ -1628,8 +1653,13 @@ function parseFrame(frameNode: JsonObject): FrameLayout {
     }
     const edgeBottom = anchor(field(frameNode, "bottom", "idle.frame"), "idle.frame.bottom", null, true);
     if (edgeBottom.open === true) fail("idle.frame.bottom.open", "belongs to the interior walk");
-    return { ...base, bottom: edgeBottom };
+    if (frameNode.bottomWraps === undefined) return { ...base, bottom: edgeBottom };
+    const bottomWraps = whole(frameNode.bottomWraps, "idle.frame.bottomWraps", 1);
+    if (bottomWraps > MAX_BOTTOM_WRAPS) fail("idle.frame.bottomWraps", `must be at most ${String(MAX_BOTTOM_WRAPS)}`);
+    if (edgeBottom.blank === true) fail("idle.frame.bottomWraps", "needs a bottom edge that is not a blank row");
+    return { ...base, bottom: edgeBottom, bottomWraps };
   }
+  if (frameNode.bottomWraps !== undefined) fail("idle.frame.bottomWraps", "belongs to the edges walk");
   const interior = { ...base, bottom: anchor(field(frameNode, "bottom", "idle.frame"), "idle.frame.bottom", null, true), walk };
   if (maxWidgetRows !== undefined) {
     if (interior.bottom.open !== true) fail("idle.frame.maxWidgetRows", "belongs to an open box");

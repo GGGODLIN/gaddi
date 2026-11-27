@@ -451,15 +451,12 @@ describe("the declaration tracks the harness", () => {
 });
 
 describe("the card is built outside the adapter", () => {
-  // Nine adapters over the whole corpus: the slowest assertion in the file, and the one that has to
-  // stay exhaustive, so it gets its own budget rather than a sample.
-  it("no adapter's own buildBlocks emits the kind, on any fixture", { timeout: 30_000 }, () => {
-    for (const agent of AGENTS) {
-      const adapter = adapterFor(agent)!;
-      for (const name of FIXTURES) {
-        const kinds = adapter.buildBlocks(fixtureLines(name)).map((b) => b.kind);
-        expect(kinds, `${agent} / ${name}`).not.toContain("unread-dialog");
-      }
+  // Give each adapter its own budget so the whole corpus stays covered as fixtures are added.
+  it.each(AGENTS)("%s's own buildBlocks never emits the kind on any fixture", { timeout: 30_000 }, (agent) => {
+    const adapter = adapterFor(agent)!;
+    for (const name of FIXTURES) {
+      const kinds = adapter.buildBlocks(fixtureLines(name)).map((b) => b.kind);
+      expect(kinds, `${agent} / ${name}`).not.toContain("unread-dialog");
     }
   });
 });
