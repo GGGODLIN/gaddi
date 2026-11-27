@@ -29,7 +29,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ### Docs
 
-- **Markdown link checks now resolve repository-root paths and pass across all tracked docs.** Fixed `scripts/check-doc-links.ts` to resolve leading-slash links from the repository root, corrected the ADR 0148 link in `CLAUDE.md`, and updated the Tier 2 phone-width PWA wording.
+- **Markdown link checks now resolve repository-root paths and pass across all tracked docs.** Leading-slash Markdown links now resolve from the repository root, the broken ADR 0148 link is fixed, and the Tier 2 phone-width PWA check wording matches the isolated-bridge setup.
 
 ## [2.17.3] - 2026-11-27
 
