@@ -1078,7 +1078,7 @@ function acl(deps: DoctorDeps): Finding {
  * record is ours (ADR 0001); a mapping we do not own is REPORTED, never touched — and a **peer** with
  * any mapping at all is an error, because a peer publishes nothing (ADR 0013).
  */
-function frontDoor(deps: DoctorDeps, mode: string): Finding {
+export function frontDoor(deps: DoctorDeps, mode: string): Finding {
   const skip = deps.ctx.env.COLLIE_SKIP_SERVE === "1";
   const raw = deps.files.read(deps.ctx.handlerFile);
 
@@ -2156,7 +2156,7 @@ async function beacons(deps: DoctorDeps, installed: boolean): Promise<Finding> {
  * The comparison is `parseMarker` + `rosterDrift`, i.e. the two pure functions `crew status`'s
  * `reportDrift` prints from, so the two verbs cannot disagree about what drift is.
  */
-function storeDrift(deps: DoctorDeps, data: TrustStoreData, install: InstallKind): Finding {
+export function storeDrift(deps: DoctorDeps, data: TrustStoreData, install: InstallKind): Finding {
   const marker = parseMarker(deps.files.read(crewRuntimePath(deps.ctx.stateDir)));
   if (marker === null) {
     return skipped(

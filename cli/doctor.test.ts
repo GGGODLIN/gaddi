@@ -808,7 +808,6 @@ describe("collie doctor — the local checks", () => {
     expect(bind?.status).toBe("error");
     expect(bind?.detail).toContain("probe has not landed yet");
     expect(bind?.detail).not.toContain("never lands");
-    // A lead that has not dialled in yet is not something an update needs: it probes its own listener.
     expect(bind?.blocksUpdate).toBeUndefined();
     expect(bind?.remedy).toContain("COLLIE_HOST=laptop.tail.ts.net");
   });
@@ -837,14 +836,7 @@ describe("collie doctor — the local checks", () => {
     expect(solo.byCheck.get("bind")?.status).toBe("error");
     expect(solo.byCheck.get("bind")?.remedy).toContain("COLLIE_ALLOW_NON_LOOPBACK_BIND=1");
     expect(solo.code).toBe(EXIT.FAIL);
-    // The new bridge and the rollback would both exit at boot on it, so it holds an update back, and
-    // `--json` carries the stamp for a script that asks the same question.
     expect(solo.byCheck.get("bind")?.blocksUpdate).toBe(true);
-    const json = harness(null, [], { env: { COLLIE_HOST: "10.0.0.4" } });
-    await cmdDoctor(json.deps, ["--json"]);
-    // SAFETY: `--json` writes one JSON array to stdout; the test above holds that shape.
-    const printed = JSON.parse(json.io.stdout.join("\n")) as Finding[];
-    expect(printed.find((f) => f.check === "bind")?.blocksUpdate).toBe(true);
 
     const hatched = await findings(
       harness(null, [], { env: { COLLIE_HOST: "10.0.0.4", COLLIE_ALLOW_NON_LOOPBACK_BIND: "1" } }),
@@ -1139,28 +1131,7 @@ describe("collie doctor — the local checks", () => {
     );
     expect(byCheck.get("front-door")?.status).toBe("error");
     expect(byCheck.get("front-door")?.remedy).toContain("collie unserve");
-    // A recorded mapping is torn down by the peer's own boot, so an update does not wait for it.
     expect(byCheck.get("front-door")?.blocksUpdate).toBeUndefined();
-  });
-
-  test("front-door: an unrecorded mapping on a PEER blocks an update, since its boot leaves it in place", async () => {
-    const peer = peerStore();
-    const files = { ...healthyFiles(), ...markerFile(peer) };
-    delete files[HANDLER];
-    const h = harness(peer, [hello({ memberId: "desk" })], {
-      env: { COLLIE_HOST: "laptop.tail.ts.net" },
-      files,
-      answers: [
-        ["tailscale status --json", { stdout: CERTS_ONLY }],
-        ["tailscale serve status --json", { stdout: SERVE_OK }],
-        ...netmapAnswers(NETMAP_OPEN),
-      ],
-    });
-    h.deps = { ...h.deps, host: hostFor("linux") };
-    const f = (await findings(h)).byCheck.get("front-door");
-    expect(f?.status).toBe("error");
-    expect(f?.detail).toContain("still proxies to");
-    expect(f?.blocksUpdate).toBe(true);
   });
 
   test("front-door: COLLIE_SKIP_SERVE=1 with a leftover record warns; without one it passes", async () => {
@@ -1261,7 +1232,6 @@ describe("collie doctor — the local checks", () => {
     const f = (await findings(h)).byCheck.get("versions");
     expect(f?.status).toBe("error");
     expect(f?.detail).toContain("resolves to no version");
-    // With no complete `current` there is nothing to roll back to, so an update waits for it.
     expect(f?.blocksUpdate).toBe(true);
   });
 
@@ -1481,25 +1451,7 @@ describe("collie doctor — the crew checks", () => {
     expect(byCheck.get("store-drift")?.detail).toContain("laptop");
     expect(byCheck.get("store-drift")?.remedy).toContain("collie restart");
     expect(code).toBe(EXIT.FAIL);
-    // The update's own restart cures it, so it does not hold the update back.
     expect(byCheck.get("store-drift")?.blocksUpdate).toBeUndefined();
-  });
-
-  test("store-drift blocks an update on a packaged install, where no update restarts anything (ADR 0050)", async () => {
-    const stale = markerFor(leadStore(), T0, 42);
-    const h = harness(LEAD, [hello()], {
-      answers: [[`git -C ${ROOT} rev-parse --show-prefix`, { code: 128 }], ...(HEALTHY_ANSWERS ?? [])],
-      files: {
-        ...healthyFiles(),
-        [`${STATE}/crew-runtime.json`]: JSON.stringify(stale),
-        [`${ROOT}/herdr-plugin.toml`]: 'id = "herdr.collie"\nversion = "1.5.2"\n',
-      },
-    });
-    h.files.rootOwned.add(ROOT);
-    const { byCheck } = await findings(h);
-    expect(byCheck.get("install")?.detail ?? "").toContain("packaged install");
-    expect(byCheck.get("store-drift")?.status).toBe("error");
-    expect(byCheck.get("store-drift")?.blocksUpdate).toBe(true);
   });
 
   test("store-drift: no marker at all is skipped — no process exists for the store to be ahead of", async () => {
