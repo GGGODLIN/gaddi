@@ -23,6 +23,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A health problem the update does not need no longer turns the Update button off.** Before, one agent pane whose conversation history Collie could not find was enough to block an update. Now only an error the update cannot get past blocks it, such as a setting Collie will not start with, and the rest show amber while the update goes ahead.
+
 ## [2.17.2] - 2026-11-27
 
 ### Changed
