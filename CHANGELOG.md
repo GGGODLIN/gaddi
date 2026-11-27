@@ -27,6 +27,10 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 - **A leftover Tailscale mapping on a crew member no longer turns the Update button off.** The member still reports the mapping as a problem, but the update goes ahead: the mapping does not use the port the new version starts on.
 
+### Docs
+
+- **Markdown link checks now resolve repository-root paths and pass across all tracked docs.** Fixed `scripts/check-doc-links.ts` to resolve leading-slash links from the repository root, corrected the ADR 0148 link in `CLAUDE.md`, and updated the Tier 2 phone-width PWA wording.
+
 ## [2.17.3] - 2026-11-27
 
 ### Changed
