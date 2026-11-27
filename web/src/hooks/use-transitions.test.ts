@@ -53,4 +53,24 @@ describe("useAgentTransitions", () => {
     expect(setStatus).toHaveBeenCalledTimes(1);
     expect(setStatus).toHaveBeenCalledWith("claude is done · build", "success");
   });
+
+  it("suppresses foreground done notices for a child pane with a live parent, while keeping blocked alerts", () => {
+    const child = (status: AgentView["status"]) =>
+      pane({ paneId: "w1:p2", status, workspaceLabel: "alpha", parentPaneId: "w1:p1" });
+    const poll = render([child("working")]);
+
+    poll([child("done")]);
+    expect(setStatus).not.toHaveBeenCalled();
+
+    poll([child("blocked")]);
+    expect(setStatus).toHaveBeenCalledTimes(1);
+    expect(setStatus).toHaveBeenCalledWith("claude needs you · alpha", "warn");
+  });
+
+  it("still announces done for a normal pane without parentPaneId", () => {
+    const poll = render([pane({ paneId: "w1:p3", status: "working", workspaceLabel: "beta" })]);
+    poll([pane({ paneId: "w1:p3", status: "done", workspaceLabel: "beta" })]);
+    expect(setStatus).toHaveBeenCalledTimes(1);
+    expect(setStatus).toHaveBeenCalledWith("claude is done · beta", "success");
+  });
 });

@@ -10,7 +10,7 @@ import { fixtureServers } from "@/test/handlers";
 import { withHeaderHost } from "@/test/header-host";
 import { server } from "@/test/msw";
 import type { StartLaunchBody } from "@/lib/api";
-import { SpaceRoute } from "./space";
+import { SpaceRoute, landingPane } from "./space";
 
 // The space screen on a crew. The one thing asserted here is the HOST the space is read on: a lead's
 // merged snapshot unions the peers' spaces and tags each pane with the machine it is on, and pane
@@ -225,5 +225,39 @@ describe("SpaceRoute — row hold actions and unseen mark", () => {
     const markSeenBtn = await screen.findByRole("button", { name: "Mark as seen" });
     await user.click(markSeenBtn);
     await waitFor(() => expect(seenPosts).toEqual([{ seen: true }]));
+  });
+});
+
+describe("landingPane with unpaned child", () => {
+  it("picks the shell parent over an unpaned agent child listed first in the tab", () => {
+    const unpanedChild: AgentView = {
+      paneId: "w1:c1",
+      workspaceId: "w1",
+      workspaceLabel: "webapp",
+      workspaceNumber: 1,
+      tabId: "w1:t1",
+      agent: "claude",
+      status: "working",
+      cwd: "/home/you/webapp",
+      focused: false,
+      host: LEAD,
+      parentPaneId: "w1:s1",
+      unpaned: true,
+    };
+    const shellParent: AgentView = {
+      paneId: "w1:s1",
+      workspaceId: "w1",
+      workspaceLabel: "webapp",
+      workspaceNumber: 1,
+      tabId: "w1:t1",
+      agent: "shell",
+      status: "unknown",
+      cwd: "/home/you/webapp",
+      focused: false,
+      host: LEAD,
+      kind: "shell",
+      terminalTitle: "shell-parent",
+    };
+    expect(landingPane(workspaces[0]!, [unpanedChild, shellParent], LEAD)).toBe(shellParent);
   });
 });

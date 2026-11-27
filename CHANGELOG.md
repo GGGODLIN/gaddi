@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Fixed
 
 - **A leftover Tailscale mapping on a crew member no longer turns the Update button off.** The member still reports the mapping as a problem, but the update goes ahead: the mapping does not use the port the new version starts on.
+- **Background child sessions no longer interrupt the open screen or hijack tabs.** When a background child finishes under its parent, Collie keeps the foreground status quiet while still alerting if the child needs you, keeps a single-pane tab's label and tap target on its visible parent, and counts only visible rows after folding before showing the pin hint.
 
 ### Docs
 

@@ -627,13 +627,18 @@ export function AgentList({
   const rankedShown = hits === null ? rankedRows : rankedRows.filter(keep);
   const drawnShown =
     hits === null ? drawn : drawn.map((d) => ({ ...d, rows: d.rows.filter(keep) })).filter((d) => d.rows.length > 0);
+  const placeShown = drawnShown.map((d) => ({
+    group: d.group,
+    rows: d.rows,
+    treeRows: nestPanes(d.rows, hits === null ? folded : NO_FOLDED),
+  }));
   const bestRows = hits !== null && filterOrder === "best" ? byScore(baseRows, hits) : null;
   const shownRows =
     bestRows ?? [
       ...pinnedShown,
       ...(ranked
         ? rankedShown
-        : drawnShown.flatMap((d) => nestPanes(d.rows, hits === null ? folded : NO_FOLDED).map((entry) => entry.pane))),
+        : placeShown.flatMap((d) => d.treeRows.map((entry) => entry.pane))),
     ];
   const hitOf = (p: AgentView): PaneMatch | undefined => hits?.get(paneRowKey(p));
   // Enter, or the Go key: open the first row shown, through the row's own navigation (its element is the
@@ -687,9 +692,9 @@ export function AgentList({
   // It needs no pin stored, a device that never retired it, and enough rows on show to pin one above
   // the others; the count is the rows drawn after isolate and hide, the list the eye sees.
   const pinHintHere = !needsYouOnly && renderBody === undefined && onHold !== undefined && hits === null;
-  const drawnRowCount = drawn.reduce((n, d) => n + d.rows.length, 0);
+  const drawnRowCount = ranked ? rankedRows.length : placeShown.reduce((n, d) => n + d.treeRows.length, 0);
   const pinHintOpen = showsPinHint(pinHintRetired, pins.length, drawnRowCount);
-  const firstShownRow = ranked ? rankedRows[0] : drawn[0]?.rows[0];
+  const firstShownRow = ranked ? rankedRows[0] : placeShown[0]?.treeRows[0]?.pane;
   const focusFirstRow = () => {
     if (firstShownRow === undefined) return;
     document.getElementById(rowDomId(paneRowKey(firstShownRow)))?.focus({ preventScroll: true });
@@ -931,12 +936,12 @@ export function AgentList({
           )}
 
           {place &&
-            machineRuns(drawnShown).map((run) => (
+            machineRuns(placeShown).map((run) => (
               <MachineRun key={run.host} host={run.host}>
                 <SpaceGrid columns={columns}>
-                  {run.items.map(({ group: g, rows }) => (
+                  {run.items.map(({ group: g, treeRows }) => (
                     <WideSpace key={g.key} group={g} id={groupDomId(g.key)} trailing={headingNewTab(g)}>
-                      {nestPanes(rows, hits === null ? folded : NO_FOLDED).map((entry) =>
+                      {treeRows.map((entry) =>
                         row(entry.pane, workspaceGroupKey(entry.pane) === g.key ? "place" : "herd", entry),
                       )}
                     </WideSpace>
@@ -1068,7 +1073,7 @@ export function AgentList({
         </section>
       )}
 
-      {!renderBody && bestRows === null && !ranked && drawnShown.map(({ group: g, rows }) => (
+      {!renderBody && bestRows === null && !ranked && placeShown.map(({ group: g, treeRows }) => (
         <section key={g.key} id={groupDomId(g.key)} className="flex scroll-mt-4 flex-col gap-2">
           <SectionHeader
             label={g.heading ?? g.label}
@@ -1084,7 +1089,7 @@ export function AgentList({
             }
           />
           <ListGroup>
-            {nestPanes(rows, hits === null ? folded : NO_FOLDED).map((entry) =>
+            {treeRows.map((entry) =>
               row(entry.pane, workspaceGroupKey(entry.pane) === g.key ? "place" : "herd", entry),
             )}
           </ListGroup>
