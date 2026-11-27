@@ -23,9 +23,15 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.17.2] - 2026-11-27
+
+### Changed
+
+- **Built on upstream Collie 1.30.1.** AltanS/collie v1.30.1, commit d98f51ce7.
+
 ### Fixed
 
-- **A new worktree no longer lands inside the project it branches from.** When the Worktree folder setting pointed at the folder that holds your projects, a branch opened from the phone was checked out inside the project itself, where git then listed it as a stray new folder. Collie now refuses that spot. It also stops reading a folder whose name starts with two dots as outside your home, and stops making a hidden folder for a project whose name starts with a dot.
+- **A new worktree no longer lands inside the project it branches from.** When the Worktree folder setting pointed at the folder that holds your projects, a branch opened from the phone was checked out inside the project itself, where git then listed it as a stray new folder. Collie now refuses that spot. It also stops reading a folder whose name starts with two dots as outside your home, and stops making a hidden folder for a project whose name starts with a dot. ([020e3e22f](https://github.com/GGGODLIN/gaddi/commit/020e3e22f))
 
 ## [2.17.1] - 2026-11-26
 
