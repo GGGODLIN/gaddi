@@ -907,6 +907,15 @@ export const CONFIG_SETTINGS: readonly ConfigSetting[] = [
     doc: "How many installed versions a binary install keeps, the current one included.",
   },
   {
+    key: "codesign_identity",
+    env: "COLLIE_CODESIGN_IDENTITY",
+    section: "update",
+    kind: "string",
+    // Fork-only (FORK.md "A local macOS build signs bin/collie with the operator's identity").
+    default: "",
+    doc: "macOS only: a code-signing certificate (its SHA-1 or full name) that each local build signs the collie binary with, so macOS keeps folder permissions across updates. Empty leaves the binary ad-hoc signed.",
+  },
+  {
     key: "update_health_timeout_ms",
     env: "COLLIE_UPDATE_HEALTH_TIMEOUT_MS",
     section: "update",

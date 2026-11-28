@@ -25,7 +25,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ### Added
 
-- **A Mac build can sign Collie with your own certificate, so an update stops asking for folder access.** Each update used to bring a program macOS had not seen, and until you allowed it into a folder such as Desktop, the phone could not load anything. Set COLLIE_CODESIGN_IDENTITY to a code-signing certificate and macOS treats every later version as the same program.
+- **A Mac build can sign Collie with your own certificate, so an update stops asking for folder access.** Each update used to bring a program macOS had not seen, and until you allowed it into a folder such as Desktop, the phone could not load anything. Set COLLIE_CODESIGN_IDENTITY (or codesign_identity in the config file) to a code-signing certificate and macOS treats every later version as the same program.
 
 ## [2.17.4] - 2026-11-28
 
