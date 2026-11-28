@@ -131,7 +131,13 @@ function checkFile(file: string, failures: Failure[]) {
       const pathPart = hashIdx === -1 ? raw : raw.slice(0, hashIdx);
       const anchor = hashIdx === -1 ? null : raw.slice(hashIdx + 1);
 
-      const targetFile = pathPart === "" ? file : resolve(dir, pathPart);
+      // Repo-root Markdown links (`/path`) resolve from the repository root, not the filesystem root.
+      const targetFile =
+        pathPart === ""
+          ? file
+          : pathPart.startsWith("/")
+            ? resolve(".", pathPart.slice(1))
+            : resolve(dir, pathPart);
       if (!existsSync(targetFile)) {
         failures.push({ file, line: lineNo, link: raw, reason: "missing file" });
         continue;

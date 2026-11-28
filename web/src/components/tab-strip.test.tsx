@@ -601,6 +601,27 @@ describe("TabStrip — status on the chips", () => {
     expect(logos(screen.getByRole("button", { name: /one/ }))).toEqual([]);
     expect(logos(screen.getByRole("button", { name: /empty/ }))).toEqual([]);
   });
+
+  it("keeps the parent pane's title when a background unpaned child is in the tab, while still reporting the child's blocked triage", () => {
+    strip([
+      pane("w1:t1", "idle", { paneId: "w1:t1:p1", sessionName: "plumbing", terminalTitle: "plumbing" }),
+      pane("w1:t1", "blocked", { paneId: "w1:t1:c1", parentPaneId: "w1:t1:p1", unpaned: true, terminalTitle: "worker" }),
+    ]);
+    const cell = screen.getByRole("button", { name: /plumbing/ });
+    expect(cell).toHaveTextContent("plumbing");
+    expect(cell).toHaveTextContent("needs you");
+    expect(cell).not.toHaveTextContent("code");
+  });
+
+  it("keeps the tab label when only a named unpaned child is in agents (e.g. parent is a shell pane)", () => {
+    strip([
+      pane("w1:t1", "blocked", { paneId: "w1:t1:c1", parentPaneId: "w1:t1:s1", unpaned: true, sessionName: "worker", terminalTitle: "worker" }),
+    ]);
+    const cell = screen.getByRole("button", { name: /code/ });
+    expect(cell).toHaveTextContent("code");
+    expect(cell).toHaveTextContent("needs you");
+    expect(screen.queryByRole("button", { name: /worker/ })).toBeNull();
+  });
 });
 
 // The "+" gives no feedback while a create is in flight — the operator taps it, nothing visibly

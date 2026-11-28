@@ -351,7 +351,7 @@ describe("preflight — the doctor check", () => {
   test("a local error doctor did not stamp as blocking is amber, named by id, and the update proceeds", async () => {
     const h = harness({
       findings: [
-        { check: "agent-sessions", status: "error", detail: "1 report NO session: t2g6 (claude)", remedy: "…" },
+        { check: "agent-sessions", status: "error", detail: "1 report NO session: p7xq (claude)", remedy: "…" },
         { check: "web-dist", status: "error", detail: "missing", remedy: "collie build" },
       ],
     });
@@ -361,7 +361,7 @@ describe("preflight — the doctor check", () => {
     expect(report.verdict).toBe("amber");
     expect(check.reason).toContain("this machine can still update");
     expect(check.reason).toContain("agent-sessions, web-dist");
-    expect(check.reason).not.toContain("t2g6");
+    expect(check.reason).not.toContain("p7xq");
     expect(await cmdUpdateCheck(h.deps, ["--json"])).toBe(EXIT.OK);
   });
 

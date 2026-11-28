@@ -34,8 +34,9 @@ the full test / E2E suite unless the user asks or the requested change directly 
      session (or a mux on its own socket) with a temporary config directory, never in the
      operator's live session or config. When the task changes what the phone shows or sends for
      them (a card, a button, a palette row, a draft or input-box read), close it with one pass
-     through the dev lane's PWA at phone width, opened on that throwaway session with
-     `?s=<session>`: tap each changed item once, and after a fix re-tap only what the fix touched.
+     through a PWA at phone width pointed at that throwaway session (via an isolated bridge when
+     the dev lane targets another backend): tap each changed item once, and after a fix re-tap only
+     what the fix touched.
      Once per task, not per commit; a commit keeps the unit tests and the real-agent run. The
      canary checks that a picker opens, not what the phone then offers (a Grok hint read as a
      draft, 2026-10-15).
@@ -772,7 +773,7 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
 - **`theme.toml` adds rather than shadows** — its `[[font]]` rows put extra UI typefaces UNDER the
   shipped typefaces in the Settings picker, and the bridge serves the files read-only from
   `<config-dir>/fonts` at `GET /api/fonts/<basename>`. Same reader, same mtime liveness; a font cannot
-  fire an action and so shadows nothing ([ADR 0148](./.adr/0148-the-app-face-the-theme-and-the-character-are-device-settings.md)).
+  fire an action and so shadows nothing ([ADR 0148](./.adr/0148-a-theme-names-words-never-drawings-and-the-device-choice-wins.md)).
 - **`launchers.toml` is the operator's fifth file, and the only one whose rows CREATE a pane** — its
   rows are the allowlist `POST /api/launch` matches exactly, so the client names a row and never
   supplies a command line. Same reader, same mtime liveness; no scope ladder, because a row that
@@ -876,8 +877,9 @@ lint guard, the crew-wire guard or the `flake.lock` guard.
   the upstream positional reader.
 - **A `herdr-core` child terminal nests under its live parent and reports completion through it** —
   an unlabelled `hc run --parent` terminal borrows its ancestor's space and tab (`unpaned: true`),
-  stays out of `PaneStrip` unless open itself, and suppresses its own unread square and `done` push
-  while keeping `blocked` alerts ([ADR 9014](./.adr/9014-a-child-terminal-reports-completion-to-its-parent.md)).
+  stays out of `PaneStrip` unless open itself or a live ancestor of the open child, and suppresses its
+  own unread square, foreground `done` status and `done` push while keeping `blocked` alerts
+  ([ADR 9014](./.adr/9014-a-child-terminal-reports-completion-to-its-parent.md)).
 - **The phone parses what the phone draws; the bridge parses only what it must act on alone.** Every
   pane grammar is client-side, under `web/src/lib/harness/`. The bridge holds one,
   `extractClaudeSessionName`, and only because the bridge itself consumes it, for a label that must

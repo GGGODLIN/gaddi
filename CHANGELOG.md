@@ -23,6 +23,22 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+## [2.17.4] - 2026-11-28
+
+### Changed
+
+- **Built on upstream Collie 1.30.1.** AltanS/collie v1.30.1, commit d98f51ce7.
+
+### Fixed
+
+- **Try again after a failed update works on an install built from a git clone.** That install names its versions after their folders, such as v2.17.3, and the phone read that as version 0. It ticked "This phone" before the new screens loaded, and Try again was refused as a version mismatch. The phone screen you update from runs this check, so it applies from the update after this one. ([48ee44861](https://github.com/GGGODLIN/gaddi/commit/48ee44861))
+- **A leftover Tailscale mapping on a crew member no longer turns the Update button off.** The member still reports the mapping as a problem, but the update goes ahead: the mapping does not use the port the new version starts on. ([7d9c0c5a2](https://github.com/GGGODLIN/gaddi/commit/7d9c0c5a2))
+- **Background child sessions no longer interrupt the open screen or hijack tabs.** When a background child finishes under its parent, Collie keeps the foreground status quiet while still alerting if the child needs you, keeps a single-pane tab's label and tap target on its visible parent, and counts only visible rows after folding before showing the pin hint. ([e1cef3b76](https://github.com/GGGODLIN/gaddi/commit/e1cef3b76))
+
+### Docs
+
+- **Markdown link checks now resolve repository-root paths and pass across all tracked docs.** Leading-slash Markdown links now resolve from the repository root, the broken ADR 0148 link is fixed, and the Tier 2 phone-width PWA check wording matches the isolated-bridge setup. ([9635aca0c](https://github.com/GGGODLIN/gaddi/commit/9635aca0c))
+
 ## [2.17.3] - 2026-11-27
 
 ### Changed

@@ -1,4 +1,4 @@
-// Two `blocksUpdate` stamps that depend on more than one fact, kept beside cli/doctor.test.ts because
+// `blocksUpdate` cases that depend on more than one fact, kept beside cli/doctor.test.ts because
 // that file sits at its size ceiling (scripts/test-file-size.test.ts). The other stamps are asserted
 // where their branches are already tested.
 import { describe, expect, test } from "bun:test";
@@ -29,14 +29,16 @@ function deps(files: Record<string, string>) {
 }
 
 describe("front-door on a peer", () => {
-  test("an unrecorded mapping blocks an update: the peer's boot leaves it, and it can hold the port", () => {
+  // The mapping listens on the serve port (:443), the peer binds COLLIE_PORT (:8787): the new
+  // version starts beside it either way, so neither branch blocks the update.
+  test("an unrecorded mapping is an error that does not block an update", () => {
     const f = frontDoor(deps({}), "peer");
     expect(f.status).toBe("error");
     expect(f.detail).toContain("still proxies to");
-    expect(f.blocksUpdate).toBe(true);
+    expect(f.blocksUpdate).toBeUndefined();
   });
 
-  test("a recorded mapping does not: the peer's boot tears it down", () => {
+  test("nor does a recorded one, which the peer's boot tears down", () => {
     const f = frontDoor(deps({ [HANDLER_FILE]: "https:443|laptop.tail.ts.net:443|http://127.0.0.1:8787" }), "peer");
     expect(f.status).toBe("error");
     expect(f.blocksUpdate).toBeUndefined();
