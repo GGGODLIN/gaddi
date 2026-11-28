@@ -154,3 +154,23 @@ Each entry says what it is, where it lives, and what it assumes.
 - **Assumes.** Every release's CHANGELOG section carries the "Built on upstream Collie X.Y.Z."
   bullet.
 - **To upstream.** Leave it out. Upstream numbers its own releases already.
+
+### A local macOS build signs bin/collie with the operator's identity (2026-11-28)
+
+- **What.** When `COLLIE_CODESIGN_IDENTITY` is set (in the config folder's `.env` or the shell),
+  `collie build` on macOS re-signs the freshly compiled binary with that identity and the fixed
+  identifier `com.gggodlin.gaddi.collie`, before the web build and the swap. Unset, nothing runs. Set
+  off macOS, or when `codesign` fails or runs past 60 s, the build goes on with the ad-hoc binary and
+  says why.
+- **Why.** macOS privacy (TCC) knows an ad-hoc binary only by its content hash, so every update's new
+  `bin/collie` asked again for the Desktop folder, and until the operator answered, every paired
+  request hung while `/api/health` answered (fork 2.17.4, 2026-11-28). With one identity and one
+  identifier, the operator's "Allow" carries over to later versions.
+- **Where.** [`cli/codesign.ts`](/cli/codesign.ts), called from `cmdBuild` in
+  [`cli/build.ts`](/cli/build.ts); tests in [`cli/codesign.test.ts`](/cli/codesign.test.ts) and
+  [`cli/build.test.ts`](/cli/build.test.ts). `bun run build:cli` and the release workflow's compile do
+  not sign.
+- **Assumes.** A code-signing certificate in the operator's login keychain that `codesign` may use
+  without a prompt (the operator's Apple Development certificate, 2026-11-28).
+- **To upstream.** Could go as a general opt-in for macOS hosts, with the identifier made neutral or
+  configurable. Not proposed.

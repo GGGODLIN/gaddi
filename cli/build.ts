@@ -1,6 +1,7 @@
 import { basename, dirname, join, resolve } from "node:path";
 
 import { collieBinary, HOST, type Host } from "../bridge/host.ts";
+import { signLocalBinary } from "./codesign.ts";
 import type { CliContext } from "./context.ts";
 import { EXIT, type Io } from "./io.ts";
 import type { EnvOverride, Exec, Files } from "./sys.ts";
@@ -459,6 +460,8 @@ export function cmdBuild(deps: BuildDeps): number {
     deps.files.remove(binaryWritten);
     return EXIT.FAIL;
   }
+  // Fork-only (FORK.md "A local macOS build signs bin/collie with the operator's identity").
+  signLocalBinary(binaryWritten, deps.ctx.env, deps.host ?? HOST, deps.exec, (line) => deps.io.err(line));
 
   // 5. The web bundle, into staging. Always a production bundle: Vite takes NODE_ENV from the
   // environment, and a shell that exports NODE_ENV=development (a common dotfile line) got React's

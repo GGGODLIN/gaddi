@@ -390,6 +390,19 @@ describe("build: the ordered steps", () => {
     expect(h.files.ops).toContain(posix(`mv ${BINARY_NEW} ${BINARY}`));
   });
 
+  test("macOS with COLLIE_CODESIGN_IDENTITY: the staged binary is signed after the compile, before the web build", () => {
+    const h = harness({ env: { COLLIE_CODESIGN_IDENTITY: "Apple Development: Someone (TEAM123456)" } });
+    h.deps.host = hostFor("darwin");
+    expect(cmdBuild(h.deps)).toBe(EXIT.OK);
+    const all = calls(h);
+    const sign = all.findIndex((call) => call.startsWith("codesign "));
+    expect(all[sign]).toBe(
+      posix(`codesign --force --sign Apple Development: Someone (TEAM123456) --identifier com.gggodlin.gaddi.collie ${BINARY_NEW}`),
+    );
+    expect(sign).toBeGreaterThan(all.findIndex(compilerCall));
+    expect(sign).toBeLessThan(all.findIndex((call) => call.includes("bun run build -- --outDir dist-staging")));
+  });
+
   test("Windows: the swap renames the `.exe` Bun wrote onto the live `.exe`", () => {
     // `bun build --compile --outfile bin/collie.new` writes `bin/collie.new.exe` on Windows. Renaming
     // the bare name died with ENOENT after the web bundle had already built, so neither swap landed.
