@@ -71,6 +71,7 @@ const NOT_REACHED_BY_WINDOWS: readonly Allowed[] = [
   { file: "bridge/inside/wire.ts", pattern: "startsWithSlash", count: 1, why: "a hello's cwd: an absolute POSIX path or a drive path, both forms checked on every host" },
   { file: "bridge/files-view.ts", pattern: "startsWithSlash", count: 1, why: "the wire's relative path, `/`-separated on every host; joined with host.path" },
   { file: "bridge/math/tar.ts", pattern: "splitOnSlash", count: 2, why: "tar entry names, `/`-separated in every archive; written through path.join" },
+  { file: "scripts/check-doc-links.ts", pattern: "startsWithSlash", count: 1, why: "a repo-root Markdown link such as /docs/x.md, `/`-separated on every host; resolved with node:path" },
   { file: "scripts/math-pack.ts", pattern: "splitOnSlash", count: 1, why: "pack paths: tar entry names and the pack's relative imports, `/`-separated on every host" },
   { file: "bridge/files-view.ts", pattern: "splitOnSlash", count: 1, why: "the same wire path, cut into names before host.path.join" },
   { file: "bridge/deliverables.ts", pattern: "startsWithSlash", count: 2, why: "file URL grammar uses slashes; the POSIX absolute-path branch refuses Windows" },
