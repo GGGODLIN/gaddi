@@ -234,6 +234,13 @@ describe("POST api/update — the update write gate's verdict", () => {
     expect(parseUpdateStartRequest([])).toBeNull();
   });
 
+  test("a retry naming a staged checkout's folder (`v2.17.4`) asks for the bare version", () => {
+    expect(parseUpdateStartRequest({ confirm: true, target: "v2.17.4", major: false })?.target).toBe("2.17.4");
+    expect(parseUpdateStartRequest({ confirm: true, target: "verbose", major: false })?.target).toBe("verbose");
+    const rollback = parseRollbackRequest({ confirm: true, requestId: "0f8fad5b-d9cb-469f-a165-70867728950e", target: "v2.17.2" });
+    expect(rollback?.target).toBe("2.17.2");
+  });
+
   test("a double tap is refused by the run in flight, naming it — never a second updater", () => {
     const v = updateStartVerdict(ask(), state({ run: runAt("staging") }));
     expect(v).toEqual({

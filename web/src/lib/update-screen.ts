@@ -315,11 +315,21 @@ export function joinNames(names: readonly string[]): string {
   return t("updateScreen.list.many", { head: names.slice(0, -1).join(", "), last: names.at(-1) ?? "" });
 }
 
+// A staged checkout records its versions by folder name (`v2.17.3`), and `compareSemver` reads a
+// leading `v` as 0.0.0, which would tick "This phone" before the new bundle loads.
+function stripLeadingV(version: string): string {
+  return version.replace(/^v(?=\d)/, "");
+}
+
+function bareTarget(version: string | null | undefined): string | null {
+  return version == null ? null : stripLeadingV(version);
+}
+
 /** This bundle is at or above the target. A dev build's `-dev` stamp is not a prerelease. */
 function bundleAtLeast(version: string, target: string): boolean {
   const bare = version.replace(/-dev$/, "");
   try {
-    return compareSemver(bare, target) >= 0;
+    return compareSemver(bare, stripLeadingV(target)) >= 0;
   } catch {
     return false;
   }
@@ -327,7 +337,7 @@ function bundleAtLeast(version: string, target: string): boolean {
 
 /** This bundle is exactly the target. A dev build's `-dev` stamp is not a prerelease. */
 function bundleIs(version: string, target: string): boolean {
-  return version.replace(/-dev$/, "") === target;
+  return version.replace(/-dev$/, "") === stripLeadingV(target);
 }
 
 /** A version the run did not name. */
@@ -673,7 +683,13 @@ interface LegReading {
 
 function leadLegs(run: UpdateRun, crew: UpdateScreenCrewRun | null | undefined): LegReading {
   if (run.peers !== undefined && run.peers.length > 0) return { legs: run.peers, settledAt: run.settledAt ?? null };
-  if (crew != null && crew.to !== null && run.to !== null && crew.to === run.to && crew.to !== crew.current) {
+  if (
+    crew != null &&
+    crew.to !== null &&
+    run.to !== null &&
+    stripLeadingV(crew.to) === stripLeadingV(run.to) &&
+    crew.to !== crew.current
+  ) {
     return { legs: crew.legs, settledAt: crew.settledAt };
   }
   return { legs: run.peers ?? [], settledAt: run.settledAt ?? null };
@@ -706,8 +722,8 @@ function leadPhaseOf(state: UpdateRun["state"]): UpdatePhase {
 function leadView(input: UpdateScreenInput, run: UpdateRun): UpdateScreenView {
   const claim = input.claim ?? null;
   const lead = input.leadName;
-  const target = run.to ?? claim?.target ?? null;
-  const from = run.from;
+  const target = bareTarget(run.to ?? claim?.target ?? null);
+  const from = bareTarget(run.from);
   const rollback = run.action === "rollback";
   // A run that goes DOWN (a rollback, or a switch back to Stable) leaves this phone's app ABOVE the
   // target until it reloads, so its step is done only on the very version (M60 spec 01).
@@ -825,7 +841,8 @@ function untouched(row: UpdateScreenRow): UpdateScreenRow {
 
 function leadRow(run: UpdateRun, phase: UpdatePhase, lead: string, target: string | null, input: UpdateScreenInput, rollback = false): UpdateScreenRow {
   const base = { key: "lead", name: lead, lead: true, phone: false, progress: null } as const;
-  const moving = versionsOf(run.from, target);
+  const from = bareTarget(run.from);
+  const moving = versionsOf(from, target);
   switch (phase) {
     case "check":
       return { ...base, status: "active", dim: false, word: t("updateScreen.state.preflight"), versions: moving, detail: null };
@@ -847,14 +864,14 @@ function leadRow(run: UpdateRun, phase: UpdatePhase, lead: string, target: strin
     case "verify":
       return { ...base, status: "active", dim: false, word: t("updateScreen.state.verifying"), versions: moving, detail: null };
     case "rolled-back":
-      return { ...base, status: "failed", dim: false, word: t("updateScreen.row.backOn", { version: run.from ?? unknownVersion() }), versions: run.from, detail: run.reason ?? null };
+      return { ...base, status: "failed", dim: false, word: t("updateScreen.row.backOn", { version: from ?? unknownVersion() }), versions: from, detail: run.reason ?? null };
     case "stuck":
-      return { ...base, status: "failed", dim: false, word: t("updateScreen.row.stuck"), versions: run.from, detail: run.reason ?? null };
+      return { ...base, status: "failed", dim: false, word: t("updateScreen.row.stuck"), versions: from, detail: run.reason ?? null };
     case "stopped":
-      return { ...base, status: "failed", dim: false, word: t("updateScreen.row.stopped"), versions: run.from, detail: run.reason ?? null };
+      return { ...base, status: "failed", dim: false, word: t("updateScreen.row.stopped"), versions: from, detail: run.reason ?? null };
     case "failed":
       // The reason is the note's, two lines under the rows; this line would cut it at one.
-      return { ...base, status: "failed", dim: false, word: t("updateScreen.row.failed"), versions: run.from, detail: null };
+      return { ...base, status: "failed", dim: false, word: t("updateScreen.row.failed"), versions: from, detail: null };
     default:
       return { ...base, status: "ok", dim: false, word: t("updateScreen.row.on", { version: target ?? unknownVersion() }), versions: target, detail: null };
   }

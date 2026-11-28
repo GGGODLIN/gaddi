@@ -761,14 +761,22 @@ export interface UpdateStartRequest {
   readonly peersOnly: boolean;
 }
 
+// A retry sends the run record's target, which a staged checkout writes as its folder name
+// (`v2.17.3`); the verdict compares bare versions, so a kept `v` answered 409 target_mismatch.
+const normalizeTarget = (raw: JsonValue | undefined): string | null => {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  return trimmed.replace(/^v(?=\d)/, "");
+};
+
 /** Parse an untrusted body. `null` when it is not an object — the caller answers 400. */
 export function parseUpdateStartRequest(body: JsonValue): UpdateStartRequest | null {
   const rec = asRecord(body);
   if (rec === null) return null;
-  const target = rec.target;
   return {
     confirm: rec.confirm === true,
-    target: typeof target === "string" && target.trim() !== "" ? target.trim() : null,
+    target: normalizeTarget(rec.target),
     major: rec.major === true,
     peersOnly: rec.peersOnly === true,
   };
@@ -986,7 +994,7 @@ export function parseRollbackRequest(body: JsonValue): RollbackRequest | null {
   return {
     confirm: rec.confirm === true,
     requestId: isRequestId(requestId) ? requestId : null,
-    target: typeof target === "string" && target.trim() !== "" ? target.trim() : null,
+    target: normalizeTarget(target),
   };
 }
 

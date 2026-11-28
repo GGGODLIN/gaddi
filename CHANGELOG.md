@@ -26,6 +26,7 @@ Running a crew? Update the lead first; members follow on their own. Details:
 ### Fixed
 
 - **A leftover Tailscale mapping on a crew member no longer turns the Update button off.** The member still reports the mapping as a problem, but the update goes ahead: the mapping does not use the port the new version starts on.
+- **Try again after a failed update works on an install built from a git clone.** That install names its versions after their folders, such as v2.17.3, and the phone read that as version 0. It ticked "This phone" before the new screens loaded, and Try again was refused as a version mismatch.
 
 ### Docs
 
